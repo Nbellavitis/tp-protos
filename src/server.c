@@ -83,8 +83,9 @@ static void handle_server_read(struct selector_key *key) {
         printf("New connection from %s\n", addr_buf);
     }
 }
-
+/**
 int main(void) {
+
     struct selector_init conf = {
             .signal = SIGALRM,
             .select_timeout = { .tv_sec = 5, .tv_nsec = 0 }
@@ -124,4 +125,6 @@ int main(void) {
     close(server_fd);
 
     return 0;
+
 }
+ */

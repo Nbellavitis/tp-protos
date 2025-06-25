@@ -1,42 +1,53 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g
+
 SRC_DIR = src
+NEG_DIR = $(SRC_DIR)/Negotiation
+UTILS_DIR = $(SRC_DIR)/Utils
 OBJ_DIR = obj
 BIN_DIR = bin
-UTILS_DIR = Utils
 
-# Listado de fuentes
+# Archivos fuente
 SRCS = $(wildcard $(SRC_DIR)/*.c)
-UTILS = $(wildcard src/$(UTILS_DIR)/*.c)
+UTILS = $(wildcard $(UTILS_DIR)/*.c)
+NEG = $(wildcard $(NEG_DIR)/*.c)
 
-# Objetos correspondientes
-SRCS_OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-UTILS_OBJS = $(patsubst $(UTILS_DIR)/%.c, $(OBJ_DIR)/%.o, $(UTILS))
-OBJS = $(SRCS_OBJS) $(UTILS_OBJS)
+# Archivos objeto: obj/Utils/foo.o por ejemplo
+OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS)) \
+       $(patsubst $(UTILS_DIR)/%.c, $(OBJ_DIR)/Utils/%.o, $(UTILS)) \
+       $(patsubst $(NEG_DIR)/%.c, $(OBJ_DIR)/Negotiation/%.o, $(NEG))
 
-# Ejecutable final
+# Ejecutable
 TARGET = $(BIN_DIR)/programa
 
-# Targets principales
+# Target principal
 all: $(TARGET)
 
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^
 
-# Regla para compilar .c de src
+# Regla genérica para compilar .c en .o
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Regla para compilar .c de Utils
-$(OBJ_DIR)/%.o: $(UTILS_DIR)/%.c | $(OBJ_DIR)
+$(OBJ_DIR)/Utils/%.o: $(UTILS_DIR)/%.c | $(OBJ_DIR)/Utils
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Crear directorios si no existen
+$(OBJ_DIR)/Negotiation/%.o: $(NEG_DIR)/%.c | $(OBJ_DIR)/Negotiation
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Crear directorios
 $(BIN_DIR):
-	mkdir -p $(BIN_DIR)
+	mkdir -p $@
 
 $(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)
+	mkdir -p $@
+
+$(OBJ_DIR)/Utils:
+	mkdir -p $@
+
+$(OBJ_DIR)/Negotiation:
+	mkdir -p $@
 
 # Limpieza
 clean:
