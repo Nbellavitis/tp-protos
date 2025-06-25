@@ -80,6 +80,7 @@ static void handle_server_read(struct selector_key *key) {
         free(data);
     } else {
         char addr_buf[128];
+        printf("New connection from %s\n", addr_buf);
     }
 }
 
