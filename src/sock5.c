@@ -53,7 +53,7 @@ printf("socksv5PassiveAccept\n");
     }
     printf("New client connected: %d\n", newClientSocket);
     clientData->stm.initial = NEGOTIATION_READ;
-    clientData->stm.max_state = ERROR;
+    clientData->stm.max_state = NEGOTIATION_WRITE;
     clientData->closed = false;
     clientData->stm.states = clientActions;
     clientData->clientFd = newClientSocket;
