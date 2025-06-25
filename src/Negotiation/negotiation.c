@@ -1,7 +1,7 @@
 #include "negotiation.h"
 #include "negotiationParser.h"
 #define VERSION_5 0x05
-void negotiationReadInit(unsigned state, struct selector_key *key) {
+void negotiationReadInit( struct selector_key *key) {
     printf("Inicio negociación\n");
     struct ClientData *data = (struct ClientData *)key->data;
     initNegotiationParser(&data->client.negParser);

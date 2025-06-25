@@ -21,7 +21,6 @@ negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
             }
 
             if (p->i == p->nmethods) {
-                // Elegir método
                 p->method_chosen = 0xFF;
                 for (int i = 0; i < p->nmethods; i++) {
                     if (p->methods[i] == 0x00) { // sin autenticación
@@ -29,7 +28,6 @@ negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
                         break;
                     }
                 }
-
                 return NEGOTIATION_PARSE_OK;
             }
         }

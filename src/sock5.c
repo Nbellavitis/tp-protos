@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include "Auth/authParser.h"
 static void socksv5Read(struct selector_key *key);
 static void socksv5Write(struct selector_key *key);
 static void socksv5Close(struct selector_key *key);
@@ -21,8 +22,8 @@ static fd_handler  handler = {
 static const struct state_definition clientActions[] = {
     {.state = NEGOTIATION_READ, .on_arrival = negotiationReadInit, .on_read_ready = negotiationRead},
     {.state = NEGOTIATION_WRITE,.on_write_ready = negotiationWrite},
-//    {.state = AUTHENTICATION_READ,.on_arrival = authenticationReadInit, .on_read_ready = authenticationRead},
-//    {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite},
+    {.state = AUTHENTICATION_READ,.on_arrival = authenticationReadInit, .on_read_ready = authenticationRead},
+    {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite},
 //    {.state = REQ_READ,.on_arrival = requestReadInit,.on_read_ready = requestRead},
 //    {.state = ADDR_RESOLVE, .on_block_ready = addressResolveDone},
 //    {.state = CONNECTING, .on_arrival = requestConectingInit, .on_write_ready = requestConecting},
@@ -53,7 +54,7 @@ printf("socksv5PassiveAccept\n");
     }
     printf("New client connected: %d\n", newClientSocket);
     clientData->stm.initial = NEGOTIATION_READ;
-    clientData->stm.max_state = NEGOTIATION_WRITE;
+    clientData->stm.max_state = AUTHENTICATION_WRITE;
     clientData->closed = false;
     clientData->stm.states = clientActions;
     clientData->clientFd = newClientSocket;

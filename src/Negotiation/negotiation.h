@@ -9,5 +9,5 @@
 #include "../parser.h"
 unsigned negotiationRead(struct selector_key *key);
 unsigned negotiationWrite(struct selector_key *key);
-void negotiationReadInit(unsigned state, struct selector_key *key);
+void negotiationReadInit( struct selector_key *key);
 #endif //NEGOTIATION_H
