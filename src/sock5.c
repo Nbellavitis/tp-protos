@@ -33,7 +33,6 @@ static const struct state_definition clientActions[] = {
 //    {.state=ERROR, on_arrival = errorArrival}
 };
 void socksv5PassiveAccept(struct selector_key* key){
-printf("socksv5PassiveAccept\n");
     struct sockaddr_storage clientAddress;
     socklen_t clientAddressLen = sizeof(clientAddress);
     int newClientSocket = accept(key->fd, (struct sockaddr*)&clientAddress, &clientAddressLen);
@@ -65,10 +64,10 @@ printf("socksv5PassiveAccept\n");
     buffer_init(&clientData->originBuffer, BUFFER_SIZE, clientData->inOriginBuffer);
 
     stm_init(&clientData->stm);
-    printf("HOLAA\n"); //ESTO EXPLOTA AYUDAAAAA
 
     selector_status ss = selector_register(key->s, newClientSocket, &handler, OP_READ, clientData);
     if (ss != SELECTOR_SUCCESS) {
+
         free(clientData);
         close(newClientSocket);
         return;
@@ -77,6 +76,7 @@ printf("socksv5PassiveAccept\n");
 }
 static void socksv5Read(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
+
     const enum socks5State state = stm_handler_read(&clientData->stm, key);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);

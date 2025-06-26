@@ -14,26 +14,36 @@ void initAuthParser(auth_parser *parser) {
 
 
 
-unsigned authParse(auth_parser *p, struct buffer *b){
+unsigned authParse(auth_parser *p, struct buffer *b) {
+    printf("Parsing authentication data...\n");
     while (buffer_can_read(b)){
         uint8_t byte = buffer_read(b);
         if(p->version == 0){
-            if(byte !=0x05){
+            if(byte !=0x01){
+                p->error = true;
+                printf("Error: Invalid  version %d \n",byte);
+
                 return AUTH_PARSE_ERROR;
             }
             p->version = byte;
         }else if(p->nameLength == 0){
                 if(byte > 255 || byte == 0){
+                    p->error = true;
+                    printf("Error: Invalid name \n");
+
                     return AUTH_PARSE_ERROR;
                 }
                 p->nameLength = byte;
         }else if(p->offsetName < p->nameLength) {
+
             p->name[p->offsetName++] = byte;
             if (p->offsetName == p->nameLength) {
                 p->name[p->offsetName] = '\0'; // Null-terminate the name
             }
         }else if (p->passwordLength == 0) {
             if (byte > 255 || byte == 0) {
+                p->error = true;
+                printf("Error: Invalid password\n");
                 return AUTH_PARSE_ERROR;
             }
             p->passwordLength = byte;
@@ -46,4 +56,14 @@ unsigned authParse(auth_parser *p, struct buffer *b){
         }
     }
     return AUTH_PARSE_INCOMPLETE;
+}
+
+bool sendAuthResponse(struct buffer *originBuffer, uint8_t version, uint8_t status) {
+    if (!buffer_can_write(originBuffer)) {
+        return false;
+    }
+    buffer_write(originBuffer, version); // Escribir versión
+    buffer_write(originBuffer, status);  // Escribir estado (0x00 para éxito)
+
+    return true; // Respuesta enviada correctamente
 }

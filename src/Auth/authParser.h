@@ -19,10 +19,11 @@ typedef struct auth_parser {
     char password[256];
     uint8_t offsetName;
     uint8_t offsetPassword;
+    bool error;
 } auth_parser;
 
 void initAuthParser(auth_parser *parser);
-
+bool sendAuthResponse(struct buffer *originBuffer, uint8_t version, uint8_t status);
 unsigned authParse(auth_parser *p, struct buffer *b);
 
 #endif //PROTOS_AUTHPARSER_H

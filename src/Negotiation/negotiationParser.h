@@ -16,16 +16,15 @@ typedef enum {
 typedef struct negotiation_parser {
     struct parser *parser;
     struct parser_definition def;
-
     uint8_t version;
     uint8_t nmethods;
     uint8_t methods[255];  // máximo según RFC
     uint8_t method_chosen;
     uint8_t i;             // cuántos métodos ya leyó
-
     bool done;
     bool error;
 } negotiation_parser;
 void  initNegotiationParser(negotiation_parser *parser);
 negotiation_parse negotiationParse(negotiation_parser *p, struct buffer* buffer);
+bool sendNegotiationResponse(struct buffer *originBuffer, uint8_t method);
 #endif //NEGOTITATIONPARSER_H

@@ -2,7 +2,7 @@
 
 
 
-void authenticationReadInit(struct selector_key * key){
+void authenticationReadInit(unsigned state,struct selector_key * key){
     printf("Inicio autenticación\n");
     struct ClientData *data = (struct ClientData *)key->data;
     initAuthParser(&data->client.authParser);
@@ -10,13 +10,21 @@ void authenticationReadInit(struct selector_key * key){
 
 unsigned authenticationRead(struct selector_key * key){
     ClientData *data = key->data;
+    printf("Leyendo autenticación\n");
     auth_parser *p = &data->client.authParser;
-    buffer *b = &data->clientBuffer;
-    auth_parse result = authParse(p, b);
-
+    size_t readLimit;
+    size_t readCount;
+    uint8_t * b = buffer_write_ptr(&data->clientBuffer, &readLimit);
+    readCount = recv(key->fd, b, readLimit, 0);
+    if (readCount <= 0) {
+        return ERROR; // error o desconexión
+    }
+    buffer_write_adv(&data->clientBuffer, readCount);
+    auth_parse result = authParse(p, &data->clientBuffer);
     switch (result) {
         case AUTH_PARSE_OK:
-            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
+            auth_parser *authParser = &data->client.authParser;
+            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x00)) { //TODO validar usuario
                 return ERROR;
             }
             return AUTHENTICATION_WRITE;
@@ -33,13 +41,22 @@ unsigned authenticationRead(struct selector_key * key){
 unsigned authenticationWrite(struct selector_key * key){
     ClientData *data = key->data;
     auth_parser *p = &data->client.authParser;
-    buffer *b = &data->clientBuffer;
-    if (!buffer_can_write(b)) {
-        return AUTHENTICATION_WRITE; // esperá espacio
+    size_t readLimit;
+    size_t readCount;
+    uint8_t  * b = buffer_read_ptr(&data->originBuffer, &readLimit);
+    readCount = send(key->fd, b, readLimit, MSG_NOSIGNAL);
+    if (readCount <= 0) {
+        return ERROR; // error o desconexión
     }
-    buffer_write(b, p->version); // versión
-//    if(aljghajkl) //logica de auth!!!
-    buffer_write(b,0x00); //hardcodeado exito!!!!
+    buffer_read_adv(&data->originBuffer, readCount);
+
+    if (buffer_can_read(&data->originBuffer)){
+        return AUTHENTICATION_WRITE;
+    }
+
+   if (p->error || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
+        return ERROR;
+    }
     printf("Autenticación exitosa\n");
     return REQ_READ; // Continuar con la lectura de la solicitud
 }
