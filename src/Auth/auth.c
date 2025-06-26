@@ -23,7 +23,7 @@ unsigned authenticationRead(struct selector_key * key){
     auth_parse result = authParse(p, &data->clientBuffer);
     switch (result) {
         case AUTH_PARSE_OK:
-            auth_parser *authParser = &data->client.authParser;
+//            auth_parser *authParser = &data->client.authParser;
             if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x00)) { //TODO validar usuario
                 return ERROR;
             }
