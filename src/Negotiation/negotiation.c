@@ -56,6 +56,7 @@ unsigned negotiationWrite(struct selector_key *key) {
     if (p->error || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         return ERROR;
     }
+    printf("Negociación exitosa, método elegido: %d\n", p->method_chosen);
     return (p->method_chosen == 0x00) ? REQ_READ : AUTHENTICATION_READ;
 }
 

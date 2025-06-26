@@ -25,6 +25,7 @@ typedef struct ClientData {
     union {
         negotiation_parser  negParser;
         auth_parser authParser;
+
     } client;
     struct addrinfo* originResolution;
     int clientFd;

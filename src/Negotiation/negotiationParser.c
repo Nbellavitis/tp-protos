@@ -29,6 +29,9 @@ negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
                         p->method_chosen = 0x02;
                         break;
                     }
+                    if(p->methods[i] == 0x00 ) { // no auth
+                        p->method_chosen = 0x00;
+                    }
                 }
                 return NEGOTIATION_PARSE_OK;
             }
