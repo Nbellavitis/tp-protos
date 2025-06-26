@@ -17,6 +17,9 @@
 #include "Negotiation/negotiationParser.h"
 #include "Auth/authParser.h"
 #include "Auth/auth.h"
+#include "Request/request.h"
+#include "Request/requestParser.h"
+#include "Request/request.h"
 #define BUFFER_SIZE 32768
 typedef struct ClientData {
     struct state_machine stm;
@@ -25,7 +28,7 @@ typedef struct ClientData {
     union {
         negotiation_parser  negParser;
         auth_parser authParser;
-
+        request_parser reqParser;
     } client;
     struct addrinfo* originResolution;
     int clientFd;
@@ -51,4 +54,7 @@ enum socks5State {
 };
 void socksv5PassiveAccept(struct selector_key* key);
 void closeConnection(struct selector_key *key);
+selector_status registerOriginSocket(struct selector_key *key, int originFd, ClientData *data);
+
+
 #endif //SOCK5_H

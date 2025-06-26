@@ -24,10 +24,10 @@ static const struct state_definition clientActions[] = {
     {.state = NEGOTIATION_WRITE,.on_write_ready = negotiationWrite},
     {.state = AUTHENTICATION_READ,.on_arrival = authenticationReadInit, .on_read_ready = authenticationRead},
     {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite},
-//    {.state = REQ_READ,.on_arrival = requestReadInit,.on_read_ready = requestRead},
-//    {.state = ADDR_RESOLVE, .on_block_ready = addressResolveDone},
-//    {.state = CONNECTING, .on_arrival = requestConectingInit, .on_write_ready = requestConecting},
-//    {.state = REQ_WRITE, .on_write_ready = requestWrite},
+    {.state = REQ_READ, .on_arrival = requestReadInit, .on_read_ready = requestRead},
+    {.state = ADDR_RESOLVE, .on_block_ready = addressResolveDone},
+    {.state = CONNECTING, .on_arrival = requestConnectingInit, .on_write_ready = requestConnecting},
+    {.state = REQ_WRITE, .on_write_ready = requestWrite},
 //    {.state = COPYING,   .on_arrival = socksv5HandleInit,.on_read_ready = socksv5HandleRead,.on_write_ready = socksv5HandleWrite,.on_departure = socksv5HandleClose},
 //    {.state = CLOSED, on_arrival = closeArrival},
 //    {.state=ERROR, on_arrival = errorArrival}
@@ -53,7 +53,7 @@ void socksv5PassiveAccept(struct selector_key* key){
     }
     printf("New client connected: %d\n", newClientSocket);
     clientData->stm.initial = NEGOTIATION_READ;
-    clientData->stm.max_state = AUTHENTICATION_WRITE;
+    clientData->stm.max_state = REQ_WRITE;
     clientData->closed = false;
     clientData->stm.states = clientActions;
     clientData->clientFd = newClientSocket;
@@ -118,4 +118,8 @@ void closeConnection(struct selector_key *key) {
         close(clientData->clientFd);
     }
     free(clientData);
+}
+
+selector_status registerOriginSocket(struct selector_key *key, int originFd, ClientData *data) {
+    return selector_register(key->s, originFd, &handler, OP_WRITE, data);
 }
