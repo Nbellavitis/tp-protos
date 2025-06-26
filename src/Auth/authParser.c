@@ -22,7 +22,6 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
             if(byte !=0x01){
                 p->error = true;
                 printf("Error: Invalid  version %d \n",byte);
-
                 return AUTH_PARSE_ERROR;
             }
             p->version = byte;
@@ -30,7 +29,6 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
                 if(byte > 255 || byte == 0){
                     p->error = true;
                     printf("Error: Invalid name \n");
-
                     return AUTH_PARSE_ERROR;
                 }
                 p->nameLength = byte;

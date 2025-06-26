@@ -59,7 +59,7 @@ void socksv5PassiveAccept(struct selector_key* key){
     clientData->clientFd = newClientSocket;
     clientData->clientAddress = clientAddress;
 
-    clientData->originFd = -1; // No hay conexion
+    clientData->originFd = -1; // No hay conexion //todo change no idea
     buffer_init(&clientData->clientBuffer, BUFFER_SIZE, clientData->inClientBuffer);
     buffer_init(&clientData->originBuffer, BUFFER_SIZE, clientData->inOriginBuffer);
 
@@ -67,7 +67,6 @@ void socksv5PassiveAccept(struct selector_key* key){
 
     selector_status ss = selector_register(key->s, newClientSocket, &handler, OP_READ, clientData);
     if (ss != SELECTOR_SUCCESS) {
-
         free(clientData);
         close(newClientSocket);
         return;
@@ -76,7 +75,6 @@ void socksv5PassiveAccept(struct selector_key* key){
 }
 static void socksv5Read(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
-
     const enum socks5State state = stm_handler_read(&clientData->stm, key);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);

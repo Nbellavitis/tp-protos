@@ -58,5 +58,7 @@ unsigned authenticationWrite(struct selector_key * key){
         return ERROR;
     }
     printf("Autenticación exitosa\n");
+   printf("name: %s\n", p->name);
+    printf("password: %s\n", p->password);
     return REQ_READ; // Continuar con la lectura de la solicitud
 }
