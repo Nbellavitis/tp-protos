@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include "Auth/authParser.h"
+#include "Resolver/resolver.h"
 static void socksv5Read(struct selector_key *key);
 static void socksv5Write(struct selector_key *key);
 static void socksv5Close(struct selector_key *key);
@@ -24,13 +25,13 @@ static const struct state_definition clientActions[] = {
     {.state = NEGOTIATION_WRITE,.on_write_ready = negotiationWrite},
     {.state = AUTHENTICATION_READ,.on_arrival = authenticationReadInit, .on_read_ready = authenticationRead},
     {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite},
-//    {.state = REQ_READ,.on_arrival = requestReadInit,.on_read_ready = requestRead},
-//    {.state = ADDR_RESOLVE, .on_block_ready = addressResolveDone},
-//    {.state = CONNECTING, .on_arrival = requestConectingInit, .on_write_ready = requestConecting},
-//    {.state = REQ_WRITE, .on_write_ready = requestWrite},
-//    {.state = COPYING,   .on_arrival = socksv5HandleInit,.on_read_ready = socksv5HandleRead,.on_write_ready = socksv5HandleWrite,.on_departure = socksv5HandleClose},
-//    {.state = CLOSED, on_arrival = closeArrival},
-//    {.state=ERROR, on_arrival = errorArrival}
+    {.state = REQ_READ,.on_arrival = requestReadInit,.on_read_ready = requestRead},
+    {.state = ADDR_RESOLVE, .on_arrival = addressResolveInit, .on_write_ready = addressResolveDone},
+    {.state = CONNECTING, .on_arrival = requestConnectingInit, .on_write_ready = requestConnecting},
+    {.state = REQ_WRITE, .on_write_ready = requestWrite},
+    {.state = COPYING,   .on_arrival = socksv5HandleInit,.on_read_ready = socksv5HandleRead,.on_write_ready = socksv5HandleWrite,.on_departure = socksv5HandleClose},
+    {.state = CLOSED, .on_arrival = closeArrival},
+    {.state=ERROR, .on_arrival = errorArrival}
 };
 void socksv5PassiveAccept(struct selector_key* key){
     struct sockaddr_storage clientAddress;
@@ -53,7 +54,7 @@ void socksv5PassiveAccept(struct selector_key* key){
     }
     printf("New client connected: %d\n", newClientSocket);
     clientData->stm.initial = NEGOTIATION_READ;
-    clientData->stm.max_state = AUTHENTICATION_WRITE;
+    clientData->stm.max_state = ERROR;
     clientData->closed = false;
     clientData->stm.states = clientActions;
     clientData->clientFd = newClientSocket;
@@ -75,6 +76,9 @@ void socksv5PassiveAccept(struct selector_key* key){
 }
 static void socksv5Read(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
+    
+    printf("[DEBUG] SOCKS5_READ: Leyendo datos del socket %d\n", key->fd);
+    
     const enum socks5State state = stm_handler_read(&clientData->stm, key);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
@@ -82,8 +86,19 @@ static void socksv5Read(struct selector_key *key) {
     }
 }
 static void socksv5Write(struct selector_key *key) {
+    printf("[DEBUG] socksv5Write: Entrando a socksv5Write\n");
+    if (key == NULL) {
+        printf("[ERROR] socksv5Write: key es NULL\n");
+        return;
+    }
+    if (key->data == NULL) {
+        printf("[ERROR] socksv5Write: key->data es NULL\n");
+        return;
+    }
     ClientData *clientData = (ClientData *)key->data;
+    printf("[DEBUG] socksv5Write: Llamando a stm_handler_write\n");
     const enum socks5State state = stm_handler_write(&clientData->stm, key);
+    printf("[DEBUG] socksv5Write: stm_handler_write retornó: %d\n", state);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
         return;
@@ -95,8 +110,19 @@ static void socksv5Close(struct selector_key *key) {
     closeConnection(key);
 }
 static void socksv5Block(struct selector_key *key) {
+    printf("[DEBUG] socksv5Block: Entrando a socksv5Block\n");
+    if (key == NULL) {
+        printf("[ERROR] socksv5Block: key es NULL\n");
+        return;
+    }
+    if (key->data == NULL) {
+        printf("[ERROR] socksv5Block: key->data es NULL\n");
+        return;
+    }
     ClientData *clientData = (ClientData *)key->data;
+    printf("[DEBUG] socksv5Block: Llamando a stm_handler_block\n");
     const enum socks5State state = stm_handler_block(&clientData->stm, key);
+    printf("[DEBUG] socksv5Block: stm_handler_block retornó: %d\n", state);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
         return;

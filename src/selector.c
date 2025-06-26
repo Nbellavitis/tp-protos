@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <sys/signal.h>
+#include <signal.h> // sigemptyset, sigaddset, sigprocmask, sigaction
 #include "selector.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))

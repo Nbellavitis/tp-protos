@@ -1,6 +1,7 @@
 //
 // Created by nicke on 25/6/2025.
 //
+#include <stdio.h>
 #include "authParser.h"
 void initAuthParser(auth_parser *parser) {
     parser->version = 0;

@@ -4,6 +4,7 @@
  */
 #include <stdlib.h>
 #include "stm.h"
+#include <stdio.h>
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -64,11 +65,17 @@ stm_handler_read(struct state_machine *stm, struct selector_key *key) {
 
 unsigned
 stm_handler_write(struct state_machine *stm, struct selector_key *key) {
+    printf("[DEBUG] stm_handler_write: Entrando\n");
     handle_first(stm, key);
+    printf("[DEBUG] stm_handler_write: Estado actual: %d\n", stm->current->state);
+    printf("[DEBUG] stm_handler_write: on_write_ready: %p\n", (void*)stm->current->on_write_ready);
     if(stm->current->on_write_ready == 0) {
+        printf("[ERROR] stm_handler_write: on_write_ready es NULL\n");
         abort();
     }
+    printf("[DEBUG] stm_handler_write: Llamando a on_write_ready\n");
     const unsigned int ret = stm->current->on_write_ready(key);
+    printf("[DEBUG] stm_handler_write: on_write_ready retornó: %d\n", ret);
     jump(stm, ret, key);
 
     return ret;
@@ -76,11 +83,17 @@ stm_handler_write(struct state_machine *stm, struct selector_key *key) {
 
 unsigned
 stm_handler_block(struct state_machine *stm, struct selector_key *key) {
+    printf("[DEBUG] stm_handler_block: Entrando\n");
     handle_first(stm, key);
+    printf("[DEBUG] stm_handler_block: Estado actual: %d\n", stm->current->state);
+    printf("[DEBUG] stm_handler_block: on_block_ready: %p\n", (void*)stm->current->on_block_ready);
     if(stm->current->on_block_ready == 0) {
+        printf("[ERROR] stm_handler_block: on_block_ready es NULL\n");
         abort();
     }
+    printf("[DEBUG] stm_handler_block: Llamando a on_block_ready\n");
     const unsigned int ret = stm->current->on_block_ready(key);
+    printf("[DEBUG] stm_handler_block: on_block_ready retornó: %d\n", ret);
     jump(stm, ret, key);
 
     return ret;

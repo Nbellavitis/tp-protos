@@ -57,6 +57,13 @@ unsigned negotiationWrite(struct selector_key *key) {
         return ERROR;
     }
     printf("Negociación exitosa, método elegido: %d\n", p->method_chosen);
-    return (p->method_chosen == 0x00) ? REQ_READ : AUTHENTICATION_READ;
+    
+    if (p->method_chosen == 0x00) {
+        printf("[DEBUG] NEGOTIATION_WRITE: Avanzando a REQ_READ (sin autenticación)\n");
+        return REQ_READ;
+    } else {
+        printf("[DEBUG] NEGOTIATION_WRITE: Avanzando a AUTHENTICATION_READ (con autenticación)\n");
+        return AUTHENTICATION_READ;
+    }
 }
 

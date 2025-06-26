@@ -103,7 +103,9 @@ int main (int argc,char * argv[]){
     }
     printf("SOCKS5 Proxy Server listening on %s:%d\n", args.socks_addr, args.socks_port);
     while(true){
+        printf("[DEBUG] MAIN: Antes de selector_select\n");
         ss = selector_select(selector);
+        printf("[DEBUG] MAIN: Después de selector_select\n");
         if (ss != SELECTOR_SUCCESS) {
             fprintf(stdout, "Selector error: %s\n", selector_error(ss));
             selector_close();

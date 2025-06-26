@@ -17,6 +17,7 @@
 #include "Negotiation/negotiationParser.h"
 #include "Auth/authParser.h"
 #include "Auth/auth.h"
+#include "Resolver/resolverParser.h"
 #define BUFFER_SIZE 32768
 typedef struct ClientData {
     struct state_machine stm;
@@ -25,7 +26,7 @@ typedef struct ClientData {
     union {
         negotiation_parser  negParser;
         auth_parser authParser;
-
+        resolver_parser reqParser;
     } client;
     struct addrinfo* originResolution;
     int clientFd;

@@ -2,63 +2,39 @@ CC = gcc
 CFLAGS = -Wall -Wextra -g
 
 SRC_DIR = src
-NEG_DIR = $(SRC_DIR)/Negotiation
-UTILS_DIR = $(SRC_DIR)/Utils
 OBJ_DIR = obj
 BIN_DIR = bin
-AUTH_DIR = $(SRC_DIR)/Auth
-# Archivos fuente
-SRCS = $(wildcard $(SRC_DIR)/*.c)
-UTILS = $(wildcard $(UTILS_DIR)/*.c)
-NEG = $(wildcard $(NEG_DIR)/*.c)
-AUTH = $(wildcard $(AUTH_DIR)/*.c)
-# Archivos objeto: obj/Utils/foo.o por ejemplo
-OBJS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS)) \
-       $(patsubst $(UTILS_DIR)/%.c, $(OBJ_DIR)/Utils/%.o, $(UTILS)) \
-       $(patsubst $(NEG_DIR)/%.c, $(OBJ_DIR)/Negotiation/%.o, $(NEG)) \
-       $(patsubst $(AUTH_DIR)/%.c, $(OBJ_DIR)/Auth/%.o, $(AUTH))
 
-# Ejecutable
+# Excluir archivos de test del build principal
+SRCS := $(shell find $(SRC_DIR) -name '*.c' ! -path '$(SRC_DIR)/Tests/*')
+OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
+
 TARGET = $(BIN_DIR)/programa
 
-# Target principal
 all: $(TARGET)
 
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ -lpthread
 
-# Regla genérica para compilar .c en .o
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/Utils/%.o: $(UTILS_DIR)/%.c | $(OBJ_DIR)/Utils
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(OBJ_DIR)/Negotiation/%.o: $(NEG_DIR)/%.c | $(OBJ_DIR)/Negotiation
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(OBJ_DIR)/Auth/%.o: $(AUTH_DIR)/%.c | $(OBJ_DIR)/Auth
-	$(CC) $(CFLAGS) -c $< -o $@
-# Crear directorios
 $(BIN_DIR):
 	mkdir -p $@
 
-$(OBJ_DIR):
-	mkdir -p $@
+# Compilar tests solo si se invoca make tests
+test_srcs := $(shell find $(SRC_DIR)/Tests -name '*.c')
+test_objs := $(patsubst $(SRC_DIR)/Tests/%.c, $(OBJ_DIR)/Tests/%.o, $(test_srcs))
 
-$(OBJ_DIR)/Utils:
-	mkdir -p $@
+tests: $(test_objs)
+	@echo "Tests compilados. Ejecuta manualmente los binarios de test si lo deseas."
 
+$(OBJ_DIR)/Tests/%.o: $(SRC_DIR)/Tests/%.c
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/Auth:
-	mkdir -p $@
-
-$(OBJ_DIR)/Negotiation:
-	mkdir -p $@
-
-
-# Limpieza
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-.PHONY: all clean
+.PHONY: all clean tests
