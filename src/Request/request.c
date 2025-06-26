@@ -4,7 +4,6 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include "requestParser.h"
-#include "helper.h"
 
 void requestReadInit(unsigned state, struct selector_key *key) {
     printf("Inicio lectura de request\n");
