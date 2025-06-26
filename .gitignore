@@ -52,4 +52,5 @@ Mkfile.old
 dkms.conf
 .idea/
 /bin/
+/bin/programa
 /obj/
