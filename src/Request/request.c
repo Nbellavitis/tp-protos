@@ -88,7 +88,7 @@ void requestConnectingInit(unsigned state, struct selector_key *key) {
     request_parser *p = &data->client.reqParser;
 
     // Crear socket para conectar al origen
-    int domain = (p->atyp == 0x04) ? AF_INET6 : AF_INET;
+    int domain = (p->atyp == 0x04) ? AF_INET6 : AF_INET;   //@TODO creo que seria mejor CHECKEAR los 3 valores posibles. esto puede traer ERRRROR
     data->originFd = socket(domain, SOCK_STREAM, IPPROTO_TCP);
 
     if (data->originFd < 0) {
