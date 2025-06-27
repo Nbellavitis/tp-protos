@@ -331,7 +331,9 @@ unsigned requestWrite(struct selector_key *key) {
     if (buffer_can_read(&clientData->originBuffer)) {
         size_t bytes_to_write;
         uint8_t *write_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
-        ssize_t bytes_written = write(clientData->clientFd, write_ptr, bytes_to_write);
+        // ssize_t bytes_written = write(clientData->clientFd, write_ptr, bytes_to_write);
+        ssize_t bytes_written = send(clientData->clientFd, write_ptr, bytes_to_write, MSG_NOSIGNAL);
+        // todo: cambie las lineas de arriba, revisen porfa. mati
         
         if (bytes_written < 0) {
             printf("[DEBUG] REQ_WRITE: Error escribiendo al cliente\n");
