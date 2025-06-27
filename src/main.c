@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "args.h"
 #include "selector.h"
 #include <arpa/inet.h>

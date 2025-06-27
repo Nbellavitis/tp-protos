@@ -4,6 +4,7 @@
 
 #ifndef NEGOTIATION_H
 #define NEGOTIATION_H
+#define _GNU_SOURCE
 #include "../sock5.h"
 #include "negotiationParser.h"
 #include "../parser.h"
