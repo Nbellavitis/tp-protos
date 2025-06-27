@@ -1,17 +1,28 @@
-//
-// Created by nicke on 25/6/2025.
-//
-
 #ifndef PROTOS_AUTHPARSER_H
 #define PROTOS_AUTHPARSER_H
+
 #include <stdint.h>
+#include <stdbool.h>
 #include "../buffer.h"
+#include "../parser.h"
+
 typedef enum {
-    AUTH_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando
-    AUTH_PARSE_OK,          // parseo exitoso
-    AUTH_PARSE_ERROR        // error de protocolo (versión inválida, datos inconsistentes)
+    AUTH_PARSE_INCOMPLETE,
+    AUTH_PARSE_OK,
+    AUTH_PARSE_ERROR
 } auth_parse;
+
+typedef enum {
+    AUTH_VERSION,
+    AUTH_NAME_LEN,
+    AUTH_NAME,
+    AUTH_PASS_LEN,
+    AUTH_PASS,
+    AUTH_DONE
+} auth_states;
+
 typedef struct auth_parser {
+    struct parser *parser;
     uint8_t version;
     uint8_t nameLength;
     char name[256];
@@ -20,10 +31,11 @@ typedef struct auth_parser {
     uint8_t offsetName;
     uint8_t offsetPassword;
     bool error;
+    bool done;
 } auth_parser;
 
-void initAuthParser(auth_parser *parser);
+void initAuthParser(auth_parser *p);
+auth_parse authParse(auth_parser *p, struct buffer *b);
 bool sendAuthResponse(struct buffer *originBuffer, uint8_t version, uint8_t status);
-unsigned authParse(auth_parser *p, struct buffer *b);
 
-#endif //PROTOS_AUTHPARSER_H
+#endif // PROTOS_AUTHPARSER_H

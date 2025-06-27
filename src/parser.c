@@ -89,3 +89,8 @@ parser_no_classes(void) {
     return classes;
 }
 
+void change_state(struct parser *p, unsigned new_state) {  //ESTO LO AGREGUE YO SIRVE, NO SE PORQUE NO EXISTE
+    assert(p != NULL);
+    assert(new_state < p->def->states_count);
+    p->state = new_state;
+}
