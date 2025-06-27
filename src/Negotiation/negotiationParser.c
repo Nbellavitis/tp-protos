@@ -1,4 +1,6 @@
 #include "negotiationParser.h"
+#include "../Logging/statistics.h"
+
 #define VERSION_5 0x05
 
 
@@ -53,5 +55,7 @@ bool sendNegotiationResponse(struct buffer *originBuffer, uint8_t method) {
     }
     buffer_write(originBuffer, VERSION_5); // versión
     buffer_write(originBuffer, method); // método elegido
+    stats_add_origin_bytes(2);
+
     return true;
 }

@@ -3,6 +3,8 @@
 //
 #include <stdio.h>
 #include "authParser.h"
+
+
 void initAuthParser(auth_parser *parser) {
     parser->version = 0;
     parser->nameLength = 0;
@@ -64,5 +66,6 @@ bool sendAuthResponse(struct buffer *originBuffer, uint8_t version, uint8_t stat
     buffer_write(originBuffer, version); // Escribir versión
     buffer_write(originBuffer, status);  // Escribir estado (0x00 para éxito)
 
+    stats_add_origin_bytes(2);
     return true; // Respuesta enviada correctamente
 }
