@@ -6,6 +6,7 @@
 #define PROTOS_AUTHPARSER_H
 #include <stdint.h>
 #include "../buffer.h"
+#include "../Logging/statistics.h"
 typedef enum {
     AUTH_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando
     AUTH_PARSE_OK,          // parseo exitoso

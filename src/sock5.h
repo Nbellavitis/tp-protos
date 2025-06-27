@@ -17,8 +17,10 @@
 #include "Negotiation/negotiationParser.h"
 #include "Auth/authParser.h"
 #include "Auth/auth.h"
+#include "Logging/statistics.h"
 #include "Resolver/resolverParser.h"
 #define BUFFER_SIZE 32768
+
 typedef struct ClientData {
     struct state_machine stm;
     struct sockaddr_storage clientAddress;

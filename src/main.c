@@ -11,7 +11,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "sock5.h"
-#define MAXPENDING 10 // ME PINTO 10
+#define MAXPENDING 10 //todo ME PINTO 10
+
 static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t * lenResult) {
     int ipv6 = strchr(addr, ':') != NULL;
     if(ipv6){
@@ -111,5 +112,6 @@ int main (int argc,char * argv[]){
             selector_close();
             exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
         }
+        stats_print();
     }
 }

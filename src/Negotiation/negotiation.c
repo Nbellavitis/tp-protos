@@ -17,6 +17,8 @@ unsigned negotiationRead(struct selector_key *key) {
     if (readCount <= 0) {
         return ERROR; // error o desconexión
     }
+    stats_add_client_bytes(readCount);  //@todo checkear todos los lugares donde poner esto
+
     buffer_write_adv(&data->clientBuffer, readCount);
     negotiation_parse result = negotiationParse(p, &data->clientBuffer);
     printf("Resultado de negociación: %d\n", result);
@@ -48,6 +50,7 @@ unsigned negotiationWrite(struct selector_key *key) {
         return ERROR; // error o desconexión
     }
     buffer_read_adv(&data->originBuffer, writeCount);
+    stats_add_origin_bytes(writeCount);
 
     if (buffer_can_read(&data->originBuffer)) {
         return NEGOTIATION_WRITE;

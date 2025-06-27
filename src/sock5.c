@@ -14,12 +14,14 @@ static void socksv5Read(struct selector_key *key);
 static void socksv5Write(struct selector_key *key);
 static void socksv5Close(struct selector_key *key);
 static void socksv5Block(struct selector_key *key);
+
 static fd_handler  handler = {
      .handle_read = socksv5Read,
      .handle_write = socksv5Write,
      .handle_close = socksv5Close,
      .handle_block = socksv5Block,
 };
+
 static const struct state_definition clientActions[] = {
     {.state = NEGOTIATION_READ, .on_arrival = negotiationReadInit, .on_read_ready = negotiationRead},
     {.state = NEGOTIATION_WRITE,.on_write_ready = negotiationWrite},
@@ -53,6 +55,7 @@ void socksv5PassiveAccept(struct selector_key* key){
         return;
     }
     printf("New client connected: %d\n", newClientSocket);
+    stats_connection_opened();
     clientData->stm.initial = NEGOTIATION_READ;
     clientData->stm.max_state = ERROR;
     clientData->closed = false;
@@ -133,6 +136,7 @@ void closeConnection(struct selector_key *key) {
     if (clientData->closed) {
         return; // ya fue cerrado
     }
+    stats_connection_closed();
     clientData->closed = true;
 
     if (clientData->originFd >= 0) {

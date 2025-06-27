@@ -147,10 +147,13 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
         printf("[DEBUG] sendRequestResponse: Buffer lleno, no se puede escribir\n");
         return false;
     }
-    
+    unsigned written = 0;
+
     // VER
     buffer_write(originBuffer, version);
-    
+    stats_add_origin_bytes(1);
+
+
     // Verificar espacio para REP
     if (!buffer_can_write(originBuffer)) {
         printf("[DEBUG] sendRequestResponse: Buffer lleno después de VER\n");
@@ -159,7 +162,9 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
     
     // REP
     buffer_write(originBuffer, reply);
-    
+    stats_add_origin_bytes(1);
+
+
     // Verificar espacio para RSV
     if (!buffer_can_write(originBuffer)) {
         printf("[DEBUG] sendRequestResponse: Buffer lleno después de REP\n");
@@ -168,6 +173,7 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
     
     // RSV
     buffer_write(originBuffer, 0x00);
+    stats_add_origin_bytes(1);
     
     // Verificar espacio para ATYP
     if (!buffer_can_write(originBuffer)) {
@@ -177,7 +183,8 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
     
     // ATYP
     buffer_write(originBuffer, atyp);
-    
+    stats_add_origin_bytes(1);
+
     // BND.ADDR
     switch (atyp) {
         case ATYP_IPV4:
@@ -193,6 +200,7 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
                 }
                 buffer_write(originBuffer, ((uint8_t*)bnd_addr)[i]);
             }
+            stats_add_origin_bytes(4);
             break;
         case ATYP_IPV6:
             // Verificar espacio para 16 bytes de IPv6
@@ -207,6 +215,8 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
                 }
                 buffer_write(originBuffer, ((uint8_t*)bnd_addr)[i]);
             }
+            stats_add_origin_bytes(16);
+
             break;
         case ATYP_DOMAIN: {
             uint8_t domain_len = strlen((char*)bnd_addr);
@@ -224,6 +234,7 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
                     return false;
                 }
                 buffer_write(originBuffer, ((char*)bnd_addr)[i]);
+                stats_add_origin_bytes(1);  //@TODO esto es ineficiente. pero maneja el error inherentemente ni idea ver
             }
             break;
         }
@@ -238,14 +249,16 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
     // BND.PORT (network byte order)
     uint16_t port_network = htons(bnd_port);
     buffer_write(originBuffer, (port_network >> 8) & 0xFF);
-    
+    stats_add_origin_bytes(1);
+
     if (!buffer_can_write(originBuffer)) {
         printf("[DEBUG] sendRequestResponse: Buffer lleno para segundo byte de puerto\n");
         return false;
     }
     
     buffer_write(originBuffer, port_network & 0xFF);
-    
+    stats_add_origin_bytes(1);
+
     printf("[DEBUG] sendRequestResponse: Respuesta SOCKS5 enviada al buffer\n");
     return true;
 }
@@ -269,6 +282,8 @@ unsigned requestRead(struct selector_key *key) {
     if (readCount <= 0) {
         return ERROR; // error o desconexión
     }
+    stats_add_client_bytes(readCount);  //@todo checkear todos los lugares donde poner esto
+
     buffer_write_adv(&clientData->clientBuffer, readCount);
 
     // Print del buffer antes de parsear
@@ -570,7 +585,8 @@ unsigned socksv5HandleRead(struct selector_key *key) {
             printf("[DEBUG] COPYING_READ: Cliente cerró conexión\n");
             return CLOSED;
         }
-        
+        stats_add_client_bytes(bytes_read);
+
         printf("[DEBUG] COPYING_READ: Leídos %zd bytes del cliente\n", bytes_read);
         buffer_write_adv(&clientData->originBuffer, bytes_read);
         
