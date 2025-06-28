@@ -47,6 +47,7 @@ typedef struct ClientData {
     int originFd;
     struct  dns_request dns_req;
     int dns_resolution_state;
+    int connection_ready;
     struct buffer clientBuffer;
     struct buffer originBuffer;
     uint8_t inClientBuffer[BUFFER_SIZE];
