@@ -27,7 +27,30 @@ void stats_add_origin_bytes(unsigned n) {
     g_stats.bytes_o2c += n;
 }
 
+// Getters para las estadísticas
+unsigned stats_get_connections_opened(void) {
+    return g_stats.hist_conn;
+}
 
+unsigned stats_get_connections_closed(void) {
+    return g_stats.hist_conn - g_stats.curr_conn;
+}
+
+unsigned stats_get_current_connections(void) {
+    return g_stats.curr_conn;
+}
+
+unsigned stats_get_max_connections(void) {
+    return g_stats.max_conn;
+}
+
+unsigned stats_get_client_bytes(void) {
+    return g_stats.bytes_c2o;
+}
+
+unsigned stats_get_origin_bytes(void) {
+    return g_stats.bytes_o2c;
+}
 
 void stats_print()
 {

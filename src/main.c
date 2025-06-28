@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "sock5.h"
+#include "ManagementProtocol/management.h"
 #define MAXPENDING 10 //todo ME PINTO 10
 
 // Variables globales para usuarios autorizados
@@ -123,6 +124,55 @@ int main (int argc,char * argv[]){
         exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
     }
     printf("SOCKS5 Proxy Server listening on %s:%d\n", args.socks_addr, args.socks_port);
+    
+    // Configurar socket de management
+    struct sockaddr_storage mgmtAddr;
+    memset(&mgmtAddr, 0, sizeof(mgmtAddr));
+    socklen_t mgmtAddrLen = sizeof(mgmtAddr);
+    int mgmt_server = -1;
+    
+    if (setupSockAddr(args.mng_addr, args.mng_port, &mgmtAddr, &mgmtAddrLen) < 0) {
+        fprintf(stdout, "Failed to setup Management address\n");
+        exit(1);
+    }
+    
+    mgmt_server = socket(mgmtAddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
+    if (mgmt_server < 0) {
+        fprintf(stdout, "Failed to create management socket: %s\n", strerror(errno));
+        exit(1);
+    }
+    
+    setsockopt(mgmt_server, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+    if (bind(mgmt_server, (struct sockaddr *)&mgmtAddr, mgmtAddrLen) < 0) {
+        fprintf(stdout, "Failed to bind management socket: %s\n", strerror(errno));
+        close(mgmt_server);
+        exit(1);
+    }
+    
+    if (listen(mgmt_server, MAXPENDING) < 0) {
+        fprintf(stdout, "Failed to listen on management socket: %s\n", strerror(errno));
+        close(mgmt_server);
+        exit(1);
+    }
+    
+    if (selector_fd_set_nio(mgmt_server) == -1) {
+        fprintf(stdout, "Failed to set management socket to non-blocking: %s\n", strerror(errno));
+        close(mgmt_server);
+        exit(1);
+    }
+    
+    const fd_handler management = {
+        .handle_read = management_passive_accept
+    };
+    ss = selector_register(selector, mgmt_server, &management, OP_READ, NULL);
+    if (ss != SELECTOR_SUCCESS) {
+        fprintf(stdout, "Failed to register management socket with selector: %s\n", selector_error(ss));
+        selector_close();
+        exit(1);
+    }
+    
+    printf("Management Server listening on %s:%d\n", args.mng_addr, args.mng_port);
+    
     while(true){
         printf("[DEBUG] MAIN: Antes de selector_select\n");
         ss = selector_select(selector);

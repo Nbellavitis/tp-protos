@@ -20,7 +20,13 @@ void stats_connection_closed(void);
 void stats_add_client_bytes(unsigned n);
 void stats_add_origin_bytes(unsigned n);
 
-
+// Getters para las estadísticas
+unsigned stats_get_connections_opened(void);
+unsigned stats_get_connections_closed(void);
+unsigned stats_get_current_connections(void);
+unsigned stats_get_max_connections(void);
+unsigned stats_get_client_bytes(void);
+unsigned stats_get_origin_bytes(void);
 
 void stats_print();
 
