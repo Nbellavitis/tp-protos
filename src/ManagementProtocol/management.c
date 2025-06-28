@@ -14,6 +14,8 @@
 // Declaraciones de funciones externas
 extern struct users* get_authorized_users(void);
 extern int get_num_authorized_users(void);
+extern bool add_user(const char* username, const char* password);
+extern bool delete_user(const char* username);
 
 // Credenciales hardcodeadas del admin
 static const char* ADMIN_USERNAME = "admin";
@@ -338,12 +340,47 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 send_management_response(&mgmt_data->response_buffer, STATUS_OK, users_response);
                 break;
             }
-            case CMD_ADD_USER:
-                send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Add user not implemented yet");
+            case CMD_ADD_USER: {
+                // Parsear payload (formato: "username:password")
+                char *colon = strchr(mgmt_data->parser.payload, ':');
+                if (colon == NULL) {
+                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid format. Use: username:password");
+                } else {
+                    *colon = '\0';
+                    char *username = mgmt_data->parser.payload;
+                    char *password = colon + 1;
+                    
+                    if (strlen(username) == 0 || strlen(password) == 0) {
+                        send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username and password cannot be empty");
+                    } else if (add_user(username, password)) {
+                        char response[256];
+                        snprintf(response, sizeof(response), "User '%s' added successfully", username);
+                        send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
+                    } else {
+                        if (get_num_authorized_users() >= MAX_USERS) {
+                            send_management_response(&mgmt_data->response_buffer, STATUS_FULL, "Maximum number of users reached");
+                        } else {
+                            send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "User already exists or memory error");
+                        }
+                    }
+                }
                 break;
-            case CMD_DELETE_USER:
-                send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Delete user not implemented yet");
+            }
+            case CMD_DELETE_USER: {
+                // El payload contiene solo el nombre de usuario a eliminar
+                char *username = mgmt_data->parser.payload;
+                
+                if (strlen(username) == 0) {
+                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username cannot be empty");
+                } else if (delete_user(username)) {
+                    char response[256];
+                    snprintf(response, sizeof(response), "User '%s' deleted successfully", username);
+                    send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
+                } else {
+                    send_management_response(&mgmt_data->response_buffer, STATUS_NOT_FOUND, "User not found");
+                }
                 break;
+            }
             default:
                 send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Unknown command");
                 break;

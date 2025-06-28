@@ -28,6 +28,74 @@ int get_num_authorized_users(void) {
     return num_authorized_users;
 }
 
+// Agregar un nuevo usuario
+bool add_user(const char* username, const char* password) {
+    if (username == NULL || password == NULL) {
+        return false;
+    }
+    
+    if (num_authorized_users >= MAX_USERS) {
+        return false; // Array lleno
+    }
+    
+    // Verificar que el usuario no exista ya
+    for (int i = 0; i < num_authorized_users; i++) {
+        if (authorized_users[i].name != NULL && strcmp(authorized_users[i].name, username) == 0) {
+            return false; // Usuario ya existe
+        }
+    }
+    
+    // Crear copias de los strings (necesario porque el payload es temporal)
+    char* name_copy = malloc(strlen(username) + 1);
+    char* pass_copy = malloc(strlen(password) + 1);
+    
+    if (name_copy == NULL || pass_copy == NULL) {
+        free(name_copy);
+        free(pass_copy);
+        return false;
+    }
+    
+    strcpy(name_copy, username);
+    strcpy(pass_copy, password);
+    
+    authorized_users[num_authorized_users].name = name_copy;
+    authorized_users[num_authorized_users].pass = pass_copy;
+    num_authorized_users++;
+    
+    printf("Usuario agregado: %s\n", username);
+    return true;
+}
+
+// Eliminar un usuario
+bool delete_user(const char* username) {
+    if (username == NULL) {
+        return false;
+    }
+    
+    for (int i = 0; i < num_authorized_users; i++) {
+        if (authorized_users[i].name != NULL && strcmp(authorized_users[i].name, username) == 0) {
+            // Liberar memoria de los strings
+            free(authorized_users[i].name);
+            free(authorized_users[i].pass);
+            
+            // Mover todos los elementos posteriores una posición hacia atrás
+            for (int j = i; j < num_authorized_users - 1; j++) {
+                authorized_users[j] = authorized_users[j + 1];
+            }
+            
+            // Limpiar el último elemento
+            authorized_users[num_authorized_users - 1].name = NULL;
+            authorized_users[num_authorized_users - 1].pass = NULL;
+            
+            num_authorized_users--;
+            printf("Usuario eliminado: %s\n", username);
+            return true;
+        }
+    }
+    
+    return false; // Usuario no encontrado
+}
+
 static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t * lenResult) {
     int ipv6 = strchr(addr, ':') != NULL;
     if(ipv6){
@@ -78,9 +146,14 @@ int main (int argc,char * argv[]){
     struct socks5args args;
     parse_args(argc, argv, &args);
     
-    // Inicializar usuarios autorizados
-    authorized_users = args.users;
+    // Inicializar usuarios autorizados - copiar a memoria dinámica
+    authorized_users = calloc(MAX_USERS, sizeof(struct users));
     for (int i = 0; i < MAX_USERS && args.users[i].name != NULL; i++) {
+        // Copiar strings a memoria dinámica
+        authorized_users[i].name = malloc(strlen(args.users[i].name) + 1);
+        authorized_users[i].pass = malloc(strlen(args.users[i].pass) + 1);
+        strcpy(authorized_users[i].name, args.users[i].name);
+        strcpy(authorized_users[i].pass, args.users[i].pass);
         num_authorized_users++;
     }
     struct sockaddr_storage auxAddr;
