@@ -1,15 +1,31 @@
 #include "auth.h"
 
 bool validateUser(const char* username, const char* password) {
-    // Usuario hardcodeado para pruebas por sesión
-    const char* valid_username = "admin";
-    const char* valid_password = "password123";
-    
     if (username == NULL || password == NULL) {
         return false;
     }
+
+    // todo: revisar lo hicimos con get porque no sabemos si estaría bien que desde acá pueda acceder al struct users users[MAX_USERS];
+    struct users* users = get_authorized_users();
+    int num_users = get_num_authorized_users();
     
-    return (strcmp(username, valid_username) == 0 && strcmp(password, valid_password) == 0);
+    // Si no hay usuarios configurados, usamos usuario hardcodeado
+    if (num_users == 0) {
+        const char* valid_username = "admin";
+        const char* valid_password = "password123";
+        return (strcmp(username, valid_username) == 0 && strcmp(password, valid_password) == 0);
+    }
+    
+    // Buscar en la lista de usuarios autorizados
+    for (int i = 0; i < num_users; i++) {
+        if (users[i].name != NULL && users[i].pass != NULL) {
+            if (strcmp(username, users[i].name) == 0 && strcmp(password, users[i].pass) == 0) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
 }
 
 void authenticationReadInit(unsigned state,struct selector_key * key){

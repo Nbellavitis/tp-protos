@@ -21,7 +21,12 @@
 #include "Auth/auth.h"
 #include "Logging/statistics.h"
 #include "Resolver/resolverParser.h"
+#include "args.h"
 #define BUFFER_SIZE 32768
+
+// Funciones para acceder a usuarios autorizados
+struct users* get_authorized_users(void);
+int get_num_authorized_users(void);
 struct dns_request {
     struct gaicb req;
     struct ClientData * clientData;

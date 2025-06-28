@@ -14,6 +14,19 @@
 #include "sock5.h"
 #define MAXPENDING 10 //todo ME PINTO 10
 
+// Variables globales para usuarios autorizados
+static struct users* authorized_users = NULL;
+static int num_authorized_users = 0;
+
+// Funciones para acceder a los usuarios autorizados
+struct users* get_authorized_users(void) {
+    return authorized_users;
+}
+
+int get_num_authorized_users(void) {
+    return num_authorized_users;
+}
+
 static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t * lenResult) {
     int ipv6 = strchr(addr, ':') != NULL;
     if(ipv6){
@@ -63,6 +76,12 @@ int main (int argc,char * argv[]){
     }
     struct socks5args args;
     parse_args(argc, argv, &args);
+    
+    // Inicializar usuarios autorizados
+    authorized_users = args.users;
+    for (int i = 0; i < MAX_USERS && args.users[i].name != NULL; i++) {
+        num_authorized_users++;
+    }
     struct sockaddr_storage auxAddr;
     memset(&auxAddr, 0, sizeof(auxAddr));
     socklen_t auxAddrLen = sizeof(auxAddr);
