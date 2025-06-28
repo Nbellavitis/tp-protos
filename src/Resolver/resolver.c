@@ -174,13 +174,13 @@ unsigned addressResolveDone(struct selector_key *key) {
         return REQ_WRITE; // Enviar error y cerrar conexión
     }
     // Limpiar resolución previa si existe
-    if (clientData->originResolution != NULL) {
-        if (clientData->originResolution->ai_addr != NULL) {
-            free(clientData->originResolution->ai_addr);
-        }
-        free(clientData->originResolution);
-        clientData->originResolution = NULL;
-    }
+//    if (clientData->originResolution != NULL) {
+//        if (clientData->originResolution->ai_addr != NULL) {
+//            free(clientData->originResolution->ai_addr);
+//        }
+//        free(clientData->originResolution);
+//        clientData->originResolution = NULL;
+//    }
 
     char port_str[6];
     snprintf(port_str, sizeof(port_str), "%u", parser->port);
@@ -244,34 +244,33 @@ unsigned addressResolveDone(struct selector_key *key) {
         return CONNECTING;
 
     } else if (parser->address_type == ATYP_DOMAIN) {
-        struct addrinfo hints;
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC;      // Soporta IPv4 o IPv6
-        hints.ai_socktype = SOCK_STREAM;  // TCP
-        hints.ai_protocol = IPPROTO_TCP;  // TCP
-        struct dns_request * dns_req = &clientData->dns_req;
-        struct gaicb *reqs[] = { &dns_req->req };
-        dns_req->req.ar_name = parser->domain;
-        dns_req->req.ar_service = port_str;
-        dns_req->req.ar_request = &hints;
-        dns_req->req.ar_result = NULL;
-        dns_req->clientData = clientData;
-        dns_req->selector = key->s;
-        dns_req->fd = key->fd;
-        struct sigevent sev = {0};
-        sev.sigev_notify = SIGEV_THREAD;
-        sev.sigev_notify_function = dnsResolutionDone;
-        sev.sigev_value.sival_ptr = dns_req;  // paso dns_req al callback
 
-        if (getaddrinfo_a(GAI_NOWAIT, reqs, 1, &sev) != 0) {
-            printf("[DEBUG] ADDR_RESOLVE: Error iniciando resolución de dominio: %s\n", gai_strerror(gai_ret));
-            // Enviar error: General SOCKS server failure
-            sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
+        /* ──────────── NUEVO CÓDIGO: getaddrinfo() síncrono ──────────── */
+
+        struct addrinfo hints, *result = NULL;
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family   = AF_UNSPEC;        /* IPv4 o IPv6            */
+        hints.ai_socktype = SOCK_STREAM;      /* TCP                    */
+        hints.ai_protocol = IPPROTO_TCP;
+
+        /* “www.google.com” –> parser->domain (NO está null-terminated).
+           Copiamos a un buffer temporal para asegurarlo                */
+        char domain[256 + 1];
+        memcpy(domain, parser->domain, parser->domain_length);
+        domain[parser->domain_length] = '\0';
+
+        int rc = getaddrinfo(domain, port_str, &hints, &result);
+        if (rc != 0) {
+            printf("[DEBUG] ADDR_RESOLVE: getaddrinfo: %s\n", gai_strerror(rc));
+            sendRequestResponse(&clientData->originBuffer, 0x05, 0x04, ATYP_IPV4,
+                                parser->ipv4_addr, 0);               /* Host unreachable */
             return REQ_WRITE;
         }
-        clientData->dns_resolution_state = 1; // Indica que la resolución está en progreso
 
-        return ADDR_RESOLVE;
+        /* Éxito: guardamos la lista devuelta en el ClientData           */
+        clientData->originResolution = result;
+        printf("[DEBUG] ADDR_RESOLVE: Dominio resuelto; avanzando a CONNECTING\n");
+        return CONNECTING;
     }
 
     if (gai_ret != 0 || clientData->originResolution == NULL) {
@@ -668,6 +667,7 @@ void dnsResolutionDone(union sigval sv) {
     struct dns_request *dns_req = sv.sival_ptr;
     ClientData *clientData = (ClientData *)dns_req->clientData;
     int ret = gai_error(&dns_req->req);
+
     if (ret != 0) {
         printf("[DEBUG] Error en resolución: %s\n", gai_strerror(ret));
         freeaddrinfo(dns_req->req.ar_result);
