@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "sock5.h"
+#include "ManagementProtocol/management.h"
 #define MAXPENDING 10 //todo ME PINTO 10
 
 // Variables globales para usuarios autorizados
@@ -25,6 +26,74 @@ struct users* get_authorized_users(void) {
 
 int get_num_authorized_users(void) {
     return num_authorized_users;
+}
+
+// Agregar un nuevo usuario
+bool add_user(const char* username, const char* password) {
+    if (username == NULL || password == NULL) {
+        return false;
+    }
+    
+    if (num_authorized_users >= MAX_USERS) {
+        return false; // Array lleno
+    }
+    
+    // Verificar que el usuario no exista ya
+    for (int i = 0; i < num_authorized_users; i++) {
+        if (authorized_users[i].name != NULL && strcmp(authorized_users[i].name, username) == 0) {
+            return false; // Usuario ya existe
+        }
+    }
+    
+    // Crear copias de los strings (necesario porque el payload es temporal)
+    char* name_copy = malloc(strlen(username) + 1);
+    char* pass_copy = malloc(strlen(password) + 1);
+    
+    if (name_copy == NULL || pass_copy == NULL) {
+        free(name_copy);
+        free(pass_copy);
+        return false;
+    }
+    
+    strcpy(name_copy, username);
+    strcpy(pass_copy, password);
+    
+    authorized_users[num_authorized_users].name = name_copy;
+    authorized_users[num_authorized_users].pass = pass_copy;
+    num_authorized_users++;
+    
+    printf("Usuario agregado: %s\n", username);
+    return true;
+}
+
+// Eliminar un usuario
+bool delete_user(const char* username) {
+    if (username == NULL) {
+        return false;
+    }
+    
+    for (int i = 0; i < num_authorized_users; i++) {
+        if (authorized_users[i].name != NULL && strcmp(authorized_users[i].name, username) == 0) {
+            // Liberar memoria de los strings
+            free(authorized_users[i].name);
+            free(authorized_users[i].pass);
+            
+            // Mover todos los elementos posteriores una posición hacia atrás
+            for (int j = i; j < num_authorized_users - 1; j++) {
+                authorized_users[j] = authorized_users[j + 1];
+            }
+            
+            // Limpiar el último elemento
+            authorized_users[num_authorized_users - 1].name = NULL;
+            authorized_users[num_authorized_users - 1].pass = NULL;
+            
+            num_authorized_users--;
+            printf("Usuario eliminado: %s\n", username);
+            return true;
+        }
+    }
+    
+    return false; // Usuario no encontrado
 }
 
 static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t * lenResult) {
@@ -77,9 +146,14 @@ int main (int argc,char * argv[]){
     struct socks5args args;
     parse_args(argc, argv, &args);
     
-    // Inicializar usuarios autorizados
-    authorized_users = args.users;
+    // Inicializar usuarios autorizados - copiar a memoria dinámica
+    authorized_users = calloc(MAX_USERS, sizeof(struct users));
     for (int i = 0; i < MAX_USERS && args.users[i].name != NULL; i++) {
+        // Copiar strings a memoria dinámica
+        authorized_users[i].name = malloc(strlen(args.users[i].name) + 1);
+        authorized_users[i].pass = malloc(strlen(args.users[i].pass) + 1);
+        strcpy(authorized_users[i].name, args.users[i].name);
+        strcpy(authorized_users[i].pass, args.users[i].pass);
         num_authorized_users++;
     }
     struct sockaddr_storage auxAddr;
@@ -123,6 +197,55 @@ int main (int argc,char * argv[]){
         exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
     }
     printf("SOCKS5 Proxy Server listening on %s:%d\n", args.socks_addr, args.socks_port);
+    
+    // Configurar socket de management
+    struct sockaddr_storage mgmtAddr;
+    memset(&mgmtAddr, 0, sizeof(mgmtAddr));
+    socklen_t mgmtAddrLen = sizeof(mgmtAddr);
+    int mgmt_server = -1;
+    
+    if (setupSockAddr(args.mng_addr, args.mng_port, &mgmtAddr, &mgmtAddrLen) < 0) {
+        fprintf(stdout, "Failed to setup Management address\n");
+        exit(1);
+    }
+    
+    mgmt_server = socket(mgmtAddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
+    if (mgmt_server < 0) {
+        fprintf(stdout, "Failed to create management socket: %s\n", strerror(errno));
+        exit(1);
+    }
+    
+    setsockopt(mgmt_server, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+    if (bind(mgmt_server, (struct sockaddr *)&mgmtAddr, mgmtAddrLen) < 0) {
+        fprintf(stdout, "Failed to bind management socket: %s\n", strerror(errno));
+        close(mgmt_server);
+        exit(1);
+    }
+    
+    if (listen(mgmt_server, MAXPENDING) < 0) {
+        fprintf(stdout, "Failed to listen on management socket: %s\n", strerror(errno));
+        close(mgmt_server);
+        exit(1);
+    }
+    
+    if (selector_fd_set_nio(mgmt_server) == -1) {
+        fprintf(stdout, "Failed to set management socket to non-blocking: %s\n", strerror(errno));
+        close(mgmt_server);
+        exit(1);
+    }
+    
+    const fd_handler management = {
+        .handle_read = management_passive_accept
+    };
+    ss = selector_register(selector, mgmt_server, &management, OP_READ, NULL);
+    if (ss != SELECTOR_SUCCESS) {
+        fprintf(stdout, "Failed to register management socket with selector: %s\n", selector_error(ss));
+        selector_close();
+        exit(1);
+    }
+    
+    printf("Management Server listening on %s:%d\n", args.mng_addr, args.mng_port);
+    
     while(true){
         printf("[DEBUG] MAIN: Antes de selector_select\n");
         ss = selector_select(selector);
