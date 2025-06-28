@@ -1,6 +1,32 @@
 #include "auth.h"
 
+bool validateUser(const char* username, const char* password) {
+    if (username == NULL || password == NULL) {
+        return false;
+    }
 
+    // todo: revisar lo hicimos con get porque no sabemos si estaría bien que desde acá pueda acceder al struct users users[MAX_USERS];
+    struct users* users = get_authorized_users();
+    int num_users = get_num_authorized_users();
+    
+    // Si no hay usuarios configurados, usamos usuario hardcodeado
+    if (num_users == 0) {
+        const char* valid_username = "admin";
+        const char* valid_password = "password123";
+        return (strcmp(username, valid_username) == 0 && strcmp(password, valid_password) == 0);
+    }
+    
+    // Buscar en la lista de usuarios autorizados
+    for (int i = 0; i < num_users; i++) {
+        if (users[i].name != NULL && users[i].pass != NULL) {
+            if (strcmp(username, users[i].name) == 0 && strcmp(password, users[i].pass) == 0) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
 
 void authenticationReadInit(unsigned state,struct selector_key * key){
     printf("Inicio autenticación\n");
@@ -25,8 +51,17 @@ unsigned authenticationRead(struct selector_key * key){
     auth_parse result = authParse(p, &data->clientBuffer);
     switch (result) {
         case AUTH_PARSE_OK:
-//            auth_parser *authParser = &data->client.authParser;
-            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x00)) { //TODO validar usuario
+            // Validar las credenciales del usuario
+            if (!validateUser(p->name, p->password)) {
+                printf("Autenticación fallida para usuario: %s\n", p->name);
+                if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x01)) {
+                    return ERROR;
+                }
+                return ERROR; // Rechazar conexión por credenciales inválidas
+            }
+            
+            printf("Autenticación exitosa para usuario: %s\n", p->name);
+            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x00)) {
                 return ERROR;
             }
             return AUTHENTICATION_WRITE;

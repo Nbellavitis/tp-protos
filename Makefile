@@ -14,7 +14,7 @@ TARGET = $(BIN_DIR)/programa
 all: $(TARGET)
 
 $(TARGET): $(OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ -lpthread
+	$(CC) $(CFLAGS) -o $@ $^ -lpthread -lanl
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	mkdir -p $(dir $@)
