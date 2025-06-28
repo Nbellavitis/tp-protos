@@ -34,6 +34,9 @@ struct dns_request {
     struct ClientData * clientData;
     fd_selector selector;
     int fd;
+    char domain_str[256];  // Buffer para el dominio null-terminated
+    char port_str[16];     // Buffer para el puerto
+    struct addrinfo hints; // Buffer para los hints de getaddrinfo
 };
 typedef struct ClientData {
     struct state_machine stm;

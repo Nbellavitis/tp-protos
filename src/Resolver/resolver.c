@@ -154,7 +154,7 @@ unsigned requestWrite(struct selector_key *key) {
 // Funciones para el estado ADDR_RESOLVE
 void addressResolveInit(const unsigned state, struct selector_key *key) {
     printf("[DEBUG] ADDR_RESOLVE_INIT: Iniciando resolución de dirección\n");
-
+    
     // Ejecutar la resolución inmediatamente
     unsigned next = addressResolveDone(key);
     printf("[DEBUG] ADDR_RESOLVE_INIT: addressResolveDone retornó: %d\n", next);
@@ -166,7 +166,6 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
             printf("[ERROR] ADDR_RESOLVE_INIT: Error configurando selector para escritura\n");
             closeConnection(key);
             return;
-
         }
     }
 }
@@ -240,11 +239,9 @@ unsigned addressResolveDone(struct selector_key *key) {
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
             return REQ_WRITE;
         }
-        *ipv6_addr = (struct sockaddr_in6){
-            .sin6_family = AF_INET6,
-            .sin6_port = htons(parser->port),
-            .sin6_addr = parser->ipv6_addr
-        };
+        ipv6_addr->sin6_family = AF_INET6;
+        ipv6_addr->sin6_port = htons(parser->port);
+        memcpy(&ipv6_addr->sin6_addr, parser->ipv6_addr, 16);
         *clientData->originResolution= (struct addrinfo){
             .ai_family = AF_INET6,
             .ai_addrlen = sizeof(*ipv6_addr),
@@ -255,16 +252,23 @@ unsigned addressResolveDone(struct selector_key *key) {
         return CONNECTING;
 
     } else if (parser->address_type == ATYP_DOMAIN) {
-        struct addrinfo hints;
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC;      // Soporta IPv4 o IPv6
-        hints.ai_socktype = SOCK_STREAM;  // TCP
-        hints.ai_protocol = IPPROTO_TCP;  // TCP
         struct dns_request * dns_req = &clientData->dns_req;
         struct gaicb *reqs[] = { &dns_req->req };
-        dns_req->req.ar_name = parser->domain;
-        dns_req->req.ar_service = port_str;
-        dns_req->req.ar_request = &hints;
+        
+        // Configurar hints en el buffer persistente
+        memset(&dns_req->hints, 0, sizeof(dns_req->hints));
+        dns_req->hints.ai_family = AF_UNSPEC;      // Soporta IPv4 o IPv6
+        dns_req->hints.ai_socktype = SOCK_STREAM;  // TCP
+        dns_req->hints.ai_protocol = IPPROTO_TCP;  // TCP
+        
+        // Crear strings null-terminated en los buffers persistentes
+        memcpy(dns_req->domain_str, parser->domain, parser->domain_length);
+        dns_req->domain_str[parser->domain_length] = '\0';
+        strcpy(dns_req->port_str, port_str);
+        
+        dns_req->req.ar_name = dns_req->domain_str;
+        dns_req->req.ar_service = dns_req->port_str;
+        dns_req->req.ar_request = &dns_req->hints;
         dns_req->req.ar_result = NULL;
         dns_req->clientData = clientData;
         dns_req->selector = key->s;
@@ -274,13 +278,15 @@ unsigned addressResolveDone(struct selector_key *key) {
         sev.sigev_notify_function = dnsResolutionDone;
         sev.sigev_value.sival_ptr = dns_req;  // paso dns_req al callback
 
-        if (getaddrinfo_a(GAI_NOWAIT, reqs, 1, &sev) != 0) {
-            printf("[DEBUG] ADDR_RESOLVE: Error iniciando resolución de dominio: %s\n", gai_strerror(gai_ret));
+        int gai_result = getaddrinfo_a(GAI_NOWAIT, reqs, 1, &sev);
+        if (gai_result != 0) {
+            printf("[DEBUG] ADDR_RESOLVE: Error iniciando resolución de dominio: %s\n", gai_strerror(gai_result));
             // Enviar error: General SOCKS server failure
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
             return REQ_WRITE;
         }
         clientData->dns_resolution_state = 1; // Indica que la resolución está en progreso
+        printf("[DEBUG] ADDR_RESOLVE: Resolución DNS iniciada para dominio: %s\n", dns_req->domain_str);
 
         return ADDR_RESOLVE;
     }
