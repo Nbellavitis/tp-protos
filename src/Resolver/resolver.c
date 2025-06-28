@@ -155,37 +155,11 @@ unsigned requestWrite(struct selector_key *key) {
 void addressResolveInit(const unsigned state, struct selector_key *key) {
     printf("[DEBUG] ADDR_RESOLVE_INIT: Iniciando resolución de dirección\n");
     
-    // Ejecutar la resolución inmediatamente
-    unsigned next = addressResolveDone(key);
-    printf("[DEBUG] ADDR_RESOLVE_INIT: addressResolveDone retornó: %d\n", next);
-
-    // Si la resolución fue exitosa, configurar el selector para escritura
-    if (next == CONNECTING) {
-        printf("[DEBUG] ADDR_RESOLVE_INIT: Configurando selector para escritura\n");
-        if(selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
-            printf("[ERROR] ADDR_RESOLVE_INIT: Error configurando selector para escritura\n");
-            closeConnection(key);
-            return;
-        }
-    }
-}
-
-unsigned addressResolveDone(struct selector_key *key) {
+    // Solo iniciar la resolución DNS asíncrona
+    // La continuación será manejada por el callback dnsResolutionDone
     ClientData *clientData = (ClientData *)key->data;
     resolver_parser *parser = &clientData->client.reqParser;
 
-    printf("[DEBUG] ADDR_RESOLVE: Iniciando resolución de dirección\n");
-    if (clientData->dns_resolution_state == 2){
-        clientData->dns_resolution_state = 0;
-        return CONNECTING;
-    }else if (clientData->dns_resolution_state == 1) {
-        printf("[DEBUG] ADDR_RESOLVE: Resolución de DNS ya en progreso, esperando\n");
-        return ADDR_RESOLVE; // Esperar a que se complete la resolución
-    }else if (clientData->dns_resolution_state == -1){
-        printf("[DEBUG] ADDR_RESOLVE: Resolución de DNS fallida, enviando error\n");
-        sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-        return REQ_WRITE; // Enviar error y cerrar conexión
-    }
     // Limpiar resolución previa si existe
     if (clientData->originResolution != NULL) {
         freeaddrinfo(clientData->originResolution);
@@ -195,49 +169,53 @@ unsigned addressResolveDone(struct selector_key *key) {
     char port_str[6];
     snprintf(port_str, sizeof(port_str), "%u", parser->port);
 
-
-
-    int gai_ret = 0;
     if (parser->address_type == ATYP_IPV4) {
-         printf("[DEBUG] ADDR_RESOLVE: Resolviendo IPv4 directa\n");
-          struct sockaddr_in* ipv4_addr = malloc(sizeof(struct sockaddr_in));
-            if (ipv4_addr == NULL) {
-            printf("[DEBUG] ADDR_RESOLVE: Error al asignar memoria para resolución IPv4\n");
+        printf("[DEBUG] ADDR_RESOLVE_INIT: Resolviendo IPv4 directa\n");
+        struct sockaddr_in* ipv4_addr = malloc(sizeof(struct sockaddr_in));
+        if (ipv4_addr == NULL) {
+            printf("[DEBUG] ADDR_RESOLVE_INIT: Error al asignar memoria para resolución IPv4\n");
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-            return REQ_WRITE;
-            }
-          clientData->originResolution = calloc(1, sizeof(struct addrinfo));
-          if(clientData->originResolution == NULL) {
-                printf("[DEBUG] ADDR_RESOLVE: Error al asignar memoria para resolución IPv4\n");
-                sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-                return REQ_WRITE;
-          }
-          *ipv4_addr = (struct sockaddr_in){
-                .sin_family = AF_INET,
-                .sin_port = htons(parser->port),
-                .sin_addr = *(struct in_addr *)parser->ipv4_addr
-          };
-          *clientData->originResolution = (struct addrinfo){
-                .ai_family = AF_INET,
-                .ai_addrlen = sizeof(*ipv4_addr),
-                .ai_addr = (struct sockaddr *)ipv4_addr,
-                .ai_socktype = SOCK_STREAM,
-                .ai_protocol = IPPROTO_TCP
-          };
-          return CONNECTING;
+            selector_set_interest(key->s, key->fd, OP_WRITE);
+            return;
+        }
+        clientData->originResolution = calloc(1, sizeof(struct addrinfo));
+        if(clientData->originResolution == NULL) {
+            printf("[DEBUG] ADDR_RESOLVE_INIT: Error al asignar memoria para resolución IPv4\n");
+            sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
+            selector_set_interest(key->s, key->fd, OP_WRITE);
+            return;
+        }
+        *ipv4_addr = (struct sockaddr_in){
+            .sin_family = AF_INET,
+            .sin_port = htons(parser->port),
+            .sin_addr = *(struct in_addr *)parser->ipv4_addr
+        };
+        *clientData->originResolution = (struct addrinfo){
+            .ai_family = AF_INET,
+            .ai_addrlen = sizeof(*ipv4_addr),
+            .ai_addr = (struct sockaddr *)ipv4_addr,
+            .ai_socktype = SOCK_STREAM,
+            .ai_protocol = IPPROTO_TCP
+        };
+        // Para IPv4, podemos proceder inmediatamente a CONNECTING
+        selector_set_interest(key->s, key->fd, OP_WRITE);
+        printf("[DEBUG] ADDR_RESOLVE_INIT: IPv4 resuelto, configurando para CONNECTING\n");
+        return;
     } else if (parser->address_type == ATYP_IPV6) {
-        printf("[DEBUG] ADDR_RESOLVE: Resolviendo IPv6 directa\n");
+        printf("[DEBUG] ADDR_RESOLVE_INIT: Resolviendo IPv6 directa\n");
         struct sockaddr_in6* ipv6_addr = malloc(sizeof(struct sockaddr_in6));
         if (ipv6_addr == NULL) {
-            printf("[DEBUG] ADDR_RESOLVE: Error al asignar memoria para resolución IPv6\n");
+            printf("[DEBUG] ADDR_RESOLVE_INIT: Error al asignar memoria para resolución IPv6\n");
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-            return REQ_WRITE;
+            selector_set_interest(key->s, key->fd, OP_WRITE);
+            return;
         }
         clientData->originResolution = calloc(1,sizeof(struct addrinfo));
         if(clientData->originResolution == NULL ) {
-            printf("[DEBUG] ADDR_RESOLVE: Error al asignar memoria para resolución IPv6\n");
+            printf("[DEBUG] ADDR_RESOLVE_INIT: Error al asignar memoria para resolución IPv6\n");
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-            return REQ_WRITE;
+            selector_set_interest(key->s, key->fd, OP_WRITE);
+            return;
         }
         ipv6_addr->sin6_family = AF_INET6;
         ipv6_addr->sin6_port = htons(parser->port);
@@ -246,12 +224,15 @@ unsigned addressResolveDone(struct selector_key *key) {
             .ai_family = AF_INET6,
             .ai_addrlen = sizeof(*ipv6_addr),
             .ai_addr = (struct sockaddr *)ipv6_addr,
-                    .ai_socktype = SOCK_STREAM,
-                    .ai_protocol = IPPROTO_TCP
+            .ai_socktype = SOCK_STREAM,
+            .ai_protocol = IPPROTO_TCP
         };
-        return CONNECTING;
-
+        // Para IPv6, podemos proceder inmediatamente a CONNECTING
+        selector_set_interest(key->s, key->fd, OP_WRITE);
+        printf("[DEBUG] ADDR_RESOLVE_INIT: IPv6 resuelto, configurando para CONNECTING\n");
+        return;
     } else if (parser->address_type == ATYP_DOMAIN) {
+        printf("[DEBUG] ADDR_RESOLVE_INIT: Iniciando resolución DNS asíncrona para dominio\n");
         struct dns_request * dns_req = &clientData->dns_req;
         struct gaicb *reqs[] = { &dns_req->req };
         
@@ -280,28 +261,41 @@ unsigned addressResolveDone(struct selector_key *key) {
 
         int gai_result = getaddrinfo_a(GAI_NOWAIT, reqs, 1, &sev);
         if (gai_result != 0) {
-            printf("[DEBUG] ADDR_RESOLVE: Error iniciando resolución de dominio: %s\n", gai_strerror(gai_result));
+            printf("[DEBUG] ADDR_RESOLVE_INIT: Error iniciando resolución de dominio: %s\n", gai_strerror(gai_result));
             // Enviar error: General SOCKS server failure
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-            return REQ_WRITE;
+            selector_set_interest(key->s, key->fd, OP_WRITE);
+            return;
         }
         clientData->dns_resolution_state = 1; // Indica que la resolución está en progreso
-        printf("[DEBUG] ADDR_RESOLVE: Resolución DNS iniciada para dominio: %s\n", dns_req->domain_str);
+        printf("[DEBUG] ADDR_RESOLVE_INIT: Resolución DNS iniciada para dominio: %s\n", dns_req->domain_str);
 
-        return ADDR_RESOLVE;
     }
+}
 
-    if (gai_ret != 0 || clientData->originResolution == NULL) {
-        printf("[DEBUG] ADDR_RESOLVE: Error resolviendo dirección: %s\n", gai_strerror(gai_ret));
-        // Error en la resolución
-        sendRequestResponse(&clientData->originBuffer, 0x05, 0x04, ATYP_IPV4, parser->ipv4_addr, 0);
-        return REQ_WRITE;
+unsigned addressResolveDone(struct selector_key *key) {
+    ClientData *clientData = (ClientData *)key->data;
+    resolver_parser *parser = &clientData->client.reqParser;
+
+    printf("[DEBUG] ADDR_RESOLVE_DONE: Procesando resultado de resolución\n");
+    
+    // Solo procesar resultados de DNS asíncrono
+    if (clientData->dns_resolution_state == 2){
+        printf("[DEBUG] ADDR_RESOLVE_DONE: DNS resuelto exitosamente, avanzando a CONNECTING\n");
+        clientData->dns_resolution_state = 0;
+        return CONNECTING;
+    } else if (clientData->dns_resolution_state == 1) {
+        printf("[DEBUG] ADDR_RESOLVE_DONE: DNS aún en progreso, esperando\n");
+        return ADDR_RESOLVE; // Esperar a que se complete la resolución
+    } else if (clientData->dns_resolution_state == -1){
+        printf("[DEBUG] ADDR_RESOLVE_DONE: DNS falló, enviando error\n");
+        sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
+        return REQ_WRITE; // Enviar error y cerrar conexión
     }
-
-    printf("[DEBUG] ADDR_RESOLVE: Dirección resuelta exitosamente, avanzando a CONNECTING\n");
-
-    // Retornar CONNECTING para que la máquina de estados avance
-    return CONNECTING;
+    
+    // Si llegamos aquí, no hay resolución DNS pendiente - esto no debería ocurrir
+    printf("[ERROR] ADDR_RESOLVE_DONE: llamado sin resolución DNS pendiente\n");
+    return ERROR;
 }
 
 void requestConnectingInit(const unsigned state, struct selector_key *key) {
