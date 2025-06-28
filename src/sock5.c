@@ -68,7 +68,7 @@ void socksv5PassiveAccept(struct selector_key* key){
     buffer_init(&clientData->originBuffer, BUFFER_SIZE, clientData->inOriginBuffer);
 
     stm_init(&clientData->stm);
-
+    selector_fd_set_nio(newClientSocket);
     selector_status ss = selector_register(key->s, newClientSocket, &handler, OP_READ, clientData);
     if (ss != SELECTOR_SUCCESS) {
         free(clientData);

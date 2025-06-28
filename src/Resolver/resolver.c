@@ -143,13 +143,17 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
 
     // Ejecutar la resolución inmediatamente
     unsigned next = addressResolveDone(key);
-    printf("clientData %p\n", (void *)key->data);
     printf("[DEBUG] ADDR_RESOLVE_INIT: addressResolveDone retornó: %d\n", next);
 
     // Si la resolución fue exitosa, configurar el selector para escritura
     if (next == CONNECTING) {
         printf("[DEBUG] ADDR_RESOLVE_INIT: Configurando selector para escritura\n");
-        selector_set_interest(key->s, key->fd, OP_WRITE);
+        if(selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
+            printf("[ERROR] ADDR_RESOLVE_INIT: Error configurando selector para escritura\n");
+            closeConnection(key);
+            return;
+
+        }
     }
 }
 
@@ -164,10 +168,17 @@ unsigned addressResolveDone(struct selector_key *key) {
     }else if (clientData->dns_resolution_state == 1) {
         printf("[DEBUG] ADDR_RESOLVE: Resolución de DNS ya en progreso, esperando\n");
         return ADDR_RESOLVE; // Esperar a que se complete la resolución
+    }else if (clientData->dns_resolution_state == -1){
+        printf("[DEBUG] ADDR_RESOLVE: Resolución de DNS fallida, enviando error\n");
+        sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
+        return REQ_WRITE; // Enviar error y cerrar conexión
     }
     // Limpiar resolución previa si existe
     if (clientData->originResolution != NULL) {
-        freeaddrinfo(clientData->originResolution);
+        if (clientData->originResolution->ai_addr != NULL) {
+            free(clientData->originResolution->ai_addr);
+        }
+        free(clientData->originResolution);
         clientData->originResolution = NULL;
     }
 
@@ -247,12 +258,10 @@ unsigned addressResolveDone(struct selector_key *key) {
         dns_req->clientData = clientData;
         dns_req->selector = key->s;
         dns_req->fd = key->fd;
-        printf("clientdata2 %p\n", (void*)clientData);
         struct sigevent sev = {0};
         sev.sigev_notify = SIGEV_THREAD;
         sev.sigev_notify_function = dnsResolutionDone;
         sev.sigev_value.sival_ptr = dns_req;  // paso dns_req al callback
-        printf("clientdata %p\n", (void*)clientData);
 
         if (getaddrinfo_a(GAI_NOWAIT, reqs, 1, &sev) != 0) {
             printf("[DEBUG] ADDR_RESOLVE: Error iniciando resolución de dominio: %s\n", gai_strerror(gai_ret));
@@ -261,7 +270,6 @@ unsigned addressResolveDone(struct selector_key *key) {
             return REQ_WRITE;
         }
         clientData->dns_resolution_state = 1; // Indica que la resolución está en progreso
-        printf("clientdata %p\n", (void*)clientData);
 
         return ADDR_RESOLVE;
     }
@@ -289,20 +297,26 @@ void requestConnectingInit(const unsigned state, struct selector_key *key) {
     // Crear socket para conectar al destino
     struct addrinfo *ai = clientData->originResolution;
     clientData->originFd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-
     if (clientData->originFd < 0) {
         printf("[DEBUG] CONNECTING_INIT: Error creando socket: %s\n", strerror(errno));
         sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
         return;
     }
-
+    selector_fd_set_nio(clientData->originFd);
     printf("[DEBUG] CONNECTING_INIT: Socket creado (fd=%d), intentando conectar\n", clientData->originFd);
 
     // Intentar conectar
-    if (connect(clientData->originFd, ai->ai_addr, ai->ai_addrlen) < 0) {
+    if (connect(clientData->originFd, ai->ai_addr, ai->ai_addrlen) < 0 && errno != EINPROGRESS) {
         printf("[DEBUG] CONNECTING_INIT: Error conectando: %s\n", strerror(errno));
         close(clientData->originFd);
-        clientData->originFd = -1;
+        if (clientData->originResolution->ai_next != NULL) {
+            struct addrinfo* next = clientData->originResolution->ai_next;
+            freeaddrinfo(clientData->originResolution);
+            clientData->originResolution = next;
+            requestConnectingInit(state, key);
+            return;
+        }
+        clientData->originFd = -1; // Resetear fd en caso de error
         sendRequestResponse(&clientData->originBuffer, 0x05, 0x05, ATYP_IPV4, parser->ipv4_addr, 0);
         return;
     }
@@ -334,7 +348,18 @@ void requestConnectingInit(const unsigned state, struct selector_key *key) {
 
     // Configurar el selector para escribir la respuesta al cliente
     printf("[DEBUG] CONNECTING_INIT: Configurando selector para escritura en cliente (fd=%d)\n", clientData->clientFd);
-    selector_set_interest(key->s, clientData->clientFd, OP_WRITE);
+    if (selector_register(key->s, clientData->originFd, &handler, OP_WRITE, clientData)){
+        printf("[ERROR] CONNECTING_INIT: Error registrando socket de origen en selector\n");
+        close(clientData->originFd);
+        clientData->originFd = -1; // Resetear fd en caso de error
+        return;
+    }
+    if(selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
+        printf("[ERROR] CONNECTING_INIT: Error configurando selector para escritura en cliente\n");
+        close(clientData->originFd);
+        clientData->originFd = -1; // Resetear fd en caso de error
+        return;
+    }
 
     printf("[DEBUG] CONNECTING_INIT: Finalizado, esperando que el selector llame a requestConnecting\n");
     printf("[DEBUG] CONNECTING_INIT: Estado actual de la máquina: %d\n", stm_state(&clientData->stm));
@@ -356,7 +381,7 @@ unsigned requestConnecting(struct selector_key *key) {
     if (buffer_can_read(&clientData->originBuffer)) {
         size_t bytes_to_write;
         uint8_t *write_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
-        ssize_t bytes_written = write(clientData->clientFd, write_ptr, bytes_to_write);
+        ssize_t bytes_written = send(clientData->clientFd, write_ptr, bytes_to_write, MSG_NOSIGNAL);
         
         if (bytes_written < 0) {
             printf("[DEBUG] CONNECTING: Error escribiendo respuesta\n");
@@ -383,15 +408,14 @@ void socksv5HandleInit(const unsigned state, struct selector_key *key) {
     
     // Registrar el socket del servidor de origen en el selector
     printf("[DEBUG] COPYING_INIT: Registrando socket del servidor de origen (fd=%d) en el selector\n", clientData->originFd);
-    selector_status ss = selector_register(key->s, clientData->originFd, &handler, OP_READ, clientData);
-    if (ss != SELECTOR_SUCCESS) {
-        printf("[ERROR] COPYING_INIT: Error registrando socket del servidor de origen\n");
-        return;
-    }
-    
+
     // Registrar el socket del cliente para lectura
     printf("[DEBUG] COPYING_INIT: Configurando socket del cliente (fd=%d) para lectura\n", clientData->clientFd);
-    selector_set_interest(key->s, clientData->clientFd, OP_READ);
+    if(selector_set_interest(key->s, clientData->clientFd, OP_READ) != SELECTOR_SUCCESS) {
+        printf("[ERROR] COPYING_INIT: Error configurando selector para lectura en el cliente\n");
+        closeConnection(key);
+        return;
+    }
 }
 
 unsigned socksv5HandleRead(struct selector_key *key) {
@@ -404,7 +428,7 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         printf("[DEBUG] COPYING_READ: Leyendo datos del cliente\n");
         size_t bytes_to_write;
         uint8_t *write_ptr = buffer_write_ptr(&clientData->originBuffer, &bytes_to_write);
-        ssize_t bytes_read = read(clientData->clientFd, write_ptr, bytes_to_write);
+        ssize_t bytes_read = recv(key->fd, write_ptr, bytes_to_write, 0);
         
         if (bytes_read <= 0) {
             printf("[DEBUG] COPYING_READ: Cliente cerró conexión\n");
@@ -416,7 +440,10 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         
         // Cambiar a escritura en el socket de origen
         printf("[DEBUG] COPYING_READ: Configurando socket del servidor para escritura\n");
-        selector_set_interest(key->s, clientData->originFd, OP_WRITE);
+        if(selector_set_interest(key->s, clientData->originFd, OP_WRITE)!= SELECTOR_SUCCESS) {
+            printf("[ERROR] COPYING_READ: Error configurando selector para escritura en el origen\n");
+            return ERROR;
+        }
         return COPYING;
         
     } else if (key->fd == clientData->originFd) {
@@ -424,7 +451,7 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         printf("[DEBUG] COPYING_READ: Leyendo datos del servidor\n");
         size_t bytes_to_write;
         uint8_t *write_ptr = buffer_write_ptr(&clientData->clientBuffer, &bytes_to_write);
-        ssize_t bytes_read = read(clientData->originFd, write_ptr, bytes_to_write);
+        ssize_t bytes_read = recv(clientData->originFd, write_ptr, bytes_to_write, 0);
         
         if (bytes_read <= 0) {
             printf("[DEBUG] COPYING_READ: Servidor cerró conexión\n");
@@ -436,7 +463,10 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         
         // Cambiar a escritura en el socket del cliente
         printf("[DEBUG] COPYING_READ: Configurando socket del cliente para escritura\n");
-        selector_set_interest(key->s, clientData->clientFd, OP_WRITE);
+        if(selector_set_interest(key->s, clientData->clientFd, OP_WRITE)!= SELECTOR_SUCCESS) {
+            printf("[ERROR] COPYING_READ: Error configurando selector para escritura en el cliente\n");
+            return ERROR;
+        }
         return COPYING;
     }
     
@@ -453,7 +483,7 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         if (buffer_can_read(&clientData->clientBuffer)) {
             size_t bytes_to_write;
             uint8_t *read_ptr = buffer_read_ptr(&clientData->clientBuffer, &bytes_to_write);
-            ssize_t bytes_written = write(clientData->clientFd, read_ptr, bytes_to_write);
+            ssize_t bytes_written = send(clientData->clientFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
             
             if (bytes_written < 0) {
                 return ERROR;
@@ -467,7 +497,10 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         }
         
         // Cambiar a lectura en el socket del cliente
-        selector_set_interest(key->s, clientData->clientFd, OP_READ);
+        if(selector_set_interest(key->s, clientData->clientFd, OP_READ)){
+            printf("[ERROR] socksv5HandleWrite: Error configurando selector para lectura en el cliente\n");
+            return ERROR;
+        }
         return COPYING;
         
     } else if (key->fd == clientData->originFd) {
@@ -475,7 +508,7 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         if (buffer_can_read(&clientData->originBuffer)) {
             size_t bytes_to_write;
             uint8_t *read_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
-            ssize_t bytes_written = write(clientData->originFd, read_ptr, bytes_to_write);
+            ssize_t bytes_written = send(clientData->originFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
             
             if (bytes_written < 0) {
                 return ERROR;
@@ -489,7 +522,10 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         }
         
         // Cambiar a lectura en el socket del servidor de origen
-        selector_set_interest(key->s, clientData->originFd, OP_READ);
+        if(selector_set_interest(key->s, clientData->originFd, OP_READ) != SELECTOR_SUCCESS) {
+            printf("[ERROR] socksv5HandleWrite: Error configurando selector para lectura en el origen\n");
+            return ERROR;
+        }
         return COPYING;
     }
     
@@ -574,13 +610,10 @@ void dnsResolutionDone(union sigval sv) {
     if (ret != 0) {
         printf("[DEBUG] Error en resolución: %s\n", gai_strerror(ret));
         freeaddrinfo(dns_req->req.ar_result);
+        clientData->dns_resolution_state = -1;
+        selector_notify_block(dns_req->selector,dns_req->fd);
         return;
     }
-    printf("[DEBUG] dns_req: %p\n", (void*)dns_req);
-    printf("[DEBUG] dns_req->req: %p\n", (void*)&dns_req->req);
-    printf("[DEBUG] dns_req->req.ar_result: %p\n", (void*)dns_req->req.ar_result);
-    printf("[DEBUG] Resolución DNS completada con éxito\n");
-    printf("clientdata %p\n", (void*)clientData);
     clientData->originResolution = dns_req->req.ar_result;
     clientData->dns_resolution_state = 2; // Indica que la resolución se completó exitosamente
     selector_notify_block(dns_req->selector,dns_req->fd);
