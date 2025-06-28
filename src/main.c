@@ -128,6 +128,10 @@ static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t
 
 int main (int argc,char * argv[]){
     printf("Starting SOCKS5 Proxy Server\n");
+    //
+    // // Ignorar SIGPIPE para evitar que el servidor se crashee
+    // signal(SIGPIPE, SIG_IGN);
+    //
     selector_status ss= SELECTOR_SUCCESS;
     struct selector_init conf = {
         .signal = SIGALRM,

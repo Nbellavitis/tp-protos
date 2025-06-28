@@ -47,12 +47,17 @@ unsigned requestRead(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     resolver_parser *parser = &clientData->client.reqParser;
 
+    // Verificar si la conexión fue cerrada
+    if (clientData->closed) {
+        return CLOSED;
+    }
+
     // Leer del socket al buffer
     size_t writeLimit;
     uint8_t *b = buffer_write_ptr(&clientData->clientBuffer, &writeLimit);
     ssize_t readCount = recv(key->fd, b, writeLimit, 0);
     if (readCount <= 0) {
-        return ERROR; // error o desconexión
+        return (readCount == 0) ? CLOSED : ERROR;
     }
     buffer_write_adv(&clientData->clientBuffer, readCount);
 
@@ -113,6 +118,11 @@ unsigned requestWrite(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     printf("[DEBUG] REQ_WRITE: Escribiendo respuesta al cliente\n");
     
+    // Verificar si la conexión fue cerrada
+    if (clientData->closed) {
+        return CLOSED;
+    }
+    
     if (buffer_can_read(&clientData->originBuffer)) {
         size_t bytes_to_write;
         uint8_t *write_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
@@ -123,6 +133,10 @@ unsigned requestWrite(struct selector_key *key) {
         if (bytes_written < 0) {
             printf("[DEBUG] REQ_WRITE: Error escribiendo al cliente\n");
             return ERROR;
+        }
+        
+        if (bytes_written == 0) {
+            return CLOSED;
         }
         
         buffer_read_adv(&clientData->originBuffer, bytes_written);
@@ -175,10 +189,7 @@ unsigned addressResolveDone(struct selector_key *key) {
     }
     // Limpiar resolución previa si existe
     if (clientData->originResolution != NULL) {
-        if (clientData->originResolution->ai_addr != NULL) {
-            free(clientData->originResolution->ai_addr);
-        }
-        free(clientData->originResolution);
+        freeaddrinfo(clientData->originResolution);
         clientData->originResolution = NULL;
     }
 
@@ -540,10 +551,12 @@ void socksv5HandleClose(const unsigned state, struct selector_key *key) {
 // Funciones para los estados finales
 void closeArrival(const unsigned state, struct selector_key *key) {
     printf("Llegando al estado CLOSED\n");
+    closeConnection(key);
 }
 
 void errorArrival(const unsigned state, struct selector_key *key) {
     printf("Llegando al estado ERROR\n");
+    closeConnection(key);
 }
 
 // Implementaciones de las funciones del handler
@@ -606,10 +619,25 @@ static void socksv5Block(struct selector_key *key) {
 void dnsResolutionDone(union sigval sv) {
     struct dns_request *dns_req = sv.sival_ptr;
     ClientData *clientData = (ClientData *)dns_req->clientData;
+    
+    // Verificar si la conexión fue cerrada/cancelada
+    if (clientData->closed || clientData->dns_resolution_state == -2) {
+        if (dns_req->req.ar_result != NULL) {
+            freeaddrinfo(dns_req->req.ar_result);
+        }
+        if (clientData->dns_resolution_state == -2) {
+            // Liberación diferida - ahora podemos liberar ClientData
+            free(clientData);
+        }
+        return;
+    }
+    
     int ret = gai_error(&dns_req->req);
     if (ret != 0) {
         printf("[DEBUG] Error en resolución: %s\n", gai_strerror(ret));
-        freeaddrinfo(dns_req->req.ar_result);
+        if (dns_req->req.ar_result != NULL) {
+            freeaddrinfo(dns_req->req.ar_result);
+        }
         clientData->dns_resolution_state = -1;
         selector_notify_block(dns_req->selector,dns_req->fd);
         return;

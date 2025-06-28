@@ -80,13 +80,23 @@ void socksv5PassiveAccept(struct selector_key* key){
 static void socksv5Read(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     
-    printf("[DEBUG] SOCKS5_READ: Leyendo datos del socket %d\n", key->fd);
+    if (clientData->closed) {
+        return;
+    }
     
     const enum socks5State state = stm_handler_read(&clientData->stm, key);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
         return;
     }
+    
+    // Actualizar las operaciones del selector según el nuevo estado
+    if (state == REQ_WRITE || state == NEGOTIATION_WRITE || state == AUTHENTICATION_WRITE) {
+        selector_set_interest(key->s, key->fd, OP_WRITE);
+    } else if (state == NEGOTIATION_READ || state == AUTHENTICATION_READ || state == REQ_READ) {
+        selector_set_interest(key->s, key->fd, OP_READ);
+    }
+    // Estados como CONNECTING, COPYING, ADDR_RESOLVE tienen su propia lógica
 }
 static void socksv5Write(struct selector_key *key) {
     printf("[DEBUG] socksv5Write: Entrando a socksv5Write\n");
@@ -106,6 +116,14 @@ static void socksv5Write(struct selector_key *key) {
         closeConnection(key);
         return;
     }
+    
+    // Actualizar las operaciones del selector según el nuevo estado
+    if (state == REQ_WRITE || state == NEGOTIATION_WRITE || state == AUTHENTICATION_WRITE) {
+        selector_set_interest(key->s, key->fd, OP_WRITE);
+    } else if (state == NEGOTIATION_READ || state == AUTHENTICATION_READ || state == REQ_READ) {
+        selector_set_interest(key->s, key->fd, OP_READ);
+    }
+    // Estados como CONNECTING, COPYING, ADDR_RESOLVE tienen su propia lógica
 }
 static void socksv5Close(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
@@ -126,18 +144,40 @@ static void socksv5Block(struct selector_key *key) {
     printf("[DEBUG] socksv5Block: Llamando a stm_handler_block\n");
     const enum socks5State state = stm_handler_block(&clientData->stm, key);
     printf("[DEBUG] socksv5Block: stm_handler_block retornó: %d\n", state);
+    
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
         return;
     }
+    
+    // Actualizar las operaciones del selector según el nuevo estado
+    if (state == REQ_WRITE || state == NEGOTIATION_WRITE || state == AUTHENTICATION_WRITE) {
+        selector_set_interest(key->s, key->fd, OP_WRITE);
+    } else if (state == NEGOTIATION_READ || state == AUTHENTICATION_READ || state == REQ_READ) {
+        selector_set_interest(key->s, key->fd, OP_READ);
+    }
+    // Estados como CONNECTING, COPYING, ADDR_RESOLVE tienen su propia lógica
 }
 void closeConnection(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     if (clientData->closed) {
         return; // ya fue cerrado
     }
+    
     stats_connection_closed();
     clientData->closed = true;
+
+    // Cancelar resolución DNS pendiente
+    if (clientData->dns_resolution_state == 1) {
+        gai_cancel(&clientData->dns_req.req);
+        clientData->dns_resolution_state = -2; // Marcado como cancelado
+    }
+
+    // Liberar recursos de resolución DNS
+    if (clientData->originResolution != NULL) {
+        freeaddrinfo(clientData->originResolution);
+        clientData->originResolution = NULL;
+    }
 
     if (clientData->originFd >= 0) {
         selector_unregister_fd(key->s, clientData->originFd);
@@ -147,5 +187,12 @@ void closeConnection(struct selector_key *key) {
         selector_unregister_fd(key->s, clientData->clientFd);
         close(clientData->clientFd);
     }
+    
+    // Limpiar el ClientData pero no liberarlo inmediatamente si hay DNS pendiente
+    if (clientData->dns_resolution_state == -2) {
+        // Marcar para liberación diferida - el callback DNS se encargará
+        return;
+    }
+    
     free(clientData);
 }
