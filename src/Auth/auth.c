@@ -1,6 +1,16 @@
 #include "auth.h"
 
-
+bool validateUser(const char* username, const char* password) {
+    // Usuario hardcodeado para pruebas por sesión
+    const char* valid_username = "admin";
+    const char* valid_password = "password123";
+    
+    if (username == NULL || password == NULL) {
+        return false;
+    }
+    
+    return (strcmp(username, valid_username) == 0 && strcmp(password, valid_password) == 0);
+}
 
 void authenticationReadInit(unsigned state,struct selector_key * key){
     printf("Inicio autenticación\n");
@@ -25,8 +35,17 @@ unsigned authenticationRead(struct selector_key * key){
     auth_parse result = authParse(p, &data->clientBuffer);
     switch (result) {
         case AUTH_PARSE_OK:
-//            auth_parser *authParser = &data->client.authParser;
-            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x00)) { //TODO validar usuario
+            // Validar las credenciales del usuario
+            if (!validateUser(p->name, p->password)) {
+                printf("Autenticación fallida para usuario: %s\n", p->name);
+                if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x01)) {
+                    return ERROR;
+                }
+                return ERROR; // Rechazar conexión por credenciales inválidas
+            }
+            
+            printf("Autenticación exitosa para usuario: %s\n", p->name);
+            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x00)) {
                 return ERROR;
             }
             return AUTHENTICATION_WRITE;
