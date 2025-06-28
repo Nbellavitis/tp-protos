@@ -232,7 +232,7 @@ unsigned addressResolveDone(struct selector_key *key) {
         *ipv6_addr = (struct sockaddr_in6){
             .sin6_family = AF_INET6,
             .sin6_port = htons(parser->port),
-            .sin6_addr = parser->ipv6_addr
+            .sin6_addr = parser->ipv6_addr   //todo checkear esto. ESTA MAL!
         };
         *clientData->originResolution= (struct addrinfo){
             .ai_family = AF_INET6,
