@@ -232,7 +232,7 @@ unsigned addressResolveDone(struct selector_key *key) {
         *ipv6_addr = (struct sockaddr_in6){
             .sin6_family = AF_INET6,
             .sin6_port = htons(parser->port),
-            .sin6_addr = parser->ipv6_addr
+            .sin6_addr = parser->ipv6_addr   //todo checkear esto. ESTA MAL!
         };
         *clientData->originResolution= (struct addrinfo){
             .ai_family = AF_INET6,
@@ -302,13 +302,47 @@ void requestConnectingInit(const unsigned state, struct selector_key *key) {
         sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
         return;
     }
+
+    // IMPORTANTE: Hacer el socket no bloqueante
     selector_fd_set_nio(clientData->originFd);
     printf("[DEBUG] CONNECTING_INIT: Socket creado (fd=%d), intentando conectar\n", clientData->originFd);
 
     // Intentar conectar
-    if (connect(clientData->originFd, ai->ai_addr, ai->ai_addrlen) < 0 && errno != EINPROGRESS) {
+    int connect_result = connect(clientData->originFd, ai->ai_addr, ai->ai_addrlen);
+
+    if (connect_result == 0) {
+        // Conexión inmediata (poco común pero posible)
+        printf("[DEBUG] CONNECTING_INIT: Conexión completada inmediatamente\n");
+        // Registrar para poder manejar el estado exitoso
+        if (selector_register(key->s, clientData->originFd, &handler, OP_WRITE, clientData)) {
+            printf("[ERROR] CONNECTING_INIT: Error registrando socket de origen\n");
+            close(clientData->originFd);
+            clientData->originFd = -1;
+            return;
+        }
+        // Marcar que la conexión está lista
+        clientData->connection_ready = 1;
+
+    } else if (errno == EINPROGRESS) {
+        // Conexión en progreso - esto es lo normal
+        printf("[DEBUG] CONNECTING_INIT: Conexión en progreso (EINPROGRESS)\n");
+
+        // Registrar el socket para detectar cuando esté listo para escritura
+        if (selector_register(key->s, clientData->originFd, &handler, OP_WRITE, clientData)) {
+            printf("[ERROR] CONNECTING_INIT: Error registrando socket de origen\n");
+            close(clientData->originFd);
+            clientData->originFd = -1;
+            return;
+        }
+        // La conexión aún no está lista
+        clientData->connection_ready = 0;
+
+    } else {
+        // Error inmediato en connect()
         printf("[DEBUG] CONNECTING_INIT: Error conectando: %s\n", strerror(errno));
         close(clientData->originFd);
+
+        // Intentar siguiente dirección si existe
         if (clientData->originResolution->ai_next != NULL) {
             struct addrinfo* next = clientData->originResolution->ai_next;
             freeaddrinfo(clientData->originResolution);
@@ -316,88 +350,115 @@ void requestConnectingInit(const unsigned state, struct selector_key *key) {
             requestConnectingInit(state, key);
             return;
         }
-        clientData->originFd = -1; // Resetear fd en caso de error
+        clientData->originFd = -1;
         sendRequestResponse(&clientData->originBuffer, 0x05, 0x05, ATYP_IPV4, parser->ipv4_addr, 0);
         return;
     }
 
-    printf("[DEBUG] CONNECTING_INIT: Conexión exitosa al destino\n");
+    // No configurar el cliente para escritura todavía - esperamos que la conexión termine
+    printf("[DEBUG] CONNECTING_INIT: Esperando completar conexión...\n");
+}
+
+unsigned requestConnecting(struct selector_key *key) {
+    printf("[DEBUG] requestConnecting: Verificando estado de conexión\n");
+
+    if (key == NULL || key->data == NULL) {
+        printf("[ERROR] requestConnecting: key o key->data es NULL\n");
+        return ERROR;
+    }
+
+    ClientData *clientData = (ClientData *)key->data;
+    resolver_parser *parser = &clientData->client.reqParser;
+
+    // Si la conexión ya estaba marcada como lista, proceder
+    if (clientData->connection_ready) {
+        printf("[DEBUG] requestConnecting: Conexión ya estaba lista\n");
+    } else {
+        // Verificar si la conexión se completó exitosamente
+        int so_error = 0;
+        socklen_t len = sizeof(so_error);
+
+        if (getsockopt(clientData->originFd, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
+            printf("[ERROR] requestConnecting: Error en getsockopt: %s\n", strerror(errno));
+            sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
+            return REQ_WRITE;
+        }
+        printf("[DEBUG] requestConnecting: getsockopt SO_ERROR = %d (%s)\n", so_error, strerror(so_error));
+
+        if (so_error != 0) {
+            printf("[DEBUG] requestConnecting: Error en conexión: %s\n", strerror(so_error));
+            close(clientData->originFd);
+
+            // Intentar siguiente dirección si existe
+            if (clientData->originResolution->ai_next != NULL) {
+                struct addrinfo* next = clientData->originResolution->ai_next;
+                freeaddrinfo(clientData->originResolution);
+                clientData->originResolution = next;
+                // Volver a intentar conexión
+                requestConnectingInit(CONNECTING, key);
+                return CONNECTING;
+            }
+
+            clientData->originFd = -1;
+            sendRequestResponse(&clientData->originBuffer, 0x05, 0x05, ATYP_IPV4, parser->ipv4_addr, 0);
+            return REQ_WRITE;
+        }
+
+        printf("[DEBUG] requestConnecting: Conexión exitosa\n");
+        clientData->connection_ready = 1;
+    }
 
     // Obtener la dirección local del socket para la respuesta
     struct sockaddr_storage local_addr;
     socklen_t local_addr_len = sizeof(local_addr);
     if (getsockname(clientData->originFd, (struct sockaddr*)&local_addr, &local_addr_len) < 0) {
-        printf("[DEBUG] CONNECTING_INIT: Error obteniendo dirección local\n");
-        // Usar dirección por defecto
+        printf("[DEBUG] requestConnecting: Error obteniendo dirección local\n");
         memset(parser->ipv4_addr, 0, 4);
     } else {
-        // Extraer la dirección local según el tipo
         if (local_addr.ss_family == AF_INET) {
             struct sockaddr_in *addr_in = (struct sockaddr_in*)&local_addr;
             memcpy(parser->ipv4_addr, &addr_in->sin_addr, 4);
         } else if (local_addr.ss_family == AF_INET6) {
             struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6*)&local_addr;
-            // Para IPv6, usar los primeros 4 bytes o convertir
-            memcpy(parser->ipv4_addr, &addr_in6->sin6_addr, 4);
+            memcpy(parser->ipv6_addr, &addr_in6->sin6_addr, 16);
         }
     }
 
-    // Conexión exitosa - enviar respuesta con éxito
-    printf("[DEBUG] CONNECTING_INIT: Enviando respuesta de éxito al cliente\n");
+    // Preparar respuesta de éxito
+    printf("[DEBUG] requestConnecting: Preparando respuesta de éxito\n");
     sendRequestResponse(&clientData->originBuffer, 0x05, 0x00, ATYP_IPV4, parser->ipv4_addr, 0);
 
-    // Configurar el selector para escribir la respuesta al cliente
-    printf("[DEBUG] CONNECTING_INIT: Configurando selector para escritura en cliente (fd=%d)\n", clientData->clientFd);
-    if (selector_register(key->s, clientData->originFd, &handler, OP_WRITE, clientData)){
-        printf("[ERROR] CONNECTING_INIT: Error registrando socket de origen en selector\n");
-        close(clientData->originFd);
-        clientData->originFd = -1; // Resetear fd en caso de error
-        return;
-    }
+    // Configurar cliente para escribir la respuesta
     if(selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
-        printf("[ERROR] CONNECTING_INIT: Error configurando selector para escritura en cliente\n");
-        close(clientData->originFd);
-        clientData->originFd = -1; // Resetear fd en caso de error
-        return;
-    }
-
-    printf("[DEBUG] CONNECTING_INIT: Finalizado, esperando que el selector llame a requestConnecting\n");
-    printf("[DEBUG] CONNECTING_INIT: Estado actual de la máquina: %d\n", stm_state(&clientData->stm));
-}
-
-unsigned requestConnecting(struct selector_key *key) {
-    printf("[DEBUG] requestConnecting: Entrando a requestConnecting\n");
-    if (key == NULL) {
-        printf("[ERROR] requestConnecting: key es NULL\n");
+        printf("[ERROR] requestConnecting: Error configurando cliente para escritura\n");
         return ERROR;
     }
-    if (key->data == NULL) {
-        printf("[ERROR] requestConnecting: key->data es NULL\n");
-        return ERROR;
-    }
-    ClientData *clientData = (ClientData *)key->data;
-    printf("[DEBUG] CONNECTING: Escribiendo respuesta de éxito al cliente\n");
-    
+
+    // Escribir respuesta inmediatamente si es posible
     if (buffer_can_read(&clientData->originBuffer)) {
         size_t bytes_to_write;
         uint8_t *write_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
         ssize_t bytes_written = send(clientData->clientFd, write_ptr, bytes_to_write, MSG_NOSIGNAL);
-        
+
         if (bytes_written < 0) {
-            printf("[DEBUG] CONNECTING: Error escribiendo respuesta\n");
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // El socket no está listo, el selector nos llamará cuando lo esté
+                printf("[DEBUG] requestConnecting: Socket no listo, esperando\n");
+                return CONNECTING;
+            }
+            printf("[DEBUG] requestConnecting: Error escribiendo respuesta: %s\n", strerror(errno));
             return ERROR;
         }
-        
+
         buffer_read_adv(&clientData->originBuffer, bytes_written);
-        
+
         if (buffer_can_read(&clientData->originBuffer)) {
-            printf("[DEBUG] CONNECTING: Más datos de respuesta para escribir\n");
+            printf("[DEBUG] requestConnecting: Respuesta parcial enviada, esperando completar\n");
             return CONNECTING;
         }
     }
-    
-    printf("[DEBUG] CONNECTING: Respuesta enviada, avanzando a COPYING\n");
-    // Si no hay más datos para escribir, pasar al estado COPYING
+
+    printf("[DEBUG] requestConnecting: Respuesta enviada completamente, avanzando a COPYING\n");
     return COPYING;
 }
 
