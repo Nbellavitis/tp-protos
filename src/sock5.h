@@ -3,6 +3,8 @@
 //
 #ifndef SOCK5_H
 #define SOCK5_H
+#define _GNU_SOURCE
+#include <netdb.h>
 #include "selector.h"
 #include "stm.h"
 #include <netdb.h>
@@ -20,7 +22,12 @@
 #include "Logging/statistics.h"
 #include "Resolver/resolverParser.h"
 #define BUFFER_SIZE 32768
-
+struct dns_request {
+    struct gaicb req;
+    struct ClientData * clientData;
+    fd_selector selector;
+    int fd;
+};
 typedef struct ClientData {
     struct state_machine stm;
     struct sockaddr_storage clientAddress;
@@ -33,6 +40,8 @@ typedef struct ClientData {
     struct addrinfo* originResolution;
     int clientFd;
     int originFd;
+    struct  dns_request dns_req;
+    int dns_resolution_state;
     struct buffer clientBuffer;
     struct buffer originBuffer;
     uint8_t inClientBuffer[BUFFER_SIZE];

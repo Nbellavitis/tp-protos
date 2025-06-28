@@ -4,6 +4,8 @@
 
 #ifndef PROTOS_RESOLVER_H
 #define PROTOS_RESOLVER_H
+#define _GNU_SOURCE
+#include <netdb.h>
 #include "../sock5.h"
 #include "../Negotiation/negotiationParser.h"
 #include "../Auth/authParser.h"
