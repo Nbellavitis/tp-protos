@@ -574,19 +574,26 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
 }
 
 void socksv5HandleClose(const unsigned state, struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
     printf("Cerrando manejo de datos\n");
+    // Solo hacer cleanup específico de COPYING, no liberación completa
+    // La liberación será manejada por closeArrival/errorArrival
 }
 
 // Funciones para los estados finales
 void closeArrival(const unsigned state, struct selector_key *key) {
     printf("Llegando al estado CLOSED\n");
-    closeConnection(key);
+    ClientData *clientData = (ClientData *)key->data;
+    if (clientData != NULL && !clientData->closed) {
+        closeConnection(key);
+    }
 }
 
 void errorArrival(const unsigned state, struct selector_key *key) {
     printf("Llegando al estado ERROR\n");
-    closeConnection(key);
+    ClientData *clientData = (ClientData *)key->data;
+    if (clientData != NULL && !clientData->closed) {
+        closeConnection(key);
+    }
 }
 
 // Implementaciones de las funciones del handler
