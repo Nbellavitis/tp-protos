@@ -55,6 +55,14 @@ unsigned requestRead(struct selector_key *key) {
     // Leer del socket al buffer
     size_t writeLimit;
     uint8_t *b = buffer_write_ptr(&clientData->clientBuffer, &writeLimit);
+    if (writeLimit == 0) {
+        // Buffer full, compact and try again
+        buffer_compact(&clientData->clientBuffer);
+        b = buffer_write_ptr(&clientData->clientBuffer, &writeLimit);
+        if (writeLimit == 0) {
+            return ERROR; // Still no space after compacting
+        }
+    }
     ssize_t readCount = recv(key->fd, b, writeLimit, 0);
     if (readCount <= 0) {
         return (readCount == 0) ? CLOSED : ERROR;
@@ -198,8 +206,10 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
             .ai_protocol = IPPROTO_TCP
         };
         // Para IPv4, podemos proceder inmediatamente a CONNECTING
-        selector_set_interest(key->s, key->fd, OP_WRITE);
         printf("[DEBUG] ADDR_RESOLVE_INIT: IPv4 resuelto, configurando para CONNECTING\n");
+        // Marcar que la resolución está completa para IPv4 directa
+        clientData->dns_resolution_state = 2;
+        selector_set_interest(key->s, key->fd, OP_WRITE);
         return;
     } else if (parser->address_type == ATYP_IPV6) {
         printf("[DEBUG] ADDR_RESOLVE_INIT: Resolviendo IPv6 directa\n");
@@ -228,8 +238,10 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
             .ai_protocol = IPPROTO_TCP
         };
         // Para IPv6, podemos proceder inmediatamente a CONNECTING
-        selector_set_interest(key->s, key->fd, OP_WRITE);
         printf("[DEBUG] ADDR_RESOLVE_INIT: IPv6 resuelto, configurando para CONNECTING\n");
+        // Marcar que la resolución está completa para IPv6 directa
+        clientData->dns_resolution_state = 2;
+        selector_set_interest(key->s, key->fd, OP_WRITE);
         return;
     } else if (parser->address_type == ATYP_DOMAIN) {
         printf("[DEBUG] ADDR_RESOLVE_INIT: Iniciando resolución DNS asíncrona para dominio\n");
@@ -439,6 +451,14 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         printf("[DEBUG] COPYING_READ: Leyendo datos del cliente\n");
         size_t bytes_to_write;
         uint8_t *write_ptr = buffer_write_ptr(&clientData->originBuffer, &bytes_to_write);
+        if (bytes_to_write == 0) {
+            // Buffer full, compact and try again
+            buffer_compact(&clientData->originBuffer);
+            write_ptr = buffer_write_ptr(&clientData->originBuffer, &bytes_to_write);
+            if (bytes_to_write == 0) {
+                return ERROR; // Still no space after compacting
+            }
+        }
         ssize_t bytes_read = recv(key->fd, write_ptr, bytes_to_write, 0);
         
         if (bytes_read <= 0) {
@@ -462,6 +482,14 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         printf("[DEBUG] COPYING_READ: Leyendo datos del servidor\n");
         size_t bytes_to_write;
         uint8_t *write_ptr = buffer_write_ptr(&clientData->clientBuffer, &bytes_to_write);
+        if (bytes_to_write == 0) {
+            // Buffer full, compact and try again
+            buffer_compact(&clientData->clientBuffer);
+            write_ptr = buffer_write_ptr(&clientData->clientBuffer, &bytes_to_write);
+            if (bytes_to_write == 0) {
+                return ERROR; // Still no space after compacting
+            }
+        }
         ssize_t bytes_read = recv(clientData->originFd, write_ptr, bytes_to_write, 0);
         
         if (bytes_read <= 0) {

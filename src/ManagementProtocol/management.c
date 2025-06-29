@@ -179,22 +179,29 @@ bool parse_management_command(management_parser *parser, struct buffer *buffer) 
 }
 
 bool send_management_response(struct buffer *buffer, uint8_t status, const char *payload) {
-    if (!buffer_can_write(buffer)) {
-        return false;
+
+    uint8_t payload_len = payload ? strlen(payload) : 0;
+    size_t total_bytes_needed = 3 + payload_len; // version + status + len + payload
+
+    size_t available_bytes;
+    buffer_write_ptr(buffer, &available_bytes);
+
+    if (available_bytes < total_bytes_needed) {
+        return false; // Not enough space in buffer
     }
-    
+
+
     buffer_write(buffer, MANAGEMENT_VERSION);
     buffer_write(buffer, status);
-    
-    uint8_t payload_len = payload ? strlen(payload) : 0;
+
     buffer_write(buffer, payload_len);
-    
+
     if (payload_len > 0) {
         for (int i = 0; i < payload_len; i++) {
             buffer_write(buffer, payload[i]);
         }
     }
-    
+
     return true;
 }
 
@@ -210,6 +217,14 @@ unsigned mgmt_auth_read(struct selector_key *key) {
     
     size_t read_limit;
     uint8_t *buffer_ptr = buffer_write_ptr(&mgmt_data->client_buffer, &read_limit);
+    if (read_limit == 0) {
+        // Buffer full, compact and try again
+        buffer_compact(&mgmt_data->client_buffer);
+        buffer_ptr = buffer_write_ptr(&mgmt_data->client_buffer, &read_limit);
+        if (read_limit == 0) {
+            return MGMT_ERROR; // Still no space after compacting
+        }
+    }
     ssize_t read_count = recv(key->fd, buffer_ptr, read_limit, 0);
     
     if (read_count <= 0) {
@@ -294,6 +309,14 @@ unsigned mgmt_command_read(struct selector_key *key) {
     
     size_t read_limit;
     uint8_t *buffer_ptr = buffer_write_ptr(&mgmt_data->client_buffer, &read_limit);
+    if (read_limit == 0) {
+        // Buffer full, compact and try again
+        buffer_compact(&mgmt_data->client_buffer);
+        buffer_ptr = buffer_write_ptr(&mgmt_data->client_buffer, &read_limit);
+        if (read_limit == 0) {
+            return MGMT_ERROR; // Still no space after compacting
+        }
+    }
     ssize_t read_count = recv(key->fd, buffer_ptr, read_limit, 0);
     
     if (read_count <= 0) {

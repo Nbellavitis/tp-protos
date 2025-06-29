@@ -13,6 +13,14 @@ unsigned negotiationRead(struct selector_key *key) {
     size_t readLimit;
     size_t readCount;
     uint8_t *b = buffer_write_ptr(&data->clientBuffer,&readLimit);
+    if (readLimit == 0) {
+        // Buffer full, compact and try again
+        buffer_compact(&data->clientBuffer);
+        b = buffer_write_ptr(&data->clientBuffer,&readLimit);
+        if (readLimit == 0) {
+            return ERROR; // Still no space after compacting
+        }
+    }
     readCount=recv(key->fd,b,readLimit,0);
     if (readCount <= 0) {
         return ERROR; // error o desconexión
