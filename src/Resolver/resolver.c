@@ -334,6 +334,8 @@ void requestConnectingInit(const unsigned state, struct selector_key *key) {
         close(clientData->originFd);
         if (clientData->originResolution->ai_next != NULL) {
             struct addrinfo* next = clientData->originResolution->ai_next;
+            // Desenlazar el siguiente nodo antes de liberar para evitar use-after-free
+            clientData->originResolution->ai_next = NULL;
             freeaddrinfo(clientData->originResolution);
             clientData->originResolution = next;
             requestConnectingInit(state, key);
