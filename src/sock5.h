@@ -73,4 +73,5 @@ enum socks5State {
 };
 void socksv5PassiveAccept(struct selector_key* key);
 void closeConnection(struct selector_key *key);
+fd_handler * getSocksv5Handler(void);
 #endif //SOCK5_H

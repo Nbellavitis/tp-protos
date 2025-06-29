@@ -150,3 +150,19 @@ void closeConnection(struct selector_key *key) {
     }
     free(clientData);
 }
+fd_handler * getSocksv5Handler(void) {
+    return &handler;
+}
+
+void socksv5HandleClose(const unsigned state, struct selector_key *key) {
+    ClientData *clientData = (ClientData *)key->data;
+    printf("Cerrando manejo de datos\n");
+}
+
+void closeArrival(const unsigned state, struct selector_key *key) {
+    printf("Llegando al estado CLOSED\n");
+}
+
+void errorArrival(const unsigned state, struct selector_key *key) {
+    printf("Llegando al estado ERROR\n");
+}

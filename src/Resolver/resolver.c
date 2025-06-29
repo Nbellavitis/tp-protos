@@ -21,17 +21,8 @@ extern unsigned stm_handler_block(struct state_machine *stm, struct selector_key
 extern void stm_handler_close(struct state_machine *stm, struct selector_key *key);
 
 // Funciones para registrar sockets en el selector
-static void socksv5Read(struct selector_key *key);
-static void socksv5Write(struct selector_key *key);
-static void socksv5Close(struct selector_key *key);
-static void socksv5Block(struct selector_key *key);
 void dnsResolutionDone(union sigval sv);
-static fd_handler handler = {
-     .handle_read = socksv5Read,
-     .handle_write = socksv5Write,
-     .handle_close = socksv5Close,
-     .handle_block = socksv5Block,
-};
+
 
 
 
@@ -313,7 +304,7 @@ void requestConnectingInit(const unsigned state, struct selector_key *key) {
         // Conexión inmediata (poco común pero posible)
         printf("[DEBUG] CONNECTING_INIT: Conexión completada inmediatamente\n");
         // Registrar para poder manejar el estado exitoso
-        if (selector_register(key->s, clientData->originFd, &handler, OP_WRITE, clientData)) {
+        if (selector_register(key->s, clientData->originFd, getSocksv5Handler(), OP_WRITE, clientData)) {
             printf("[ERROR] CONNECTING_INIT: Error registrando socket de origen\n");
             close(clientData->originFd);
             clientData->originFd = -1;
@@ -327,7 +318,7 @@ void requestConnectingInit(const unsigned state, struct selector_key *key) {
         printf("[DEBUG] CONNECTING_INIT: Conexión en progreso (EINPROGRESS)\n");
 
         // Registrar el socket para detectar cuando esté listo para escritura
-        if (selector_register(key->s, clientData->originFd, &handler, OP_WRITE, clientData)) {
+        if (selector_register(key->s, clientData->originFd, getSocksv5Handler(), OP_WRITE, clientData)) {
             printf("[ERROR] CONNECTING_INIT: Error registrando socket de origen\n");
             close(clientData->originFd);
             clientData->originFd = -1;
@@ -592,77 +583,6 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
     return ERROR;
 }
 
-void socksv5HandleClose(const unsigned state, struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    printf("Cerrando manejo de datos\n");
-}
-
-// Funciones para los estados finales
-void closeArrival(const unsigned state, struct selector_key *key) {
-    printf("Llegando al estado CLOSED\n");
-}
-
-void errorArrival(const unsigned state, struct selector_key *key) {
-    printf("Llegando al estado ERROR\n");
-}
-
-// Implementaciones de las funciones del handler
-static void socksv5Read(struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    printf("[DEBUG] SOCKS5_READ: Leyendo datos del socket %d\n", key->fd);
-    
-    const enum socks5State state = stm_handler_read(&clientData->stm, key);
-    if (state == ERROR || state == CLOSED) {
-        closeConnection(key);
-        return;
-    }
-}
-
-static void socksv5Write(struct selector_key *key) {
-    printf("[DEBUG] socksv5Write: Entrando a socksv5Write\n");
-    if (key == NULL) {
-        printf("[ERROR] socksv5Write: key es NULL\n");
-        return;
-    }
-    if (key->data == NULL) {
-        printf("[ERROR] socksv5Write: key->data es NULL\n");
-        return;
-    }
-    ClientData *clientData = (ClientData *)key->data;
-    printf("[DEBUG] socksv5Write: Llamando a stm_handler_write\n");
-    const enum socks5State state = stm_handler_write(&clientData->stm, key);
-    printf("[DEBUG] socksv5Write: stm_handler_write retornó: %d\n", state);
-    if (state == ERROR || state == CLOSED) {
-        closeConnection(key);
-        return;
-    }
-}
-
-static void socksv5Close(struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    stm_handler_close(&clientData->stm, key);
-    closeConnection(key);
-}
-
-static void socksv5Block(struct selector_key *key) {
-    printf("[DEBUG] socksv5Block: Entrando a socksv5Block\n");
-    if (key == NULL) {
-        printf("[ERROR] socksv5Block: key es NULL\n");
-        return;
-    }
-    if (key->data == NULL) {
-        printf("[ERROR] socksv5Block: key->data es NULL\n");
-        return;
-    }
-    ClientData *clientData = (ClientData *)key->data;
-    printf("[DEBUG] socksv5Block: Llamando a stm_handler_block\n");
-    const enum socks5State state = stm_handler_block(&clientData->stm, key);
-    printf("[DEBUG] socksv5Block: stm_handler_block retornó: %d\n", state);
-    if (state == ERROR || state == CLOSED) {
-        closeConnection(key);
-        return;
-    }
-}
 void dnsResolutionDone(union sigval sv) {
     struct dns_request *dns_req = sv.sival_ptr;
     ClientData *clientData = (ClientData *)dns_req->clientData;
