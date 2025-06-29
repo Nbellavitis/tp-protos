@@ -77,7 +77,7 @@ unsigned requestRead(struct selector_key *key) {
             printf("[DEBUG] REQ_READ: Request parseado exitosamente:\n");
             printf("  Command: %d\n", parser->command);
             printf("  Address Type: %d\n", parser->address_type);
-            printf("  Port: %d\n", parser->port);
+            printf("  Port: %d\n", htons(parser->port));
 
             if (parser->address_type == ATYP_DOMAIN) {
                 printf("  Domain: %.*s\n", parser->domain_length, parser->domain);
@@ -183,10 +183,7 @@ unsigned addressResolveDone(struct selector_key *key) {
     }
 
     char port_str[6];
-    snprintf(port_str, sizeof(port_str), "%u", parser->port);
-
-
-
+    snprintf(port_str, sizeof(port_str), "%u", ntohs(parser->port));
     int gai_ret = 0;
     if (parser->address_type == ATYP_IPV4) {
          printf("[DEBUG] ADDR_RESOLVE: Resolviendo IPv4 directa\n");
@@ -204,7 +201,7 @@ unsigned addressResolveDone(struct selector_key *key) {
           }
           *ipv4_addr = (struct sockaddr_in){
                 .sin_family = AF_INET,
-                .sin_port = htons(parser->port),
+                .sin_port =htons(parser->port),
                 .sin_addr = *(struct in_addr *)parser->ipv4_addr
           };
           *clientData->originResolution = (struct addrinfo){
@@ -230,10 +227,12 @@ unsigned addressResolveDone(struct selector_key *key) {
             return REQ_WRITE;
         }
         *ipv6_addr = (struct sockaddr_in6){
-            .sin6_family = AF_INET6,
-            .sin6_port = htons(parser->port),
-            .sin6_addr = parser->ipv6_addr   //todo checkear esto. ESTA MAL!
+                .sin6_family = AF_INET6,
+                .sin6_port = htons(parser->port),
         };
+
+        memcpy(&ipv6_addr->sin6_addr, parser->ipv6_addr, 16);
+
         *clientData->originResolution= (struct addrinfo){
             .ai_family = AF_INET6,
             .ai_addrlen = sizeof(*ipv6_addr),
@@ -244,16 +243,16 @@ unsigned addressResolveDone(struct selector_key *key) {
         return CONNECTING;
 
     } else if (parser->address_type == ATYP_DOMAIN) {
-        struct addrinfo hints;
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_UNSPEC;      // Soporta IPv4 o IPv6
-        hints.ai_socktype = SOCK_STREAM;  // TCP
-        hints.ai_protocol = IPPROTO_TCP;  // TCP
         struct dns_request * dns_req = &clientData->dns_req;
+        snprintf(dns_req->port, sizeof(dns_req->port), "%u", parser->port);
+        memset(&dns_req->hints, 0, sizeof(dns_req->hints));
         struct gaicb *reqs[] = { &dns_req->req };
+        dns_req->hints.ai_family = AF_UNSPEC;
+        dns_req->hints.ai_socktype = SOCK_STREAM;
+        dns_req->hints.ai_protocol = IPPROTO_TCP;
         dns_req->req.ar_name = parser->domain;
-        dns_req->req.ar_service = port_str;
-        dns_req->req.ar_request = &hints;
+        dns_req->req.ar_service = dns_req->port;
+        dns_req->req.ar_request = &dns_req->hints;
         dns_req->req.ar_result = NULL;
         dns_req->clientData = clientData;
         dns_req->selector = key->s;

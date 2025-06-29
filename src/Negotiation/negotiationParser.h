@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "../parser.h"
 #include "../buffer.h"
+#include <stdio.h>
 #include "../selector.h"
 typedef enum {
     NEGOTIATION_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando

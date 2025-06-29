@@ -6,8 +6,10 @@
 #define PROTOS_RESOLVERPARSER_H
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 #include "../buffer.h"
-
+#include <arpa/inet.h>
 typedef enum {
     REQUEST_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando
     REQUEST_PARSE_OK,          // parseo exitoso

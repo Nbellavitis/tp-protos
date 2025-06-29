@@ -7,7 +7,7 @@
 
 #include <stdio.h>
 #include <sys/socket.h>
-
+#include <stdio.h>
 
 // Create, bind, and listen a new TCP server socket
 int setupTCPServerSocket(const char *service);

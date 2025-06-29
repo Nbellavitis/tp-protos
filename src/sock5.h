@@ -33,7 +33,9 @@ struct dns_request {
     struct gaicb req;
     struct ClientData * clientData;
     fd_selector selector;
+    struct addrinfo hints;
     int fd;
+    char port[6]; // Puerto del destino
 };
 typedef struct ClientData {
     struct state_machine stm;
