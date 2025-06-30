@@ -67,6 +67,11 @@ unsigned requestRead(struct selector_key *key) {
     if (readCount <= 0) {
         return (readCount == 0) ? CLOSED : ERROR;
     }
+    // Validate readCount doesn't exceed buffer space
+    if (readCount > (ssize_t)writeLimit) {
+        printf("[ERROR 015] REQ_READ: readCount (%zd) > writeLimit (%zu)\n", readCount, writeLimit);
+        return ERROR;
+    }
     buffer_write_adv(&clientData->clientBuffer, readCount);
 
     // Print del buffer antes de parsear
@@ -458,7 +463,19 @@ unsigned socksv5HandleRead(struct selector_key *key) {
             buffer_compact(&clientData->originBuffer);
             write_ptr = buffer_write_ptr(&clientData->originBuffer, &bytes_to_write);
             if (bytes_to_write == 0) {
-                return ERROR; // Still no space after compacting
+                // Buffer still full - implement flow control instead of ERROR
+                printf("[ERROR 011] COPYING_READ: originBuffer full, pausando lectura del cliente\n");
+                // Pause reading from client until server buffer has space
+                if(selector_set_interest(key->s, clientData->clientFd, OP_NOOP) != SELECTOR_SUCCESS) {
+                    printf("[ERROR] COPYING_READ: Error pausando lectura del cliente\n");
+                    return ERROR;
+                }
+                // Ensure server socket is ready to write to drain the buffer
+                if(selector_set_interest(key->s, clientData->originFd, OP_WRITE) != SELECTOR_SUCCESS) {
+                    printf("[ERROR] COPYING_READ: Error configurando servidor para escritura\n");
+                    return ERROR;
+                }
+                return COPYING; // Stay in COPYING state, but with paused client reading
             }
         }
         ssize_t bytes_read = recv(key->fd, write_ptr, bytes_to_write, 0);
@@ -469,6 +486,11 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         }
         
         printf("[DEBUG] COPYING_READ: Leídos %zd bytes del cliente\n", bytes_read);
+        // Validate bytes_read doesn't exceed buffer space
+        if (bytes_read > (ssize_t)bytes_to_write) {
+            printf("[ERROR 013] COPYING_READ: bytes_read (%zd) > bytes_to_write (%zu)\n", bytes_read, bytes_to_write);
+            return ERROR;
+        }
         buffer_write_adv(&clientData->originBuffer, bytes_read);
         
         // Cambiar a escritura en el socket de origen
@@ -489,7 +511,19 @@ unsigned socksv5HandleRead(struct selector_key *key) {
             buffer_compact(&clientData->clientBuffer);
             write_ptr = buffer_write_ptr(&clientData->clientBuffer, &bytes_to_write);
             if (bytes_to_write == 0) {
-                return ERROR; // Still no space after compacting
+                // Buffer still full - implement flow control instead of ERROR
+                printf("[ERROR 012] COPYING_READ: clientBuffer full, pausando lectura del servidor\n");
+                // Pause reading from server until client buffer has space
+                if(selector_set_interest(key->s, clientData->originFd, OP_NOOP) != SELECTOR_SUCCESS) {
+                    printf("[ERROR] COPYING_READ: Error pausando lectura del servidor\n");
+                    return ERROR;
+                }
+                // Ensure client socket is ready to write to drain the buffer
+                if(selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
+                    printf("[ERROR] COPYING_READ: Error configurando cliente para escritura\n");
+                    return ERROR;
+                }
+                return COPYING; // Stay in COPYING state, but with paused server reading
             }
         }
         ssize_t bytes_read = recv(clientData->originFd, write_ptr, bytes_to_write, 0);
@@ -500,6 +534,11 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         }
         
         printf("[DEBUG] COPYING_READ: Leídos %zd bytes del servidor\n", bytes_read);
+        // Validate bytes_read doesn't exceed buffer space
+        if (bytes_read > (ssize_t)bytes_to_write) {
+            printf("[ERROR 014] COPYING_READ: bytes_read (%zd) > bytes_to_write (%zu)\n", bytes_read, bytes_to_write);
+            return ERROR;
+        }
         buffer_write_adv(&clientData->clientBuffer, bytes_read);
         
         // Cambiar a escritura en el socket del cliente
@@ -538,8 +577,13 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         }
         
         // Cambiar a lectura en el socket del cliente
-        if(selector_set_interest(key->s, clientData->clientFd, OP_READ)){
+        if(selector_set_interest(key->s, clientData->clientFd, OP_READ) != SELECTOR_SUCCESS){
             printf("[ERROR] socksv5HandleWrite: Error configurando selector para lectura en el cliente\n");
+            return ERROR;
+        }
+        // Resume server reading if it was paused due to full clientBuffer
+        if(selector_set_interest(key->s, clientData->originFd, OP_READ) != SELECTOR_SUCCESS) {
+            printf("[ERROR] socksv5HandleWrite: Error reanudando lectura del servidor\n");
             return ERROR;
         }
         return COPYING;
@@ -565,6 +609,11 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         // Cambiar a lectura en el socket del servidor de origen
         if(selector_set_interest(key->s, clientData->originFd, OP_READ) != SELECTOR_SUCCESS) {
             printf("[ERROR] socksv5HandleWrite: Error configurando selector para lectura en el origen\n");
+            return ERROR;
+        }
+        // Resume client reading if it was paused due to full originBuffer
+        if(selector_set_interest(key->s, clientData->clientFd, OP_READ) != SELECTOR_SUCCESS) {
+            printf("[ERROR] socksv5HandleWrite: Error reanudando lectura del cliente\n");
             return ERROR;
         }
         return COPYING;

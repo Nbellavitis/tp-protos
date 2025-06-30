@@ -53,6 +53,11 @@ unsigned authenticationRead(struct selector_key * key){
     if (readCount <= 0) {
         return ERROR; // error o desconexión
     }
+    // Validate readCount doesn't exceed buffer space
+    if (readCount > (ssize_t)readLimit) {
+        printf("[ERROR 016] AUTH_READ: readCount (%zd) > readLimit (%zu)\n", readCount, readLimit);
+        return ERROR;
+    }
 
     stats_add_client_bytes(readCount);  //@todo checkear todos los lugares donde poner esto
     buffer_write_adv(&data->clientBuffer, readCount);
