@@ -36,19 +36,34 @@ handle_first(struct state_machine *stm, struct selector_key *key) {
 
 inline static
 void jump(struct state_machine *stm, unsigned next, struct selector_key *key) {
+    printf("[TRACE] jump: current_state=%d, next_state=%d, max_state=%d\n", 
+           stm->current ? stm->current->state : -1, next, stm->max_state);
+    
     if(next > stm->max_state) {
+        printf("[ERROR] jump: next state %d > max_state %d - ABORTING\n", next, stm->max_state);
         abort();
     }
+    
     if(stm->current != stm->states + next) {
+        printf("[TRACE] jump: State change needed from %d to %d\n", 
+               stm->current ? stm->current->state : -1, next);
+        
         if(stm->current != NULL && stm->current->on_departure != NULL) {
+            printf("[TRACE] jump: Calling on_departure for state %d\n", stm->current->state);
             stm->current->on_departure(stm->current->state, key);
         }
+        
         stm->current = stm->states + next;
+        printf("[TRACE] jump: State updated to %d\n", stm->current->state);
 
         if(NULL != stm->current->on_arrival) {
+            printf("[TRACE] jump: Calling on_arrival for state %d\n", stm->current->state);
             stm->current->on_arrival(stm->current->state, key);
         }
+    } else {
+        printf("[TRACE] jump: No state change needed (staying in state %d)\n", next);
     }
+    printf("[TRACE] jump: EXIT\n");
 }
 
 unsigned

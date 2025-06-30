@@ -15,6 +15,12 @@ static void socksv5Write(struct selector_key *key);
 static void socksv5Close(struct selector_key *key);
 static void socksv5Block(struct selector_key *key);
 
+// Handler dummy para estados que no procesan lectura
+static unsigned dummyReadHandler(struct selector_key *key) {
+    printf("[DEBUG] dummyReadHandler: Evento de lectura no esperado en estado actual\n");
+    return ERROR; // Transición a estado de error
+}
+
 static fd_handler  handler = {
      .handle_read = socksv5Read,
      .handle_write = socksv5Write,
@@ -24,16 +30,16 @@ static fd_handler  handler = {
 
 static const struct state_definition clientActions[] = {
     {.state = NEGOTIATION_READ, .on_arrival = negotiationReadInit, .on_read_ready = negotiationRead},
-    {.state = NEGOTIATION_WRITE,.on_write_ready = negotiationWrite},
+    {.state = NEGOTIATION_WRITE,.on_write_ready = negotiationWrite, .on_read_ready = dummyReadHandler},
     {.state = AUTHENTICATION_READ,.on_arrival = authenticationReadInit, .on_read_ready = authenticationRead},
-    {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite},
+    {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite, .on_read_ready = dummyReadHandler},
     {.state = REQ_READ,.on_arrival = requestReadInit,.on_read_ready = requestRead},
-    {.state = ADDR_RESOLVE, .on_arrival = addressResolveInit, .on_write_ready = addressResolveDone,.on_block_ready = addressResolveDone},
-    {.state = CONNECTING, .on_arrival = requestConnectingInit, .on_write_ready = requestConnecting},
-    {.state = REQ_WRITE, .on_write_ready = requestWrite},
+    {.state = ADDR_RESOLVE, .on_arrival = addressResolveInit, .on_write_ready = addressResolveDone,.on_block_ready = addressResolveDone, .on_read_ready = dummyReadHandler},
+    {.state = CONNECTING, .on_arrival = requestConnectingInit, .on_write_ready = requestConnecting, .on_read_ready = dummyReadHandler},
+    {.state = REQ_WRITE, .on_write_ready = requestWrite, .on_read_ready = dummyReadHandler},
     {.state = COPYING,   .on_arrival = socksv5HandleInit,.on_read_ready = socksv5HandleRead,.on_write_ready = socksv5HandleWrite,.on_departure = socksv5HandleClose},
-    {.state = CLOSED, .on_arrival = closeArrival},
-    {.state=ERROR, .on_arrival = errorArrival}
+    {.state = CLOSED, .on_arrival = closeArrival, .on_read_ready = dummyReadHandler},
+    {.state=ERROR, .on_arrival = errorArrival, .on_read_ready = dummyReadHandler}
 };
 void socksv5PassiveAccept(struct selector_key* key){
     struct sockaddr_storage clientAddress;
@@ -80,7 +86,12 @@ void socksv5PassiveAccept(struct selector_key* key){
 static void socksv5Read(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     
+    if (clientData == NULL) {
+        printf("[DEBUG] socksv5Read: clientData is NULL, already freed\n");
+        return;
+    }
     if (clientData->closed) {
+        printf("[DEBUG] socksv5Read: connection already closed\n");
         return;
     }
     
@@ -127,6 +138,10 @@ static void socksv5Write(struct selector_key *key) {
 }
 static void socksv5Close(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
+    if (clientData == NULL) {
+        printf("[DEBUG] socksv5Close: clientData is NULL, already freed\n");
+        return;
+    }
     stm_handler_close(&clientData->stm, key);
     closeConnection(key);
 }
@@ -160,7 +175,12 @@ static void socksv5Block(struct selector_key *key) {
 }
 void closeConnection(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
+    if (clientData == NULL) {
+        printf("[DEBUG] closeConnection: clientData is NULL, already freed\n");
+        return; // ya fue liberado
+    }
     if (clientData->closed) {
+        printf("[DEBUG] closeConnection: already closed\n");
         return; // ya fue cerrado
     }
     
@@ -191,8 +211,10 @@ void closeConnection(struct selector_key *key) {
     // Limpiar el ClientData pero no liberarlo inmediatamente si hay DNS pendiente
     if (clientData->dns_resolution_state == -2) {
         // Marcar para liberación diferida - el callback DNS se encargará
+        key->data = NULL; // Importante: evitar accesos futuros
         return;
     }
     
     free(clientData);
+    key->data = NULL; // Importante: evitar accesos futuros
 }

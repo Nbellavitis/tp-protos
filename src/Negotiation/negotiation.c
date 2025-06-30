@@ -56,11 +56,16 @@ unsigned negotiationWrite(struct selector_key *key) {
     ClientData *data = key->data;
     negotiation_parser *p = &data->client.negParser;
     size_t writeLimit;
-    size_t writeCount;
+    ssize_t writeCount;
     uint8_t * b = buffer_read_ptr(&data->originBuffer, &writeLimit);
     writeCount = send(key->fd, b, writeLimit, MSG_NOSIGNAL );
-    if (writeCount <= 0) {
+    if (writeCount < 0) {
         return ERROR; // error o desconexión
+    }
+    if (writeCount == 0) {
+        // Socket not ready to write, stay in write mode
+        printf("[DEBUG] negotiationWrite: socket not ready, staying in OP_WRITE\n");
+        return NEGOTIATION_WRITE;
     }
     buffer_read_adv(&data->originBuffer, writeCount);
     stats_add_origin_bytes(writeCount);

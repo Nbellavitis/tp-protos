@@ -194,6 +194,7 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
         clientData->originResolution = calloc(1, sizeof(struct addrinfo));
         if(clientData->originResolution == NULL) {
             printf("[DEBUG] ADDR_RESOLVE_INIT: Error al asignar memoria para resolución IPv4\n");
+            free(ipv4_addr); // Fix memory leak
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
             selector_set_interest(key->s, key->fd, OP_WRITE);
             return;
@@ -228,6 +229,7 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
         clientData->originResolution = calloc(1,sizeof(struct addrinfo));
         if(clientData->originResolution == NULL ) {
             printf("[DEBUG] ADDR_RESOLVE_INIT: Error al asignar memoria para resolución IPv6\n");
+            free(ipv6_addr); // Fix memory leak
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
             selector_set_interest(key->s, key->fd, OP_WRITE);
             return;
@@ -418,6 +420,12 @@ unsigned requestConnecting(struct selector_key *key) {
             return ERROR;
         }
         
+        if (bytes_written == 0) {
+            // Socket not ready to write, stay in write mode
+            printf("[DEBUG] CONNECTING: client socket not ready, staying in OP_WRITE\n");
+            return CONNECTING;
+        }
+        
         buffer_read_adv(&clientData->originBuffer, bytes_written);
         
         if (buffer_can_read(&clientData->originBuffer)) {
@@ -557,23 +565,50 @@ unsigned socksv5HandleRead(struct selector_key *key) {
 unsigned socksv5HandleWrite(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     
+    printf("[TRACE] socksv5HandleWrite: ENTRY fd=%d clientFd=%d originFd=%d\n", 
+           key->fd, clientData->clientFd, clientData->originFd);
+    
     // Escribir datos del buffer al socket correspondiente
     if (key->fd == clientData->clientFd) {
+        printf("[TRACE] socksv5HandleWrite: Writing to CLIENT fd=%d\n", key->fd);
+        // Verificar estado de clientData antes de acceder al buffer
+        if (clientData->closed) {
+            printf("[ERROR] socksv5HandleWrite: clientData is marked as closed\n");
+            return ERROR;
+        }
+        if (clientData->clientFd != key->fd) {
+            printf("[ERROR] socksv5HandleWrite: CLIENT fd mismatch - expected %d, got %d\n", clientData->clientFd, key->fd);
+            return ERROR;
+        }
+        
         // Escribir datos del buffer del cliente al cliente
         if (buffer_can_read(&clientData->clientBuffer)) {
             size_t bytes_to_write;
             uint8_t *read_ptr = buffer_read_ptr(&clientData->clientBuffer, &bytes_to_write);
+            printf("[TRACE] socksv5HandleWrite: CLIENT buffer has %zu bytes to write\n", bytes_to_write);
             ssize_t bytes_written = send(clientData->clientFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
             
+            printf("[TRACE] socksv5HandleWrite: CLIENT send() returned %zd bytes\n", bytes_written);
+            
             if (bytes_written < 0) {
+                printf("[ERROR] socksv5HandleWrite: CLIENT send() failed\n");
                 return ERROR;
+            }
+            
+            if (bytes_written == 0) {
+                // Socket not ready to write, stay in write mode
+                printf("[DEBUG] socksv5HandleWrite: client socket not ready, staying in OP_WRITE\n");
+                return COPYING;
             }
             
             buffer_read_adv(&clientData->clientBuffer, bytes_written);
             
             if (buffer_can_read(&clientData->clientBuffer)) {
+                printf("[TRACE] socksv5HandleWrite: CLIENT still has data, staying in COPYING\n");
                 return COPYING;
             }
+        } else {
+            printf("[TRACE] socksv5HandleWrite: CLIENT buffer is empty\n");
         }
         
         // Cambiar a lectura en el socket del cliente
@@ -589,21 +624,45 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         return COPYING;
         
     } else if (key->fd == clientData->originFd) {
+        printf("[TRACE] socksv5HandleWrite: Writing to ORIGIN fd=%d\n", key->fd);
+        // Verificar estado de clientData antes de acceder al buffer
+        if (clientData->closed) {
+            printf("[ERROR] socksv5HandleWrite: clientData is marked as closed\n");
+            return ERROR;
+        }
+        if (clientData->originFd != key->fd) {
+            printf("[ERROR] socksv5HandleWrite: fd mismatch - expected %d, got %d\n", clientData->originFd, key->fd);
+            return ERROR;
+        }
+        
         // Escribir datos del buffer del origen al servidor de origen
         if (buffer_can_read(&clientData->originBuffer)) {
             size_t bytes_to_write;
             uint8_t *read_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
+            printf("[TRACE] socksv5HandleWrite: ORIGIN buffer has %zu bytes to write\n", bytes_to_write);
             ssize_t bytes_written = send(clientData->originFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
             
+            printf("[TRACE] socksv5HandleWrite: ORIGIN send() returned %zd bytes\n", bytes_written);
+            
             if (bytes_written < 0) {
+                printf("[ERROR] socksv5HandleWrite: ORIGIN send() failed\n");
                 return ERROR;
+            }
+            
+            if (bytes_written == 0) {
+                // Socket not ready to write, stay in write mode
+                printf("[DEBUG] socksv5HandleWrite: origin socket not ready, staying in OP_WRITE\n");
+                return COPYING;
             }
             
             buffer_read_adv(&clientData->originBuffer, bytes_written);
             
             if (buffer_can_read(&clientData->originBuffer)) {
+                printf("[TRACE] socksv5HandleWrite: ORIGIN still has data, staying in COPYING\n");
                 return COPYING;
             }
+        } else {
+            printf("[TRACE] socksv5HandleWrite: ORIGIN buffer is empty\n");
         }
         
         // Cambiar a lectura en el socket del servidor de origen
@@ -616,9 +675,14 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
             printf("[ERROR] socksv5HandleWrite: Error reanudando lectura del cliente\n");
             return ERROR;
         }
+        printf("[TRACE] socksv5HandleWrite: CLIENT/ORIGIN switching to READ mode - returning COPYING\n");
         return COPYING;
+    } else {
+        printf("[ERROR] socksv5HandleWrite: Unknown fd=%d (not client=%d or origin=%d)\n", 
+               key->fd, clientData->clientFd, clientData->originFd);
     }
     
+    printf("[TRACE] socksv5HandleWrite: EXIT with ERROR\n");
     return ERROR;
 }
 

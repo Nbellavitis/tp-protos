@@ -54,6 +54,16 @@ unsigned stats_get_origin_bytes(void) {
 
 void stats_print()
 {
+    // Take a snapshot to avoid race conditions with concurrent modifications
+    struct stats snapshot = g_stats;
+    
+    // Validate values to prevent corruption-induced crashes
+    if (snapshot.hist_conn > 1000000 || snapshot.curr_conn > 10000 || 
+        snapshot.max_conn > 10000 || snapshot.bytes_c2o > 0xFFFFFF || 
+        snapshot.bytes_o2c > 0xFFFFFF) {
+        printf("[ERROR] stats_print: Detected corrupted statistics, skipping print\n");
+        return;
+    }
 
     fprintf(stdout,
             "=== SOCKS5 STATISTICS ===\n"
@@ -62,9 +72,9 @@ void stats_print()
             "Pico de conexiones    : %u\n"
             "Bytes CLI → ORI       : %u\n"
             "Bytes ORI → CLI       : %u\n",
-            g_stats.hist_conn,
-            g_stats.curr_conn,
-            g_stats.max_conn,
-            g_stats.bytes_c2o,
-            g_stats.bytes_o2c);
+            snapshot.hist_conn,
+            snapshot.curr_conn,
+            snapshot.max_conn,
+            snapshot.bytes_c2o,
+            snapshot.bytes_o2c);
 }

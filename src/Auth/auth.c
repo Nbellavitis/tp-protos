@@ -92,11 +92,16 @@ unsigned authenticationWrite(struct selector_key * key){
     ClientData *data = key->data;
     auth_parser *p = &data->client.authParser;
     size_t readLimit;
-    size_t readCount;
+    ssize_t readCount;
     uint8_t  * b = buffer_read_ptr(&data->originBuffer, &readLimit);
     readCount = send(key->fd, b, readLimit, MSG_NOSIGNAL);
-    if (readCount <= 0) {
+    if (readCount < 0) {
         return ERROR; // error o desconexión
+    }
+    if (readCount == 0) {
+        // Socket not ready to write, stay in write mode
+        printf("[DEBUG] authenticationWrite: socket not ready, staying in OP_WRITE\n");
+        return AUTHENTICATION_WRITE;
     }
     stats_add_origin_bytes(readCount); //@Todo check donde va esto.
     buffer_read_adv(&data->originBuffer, readCount);
