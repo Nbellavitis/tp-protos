@@ -15,6 +15,14 @@
 #include "ManagementProtocol/management.h"
 #define MAXPENDING 10 //todo ME PINTO 10
 
+static bool killed = false;
+
+void sig_handler(int signum) {
+    if (signum == SIGTERM || signum == SIGINT) {
+        printf("Received signal %d, shutting down...\n", signum);
+        killed = true;
+    }
+}
 // Variables globales para usuarios autorizados
 static struct users* authorized_users = NULL;
 static int num_authorized_users = 0;
@@ -128,20 +136,23 @@ static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t
 
 int main (int argc,char * argv[]){
     printf("Starting SOCKS5 Proxy Server\n");
+    signal(SIGTERM, sig_handler);
+    signal(SIGINT, sig_handler);
     selector_status ss= SELECTOR_SUCCESS;
+    char * error = NULL;
     struct selector_init conf = {
         .signal = SIGALRM,
         .select_timeout = { .tv_sec = 10, .tv_nsec = 0 }
 
     };
     if (selector_init(&conf) != SELECTOR_SUCCESS) {
-        fprintf(stdout, "Failed to initialize selector\n");
-        exit(1);
+        error = "Failed to initialize selector";
+        return endProgram(authorized_users, NULL, ss, -1, -1,error);
     }
    struct fdselector * selector = selector_new(FD_SETSIZE);
     if (selector == NULL) {
-        fprintf(stdout, "Failed to create selector\n");
-        exit(1);
+        error = "Failed to create selector";
+        return endProgram(authorized_users, selector, ss, -1, -1,error);
     }
     struct socks5args args;
     parse_args(argc, argv, &args);
@@ -161,30 +172,27 @@ int main (int argc,char * argv[]){
     socklen_t auxAddrLen = sizeof(auxAddr);
     int server = -1;
     if (setupSockAddr(args.socks_addr, args.socks_port, &auxAddr, &auxAddrLen) < 0) {
-        fprintf(stdout, "Failed to setup SOCKS address\n");
-        exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
+        error = "Invalid address or port for SOCKS5 server";
+        return endProgram(authorized_users, selector, ss, server, -1,error);
     }
     server = socket(auxAddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
     if (server < 0) {
-        fprintf(stdout, "Failed to create server socket: %s\n", strerror(errno));
-        exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
+        error = "Failed to create socket for SOCKS5 server";
+        return endProgram(authorized_users, selector, ss, server, -1,error);
     }
     int enable = 1;
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
     if (bind(server, (struct sockaddr *)&auxAddr, auxAddrLen) < 0) {
-        fprintf(stdout, "Failed to bind server socket: %s\n", strerror(errno));
-        close(server);
-        exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
+        error = "Failed to bind socket for SOCKS5 server";
+        return endProgram(authorized_users, selector, ss, server, -1,error);
     }
     if (listen(server, MAXPENDING) < 0) {
-        fprintf(stdout, "Failed to listen on server socket: %s\n", strerror(errno));
-        close(server);
-        exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
+        error = "Failed to listen on socket for SOCKS5 server";
+        return endProgram(authorized_users, selector, ss, server, -1,error);
     }
     if (selector_fd_set_nio(server) == -1) {
-        fprintf(stdout, "Failed to set server socket to non-blocking: %s\n", strerror(errno));
-        close(server);
-        exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
+        error = "Failed to set non-blocking mode for SOCKS5 server socket";
+        return endProgram(authorized_users, selector, ss, server, -1,error);
     }
 
     const fd_handler socksv5 = {
@@ -192,9 +200,8 @@ int main (int argc,char * argv[]){
     };
     ss = selector_register(selector, server, &socksv5, OP_READ, NULL);
     if (ss != SELECTOR_SUCCESS) {
-        fprintf(stdout, "Failed to register server socket with selector: %s\n", selector_error(ss));
-        selector_close();
-        exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
+        error = "Failed to register SOCKS5 server socket with selector";
+        return endProgram(authorized_users, selector, ss, server, -1,error);
     }
     printf("SOCKS5 Proxy Server listening on %s:%d\n", args.socks_addr, args.socks_port);
     
@@ -205,33 +212,30 @@ int main (int argc,char * argv[]){
     int mgmt_server = -1;
     
     if (setupSockAddr(args.mng_addr, args.mng_port, &mgmtAddr, &mgmtAddrLen) < 0) {
-        fprintf(stdout, "Failed to setup Management address\n");
-        exit(1);
+        error = "Invalid address or port for Management server";
+        return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
     }
     
     mgmt_server = socket(mgmtAddr.ss_family, SOCK_STREAM, IPPROTO_TCP);
     if (mgmt_server < 0) {
-        fprintf(stdout, "Failed to create management socket: %s\n", strerror(errno));
-        exit(1);
+        error = "Failed to create socket for Management server";
+        return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
     }
     
     setsockopt(mgmt_server, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
     if (bind(mgmt_server, (struct sockaddr *)&mgmtAddr, mgmtAddrLen) < 0) {
-        fprintf(stdout, "Failed to bind management socket: %s\n", strerror(errno));
-        close(mgmt_server);
-        exit(1);
+        error = "Failed to bind socket for Management server";
+        return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
     }
     
     if (listen(mgmt_server, MAXPENDING) < 0) {
-        fprintf(stdout, "Failed to listen on management socket: %s\n", strerror(errno));
-        close(mgmt_server);
-        exit(1);
+        error = "Failed to listen on socket for Management server";
+        return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
     }
     
     if (selector_fd_set_nio(mgmt_server) == -1) {
-        fprintf(stdout, "Failed to set management socket to non-blocking: %s\n", strerror(errno));
-        close(mgmt_server);
-        exit(1);
+        error = "Failed to set non-blocking mode for Management server socket";
+        return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
     }
     
     const fd_handler management = {
@@ -239,22 +243,50 @@ int main (int argc,char * argv[]){
     };
     ss = selector_register(selector, mgmt_server, &management, OP_READ, NULL);
     if (ss != SELECTOR_SUCCESS) {
-        fprintf(stdout, "Failed to register management socket with selector: %s\n", selector_error(ss));
-        selector_close();
-        exit(1);
+        return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
     }
     
     printf("Management Server listening on %s:%d\n", args.mng_addr, args.mng_port);
     
-    while(true){
+    while(!killed){
         printf("[DEBUG] MAIN: Antes de selector_select\n");
         ss = selector_select(selector);
         printf("[DEBUG] MAIN: Después de selector_select\n");
         if (ss != SELECTOR_SUCCESS) {
-            fprintf(stdout, "Selector error: %s\n", selector_error(ss));
-            selector_close();
-            exit(1);   // todo VER COMO BORRAR TODO (NO HACER EXIT)
+            return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
         }
         stats_print();
     }
+    return endProgram(authorized_users, selector, ss, server, mgmt_server,NULL);
+}
+int endProgram(struct users * users,fd_selector selector, selector_status ss, int server, int mgmt_server,char * error) {
+    int ret= 0;
+    if (users != NULL) {
+       free(users);
+    }
+    if (ss != SELECTOR_SUCCESS) {
+        fprintf(stdout, "Selector error: %s\n", selector_error(ss));
+        ret = -1; // Indicar error en el selector
+    }else if (errno < 0) {
+        fprintf(stdout, "Error: %s\n", strerror(errno));
+        ret = -1; // Indicar error de sistema
+    } else if (error != NULL) {
+        fprintf(stdout, "Error: %s\n", error);
+        ret = -1; // Indicar error específico
+    }
+    if (selector != NULL) {
+        selector_destroy(selector);
+    }
+    selector_close();
+
+    if (server >= 0) {
+        close(server);
+    }
+
+    if (mgmt_server >= 0) {
+        close(mgmt_server);
+    }
+
+    return ret;
+
 }

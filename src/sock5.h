@@ -22,6 +22,7 @@
 #include "Logging/statistics.h"
 #include "Resolver/resolverParser.h"
 #include "args.h"
+#include "Copy/copy.h"
 #define BUFFER_SIZE 32768
 
 // Funciones para acceder a usuarios autorizados

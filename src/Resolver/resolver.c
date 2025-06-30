@@ -221,9 +221,7 @@ unsigned addressResolveDone(struct selector_key *key) {
                 .sin6_family = AF_INET6,
                 .sin6_port = htons(parser->port),
         };
-
         memcpy(&ipv6_addr->sin6_addr, parser->ipv6_addr, 16);
-
         *clientData->originResolution= (struct addrinfo){
             .ai_family = AF_INET6,
             .ai_addrlen = sizeof(*ipv6_addr),
@@ -452,136 +450,7 @@ unsigned requestConnecting(struct selector_key *key) {
     return COPYING;
 }
 
-// Funciones para el estado COPYING (manejo de datos entre cliente y servidor)
-void socksv5HandleInit(const unsigned state, struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    printf("Iniciando copia de datos entre cliente y servidor\n");
-    
-    // Registrar el socket del servidor de origen en el selector
-    printf("[DEBUG] COPYING_INIT: Registrando socket del servidor de origen (fd=%d) en el selector\n", clientData->originFd);
 
-    // Registrar el socket del cliente para lectura
-    printf("[DEBUG] COPYING_INIT: Configurando socket del cliente (fd=%d) para lectura\n", clientData->clientFd);
-    if(selector_set_interest(key->s, clientData->clientFd, OP_READ) != SELECTOR_SUCCESS) {
-        printf("[ERROR] COPYING_INIT: Error configurando selector para lectura en el cliente\n");
-        closeConnection(key);
-        return;
-    }
-}
-
-unsigned socksv5HandleRead(struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    printf("[DEBUG] COPYING_READ: Leyendo datos del socket %d\n", key->fd);
-    
-    // Leer datos del socket activo y escribirlos en el buffer correspondiente
-    if (key->fd == clientData->clientFd) {
-        // Datos del cliente -> servidor de origen
-        printf("[DEBUG] COPYING_READ: Leyendo datos del cliente\n");
-        size_t bytes_to_write;
-        uint8_t *write_ptr = buffer_write_ptr(&clientData->originBuffer, &bytes_to_write);
-        ssize_t bytes_read = recv(key->fd, write_ptr, bytes_to_write, 0);
-        
-        if (bytes_read <= 0) {
-            printf("[DEBUG] COPYING_READ: Cliente cerró conexión\n");
-            return CLOSED;
-        }
-        
-        printf("[DEBUG] COPYING_READ: Leídos %zd bytes del cliente\n", bytes_read);
-        buffer_write_adv(&clientData->originBuffer, bytes_read);
-        
-        // Cambiar a escritura en el socket de origen
-        printf("[DEBUG] COPYING_READ: Configurando socket del servidor para escritura\n");
-        if(selector_set_interest(key->s, clientData->originFd, OP_WRITE)!= SELECTOR_SUCCESS) {
-            printf("[ERROR] COPYING_READ: Error configurando selector para escritura en el origen\n");
-            return ERROR;
-        }
-        return COPYING;
-        
-    } else if (key->fd == clientData->originFd) {
-        // Datos del servidor de origen -> cliente
-        printf("[DEBUG] COPYING_READ: Leyendo datos del servidor\n");
-        size_t bytes_to_write;
-        uint8_t *write_ptr = buffer_write_ptr(&clientData->clientBuffer, &bytes_to_write);
-        ssize_t bytes_read = recv(clientData->originFd, write_ptr, bytes_to_write, 0);
-        
-        if (bytes_read <= 0) {
-            printf("[DEBUG] COPYING_READ: Servidor cerró conexión\n");
-            return CLOSED;
-        }
-        
-        printf("[DEBUG] COPYING_READ: Leídos %zd bytes del servidor\n", bytes_read);
-        buffer_write_adv(&clientData->clientBuffer, bytes_read);
-        
-        // Cambiar a escritura en el socket del cliente
-        printf("[DEBUG] COPYING_READ: Configurando socket del cliente para escritura\n");
-        if(selector_set_interest(key->s, clientData->clientFd, OP_WRITE)!= SELECTOR_SUCCESS) {
-            printf("[ERROR] COPYING_READ: Error configurando selector para escritura en el cliente\n");
-            return ERROR;
-        }
-        return COPYING;
-    }
-    
-    printf("[ERROR] COPYING_READ: Socket desconocido: %d\n", key->fd);
-    return ERROR;
-}
-
-unsigned socksv5HandleWrite(struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    
-    // Escribir datos del buffer al socket correspondiente
-    if (key->fd == clientData->clientFd) {
-        // Escribir datos del buffer del cliente al cliente
-        if (buffer_can_read(&clientData->clientBuffer)) {
-            size_t bytes_to_write;
-            uint8_t *read_ptr = buffer_read_ptr(&clientData->clientBuffer, &bytes_to_write);
-            ssize_t bytes_written = send(clientData->clientFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
-            
-            if (bytes_written < 0) {
-                return ERROR;
-            }
-            
-            buffer_read_adv(&clientData->clientBuffer, bytes_written);
-            
-            if (buffer_can_read(&clientData->clientBuffer)) {
-                return COPYING;
-            }
-        }
-        
-        // Cambiar a lectura en el socket del cliente
-        if(selector_set_interest(key->s, clientData->clientFd, OP_READ)){
-            printf("[ERROR] socksv5HandleWrite: Error configurando selector para lectura en el cliente\n");
-            return ERROR;
-        }
-        return COPYING;
-        
-    } else if (key->fd == clientData->originFd) {
-        // Escribir datos del buffer del origen al servidor de origen
-        if (buffer_can_read(&clientData->originBuffer)) {
-            size_t bytes_to_write;
-            uint8_t *read_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
-            ssize_t bytes_written = send(clientData->originFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
-            
-            if (bytes_written < 0) {
-                return ERROR;
-            }
-            
-            buffer_read_adv(&clientData->originBuffer, bytes_written);
-            
-            if (buffer_can_read(&clientData->originBuffer)) {
-                return COPYING;
-            }
-        }
-        
-        // Cambiar a lectura en el socket del servidor de origen
-        if(selector_set_interest(key->s, clientData->originFd, OP_READ) != SELECTOR_SUCCESS) {
-            printf("[ERROR] socksv5HandleWrite: Error configurando selector para lectura en el origen\n");
-            return ERROR;
-        }
-        return COPYING;
-    }
-    
-    return ERROR;
-}
 
 void dnsResolutionDone(union sigval sv) {
     struct dns_request *dns_req = sv.sival_ptr;

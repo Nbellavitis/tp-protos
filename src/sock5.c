@@ -14,7 +14,8 @@ static void socksv5Read(struct selector_key *key);
 static void socksv5Write(struct selector_key *key);
 static void socksv5Close(struct selector_key *key);
 static void socksv5Block(struct selector_key *key);
-
+static void closeArrival(const unsigned state, struct selector_key *key);
+static void errorArrival(const unsigned state, struct selector_key *key);
 static fd_handler  handler = {
      .handle_read = socksv5Read,
      .handle_write = socksv5Write,
@@ -69,7 +70,6 @@ void socksv5PassiveAccept(struct selector_key* key){
     buffer_init(&clientData->originBuffer, BUFFER_SIZE, clientData->inOriginBuffer);
 
     stm_init(&clientData->stm);
-    selector_fd_set_nio(newClientSocket);
     selector_status ss = selector_register(key->s, newClientSocket, &handler, OP_READ, clientData);
     if (ss != SELECTOR_SUCCESS) {
         free(clientData);
@@ -154,15 +154,12 @@ fd_handler * getSocksv5Handler(void) {
     return &handler;
 }
 
-void socksv5HandleClose(const unsigned state, struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    printf("Cerrando manejo de datos\n");
-}
 
-void closeArrival(const unsigned state, struct selector_key *key) {
+
+static void closeArrival(const unsigned state, struct selector_key *key) {
     printf("Llegando al estado CLOSED\n");
 }
 
-void errorArrival(const unsigned state, struct selector_key *key) {
+static void errorArrival(const unsigned state, struct selector_key *key) {
     printf("Llegando al estado ERROR\n");
 }
