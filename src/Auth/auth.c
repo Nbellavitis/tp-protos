@@ -1,4 +1,5 @@
 #include "auth.h"
+#include <errno.h>
 
 bool validateUser(const char* username, const char* password) {
     if (username == NULL || password == NULL) {
@@ -46,12 +47,18 @@ unsigned authenticationRead(struct selector_key * key){
         buffer_compact(&data->clientBuffer);
         b = buffer_write_ptr(&data->clientBuffer, &readLimit);
         if (readLimit == 0) {
-            return ERROR; // Still no space after compacting
+            printf("[ERROR 025] authenticationRead: Buffer sin espacio después de compactar - fd:%d\n", key->fd);
+            return ERROR;
         }
     }
     readCount = recv(key->fd, b, readLimit, 0);
     if (readCount <= 0) {
-        return ERROR; // error o desconexión
+        if (readCount == 0) {
+            printf("[DEBUG] authenticationRead: Cliente cerró conexión - fd:%d\n", key->fd);
+        } else {
+            printf("[ERROR 026] authenticationRead: Error en recv() - fd:%d, errno:%d\n", key->fd, errno);
+        }
+        return ERROR;
     }
 
     stats_add_client_bytes(readCount);  //@todo checkear todos los lugares donde poner esto
@@ -62,14 +69,25 @@ unsigned authenticationRead(struct selector_key * key){
             // Validar las credenciales del usuario
             if (!validateUser(p->name, p->password)) {
                 printf("Autenticación fallida para usuario: %s\n", p->name);
-                if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x01)) {
+                if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
+                    printf("[ERROR 027] authenticationRead: Error configurando selector para escritura - fd:%d\n", key->fd);
                     return ERROR;
                 }
-                return ERROR; // Rechazar conexión por credenciales inválidas
+                if (!sendAuthResponse(&data->originBuffer,p->version,0x01)) {
+                    printf("[ERROR 028] authenticationRead: Error enviando respuesta auth fallida - fd:%d\n", key->fd);
+                    return ERROR;
+                }
+                printf("[DEBUG] authenticationRead: Rechazando por credenciales inválidas - fd:%d\n", key->fd);
+                return ERROR;
             }
             
             printf("Autenticación exitosa para usuario: %s\n", p->name);
-            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x00)) {
+            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
+                printf("[ERROR 029] authenticationRead: Error configurando selector para escritura exitosa - fd:%d\n", key->fd);
+                return ERROR;
+            }
+            if (!sendAuthResponse(&data->originBuffer,p->version,0x00)) {
+                printf("[ERROR 030] authenticationRead: Error enviando respuesta auth exitosa - fd:%d\n", key->fd);
                 return ERROR;
             }
             return AUTHENTICATION_WRITE;
@@ -79,6 +97,7 @@ unsigned authenticationRead(struct selector_key * key){
 
         case AUTH_PARSE_ERROR:
         default:
+            printf("[ERROR 031] authenticationRead: Error parseando autenticación - fd:%d\n", key->fd);
             return ERROR;
     }
 }
@@ -91,7 +110,8 @@ unsigned authenticationWrite(struct selector_key * key){
     uint8_t  * b = buffer_read_ptr(&data->originBuffer, &readLimit);
     readCount = send(key->fd, b, readLimit, MSG_NOSIGNAL);
     if (readCount <= 0) {
-        return ERROR; // error o desconexión
+        printf("[ERROR 032] authenticationWrite: Error en send() - fd:%d, errno:%d\n", key->fd, errno);
+        return ERROR;
     }
     stats_add_origin_bytes(readCount); //@Todo check donde va esto.
     buffer_read_adv(&data->originBuffer, readCount);
@@ -100,7 +120,12 @@ unsigned authenticationWrite(struct selector_key * key){
         return AUTHENTICATION_WRITE;
     }
 
-   if (p->error || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
+   if (p->error) {
+        printf("[ERROR 033] authenticationWrite: Parser en estado error - fd:%d\n", key->fd);
+        return ERROR;
+    }
+    if (selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
+        printf("[ERROR 034] authenticationWrite: Error configurando selector para lectura - fd:%d\n", key->fd);
         return ERROR;
     }
     printf("Autenticación exitosa\n");

@@ -60,12 +60,19 @@ unsigned requestRead(struct selector_key *key) {
         buffer_compact(&clientData->clientBuffer);
         b = buffer_write_ptr(&clientData->clientBuffer, &writeLimit);
         if (writeLimit == 0) {
-            return ERROR; // Still no space after compacting
+            printf("[ERROR 001] requestRead: Buffer sin espacio después de compactar - fd:%d\n", key->fd);
+            return ERROR;
         }
     }
     ssize_t readCount = recv(key->fd, b, writeLimit, 0);
     if (readCount <= 0) {
-        return (readCount == 0) ? CLOSED : ERROR;
+        if (readCount == 0) {
+            printf("[DEBUG] requestRead: Cliente cerró conexión - fd:%d\n", key->fd);
+            return CLOSED;
+        } else {
+            printf("[ERROR 002] requestRead: Error en recv() - fd:%d, errno:%d\n", key->fd, errno);
+            return ERROR;
+        }
     }
     buffer_write_adv(&clientData->clientBuffer, readCount);
 
@@ -102,7 +109,7 @@ unsigned requestRead(struct selector_key *key) {
 
             // Por ahora solo soportamos CONNECT
             if (parser->command != CMD_CONNECT) {
-                printf("[DEBUG] REQ_READ: Comando no soportado (%d), enviando error\n", parser->command);
+                printf("[ERROR 004] requestRead: Comando SOCKS no soportado (%d) - fd:%d\n", parser->command, key->fd);
                 // Enviar error: Command not supported
                 sendRequestResponse(&clientData->originBuffer, 0x05, 0x07, ATYP_IPV4, parser->ipv4_addr, 0);
                 return REQ_WRITE;
@@ -113,12 +120,13 @@ unsigned requestRead(struct selector_key *key) {
             return ADDR_RESOLVE;
 
         case REQUEST_PARSE_ERROR:
-            printf("[DEBUG] REQ_READ: Error parsing request\n");
+            printf("[ERROR 003] requestRead: Error parseando request SOCKS5 - fd:%d\n", key->fd);
             // Enviar error: General SOCKS server failure
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
             return REQ_WRITE;
     }
 
+    printf("[ERROR 005] requestRead: Estado inesperado en parser - fd:%d\n", key->fd);
     return ERROR;
 }
 
@@ -139,7 +147,7 @@ unsigned requestWrite(struct selector_key *key) {
         // todo: cambie las lineas de arriba, revisen porfa. mati
         
         if (bytes_written < 0) {
-            printf("[DEBUG] REQ_WRITE: Error escribiendo al cliente\n");
+            printf("[ERROR 006] requestWrite: Error en send() al cliente - fd:%d, errno:%d\n", key->fd, errno);
             return ERROR;
         }
         
@@ -300,13 +308,13 @@ unsigned addressResolveDone(struct selector_key *key) {
         printf("[DEBUG] ADDR_RESOLVE_DONE: DNS aún en progreso, esperando\n");
         return ADDR_RESOLVE; // Esperar a que se complete la resolución
     } else if (clientData->dns_resolution_state == -1){
-        printf("[DEBUG] ADDR_RESOLVE_DONE: DNS falló, enviando error\n");
+        printf("[ERROR 007] addressResolveDone: DNS falló - fd:%d\n", key->fd);
         sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
         return REQ_WRITE; // Enviar error y cerrar conexión
     }
     
     // Si llegamos aquí, no hay resolución DNS pendiente - esto no debería ocurrir
-    printf("[ERROR] ADDR_RESOLVE_DONE: llamado sin resolución DNS pendiente\n");
+    printf("[ERROR 008] addressResolveDone: llamado sin resolución DNS pendiente - fd:%d, dns_state:%d\n", key->fd, clientData->dns_resolution_state);
     return ERROR;
 }
 
@@ -464,8 +472,13 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         ssize_t bytes_read = recv(key->fd, write_ptr, bytes_to_write, 0);
         
         if (bytes_read <= 0) {
-            printf("[DEBUG] COPYING_READ: Cliente cerró conexión\n");
-            return CLOSED;
+            if (bytes_read == 0) {
+                printf("[DEBUG] COPYING_READ: Cliente cerró conexión - fd:%d\n", key->fd);
+                return CLOSED;
+            } else {
+                printf("[ERROR 009] socksv5HandleRead: Error recv() del cliente - fd:%d, errno:%d\n", key->fd, errno);
+                return ERROR;
+            }
         }
         
         printf("[DEBUG] COPYING_READ: Leídos %zd bytes del cliente\n", bytes_read);
@@ -474,7 +487,7 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         // Cambiar a escritura en el socket de origen
         printf("[DEBUG] COPYING_READ: Configurando socket del servidor para escritura\n");
         if(selector_set_interest(key->s, clientData->originFd, OP_WRITE)!= SELECTOR_SUCCESS) {
-            printf("[ERROR] COPYING_READ: Error configurando selector para escritura en el origen\n");
+            printf("[ERROR 011] socksv5HandleRead: Error configurando selector origen para escritura - fd:%d->%d\n", key->fd, clientData->originFd);
             return ERROR;
         }
         return COPYING;
@@ -495,8 +508,13 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         ssize_t bytes_read = recv(clientData->originFd, write_ptr, bytes_to_write, 0);
         
         if (bytes_read <= 0) {
-            printf("[DEBUG] COPYING_READ: Servidor cerró conexión\n");
-            return CLOSED;
+            if (bytes_read == 0) {
+                printf("[DEBUG] COPYING_READ: Servidor cerró conexión - fd:%d\n", key->fd);
+                return CLOSED;
+            } else {
+                printf("[ERROR 010] socksv5HandleRead: Error recv() del servidor - fd:%d, errno:%d\n", key->fd, errno);
+                return ERROR;
+            }
         }
         
         printf("[DEBUG] COPYING_READ: Leídos %zd bytes del servidor\n", bytes_read);
@@ -505,13 +523,13 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         // Cambiar a escritura en el socket del cliente
         printf("[DEBUG] COPYING_READ: Configurando socket del cliente para escritura\n");
         if(selector_set_interest(key->s, clientData->clientFd, OP_WRITE)!= SELECTOR_SUCCESS) {
-            printf("[ERROR] COPYING_READ: Error configurando selector para escritura en el cliente\n");
+            printf("[ERROR 012] socksv5HandleRead: Error configurando selector cliente para escritura - fd:%d->%d\n", key->fd, clientData->clientFd);
             return ERROR;
         }
         return COPYING;
     }
     
-    printf("[ERROR] COPYING_READ: Socket desconocido: %d\n", key->fd);
+    printf("[ERROR 013] socksv5HandleRead: Socket desconocido - fd:%d (cliente:%d, origen:%d)\n", key->fd, clientData->clientFd, clientData->originFd);
     return ERROR;
 }
 
@@ -527,6 +545,7 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
             ssize_t bytes_written = send(clientData->clientFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
             
             if (bytes_written < 0) {
+                printf("[ERROR 014] socksv5HandleWrite: Error send() al cliente - fd:%d, errno:%d\n", clientData->clientFd, errno);
                 return ERROR;
             }
             
@@ -538,8 +557,8 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         }
         
         // Cambiar a lectura en el socket del cliente
-        if(selector_set_interest(key->s, clientData->clientFd, OP_READ)){
-            printf("[ERROR] socksv5HandleWrite: Error configurando selector para lectura en el cliente\n");
+        if(selector_set_interest(key->s, clientData->clientFd, OP_READ) != SELECTOR_SUCCESS){
+            printf("[ERROR 015] socksv5HandleWrite: Error configurando selector cliente para lectura - fd:%d\n", clientData->clientFd);
             return ERROR;
         }
         return COPYING;
@@ -552,6 +571,7 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
             ssize_t bytes_written = send(clientData->originFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
             
             if (bytes_written < 0) {
+                printf("[ERROR 016] socksv5HandleWrite: Error send() al servidor - fd:%d, errno:%d\n", clientData->originFd, errno);
                 return ERROR;
             }
             
@@ -564,12 +584,13 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         
         // Cambiar a lectura en el socket del servidor de origen
         if(selector_set_interest(key->s, clientData->originFd, OP_READ) != SELECTOR_SUCCESS) {
-            printf("[ERROR] socksv5HandleWrite: Error configurando selector para lectura en el origen\n");
+            printf("[ERROR 017] socksv5HandleWrite: Error configurando selector origen para lectura - fd:%d\n", clientData->originFd);
             return ERROR;
         }
         return COPYING;
     }
     
+    printf("[ERROR 018] socksv5HandleWrite: Socket desconocido - fd:%d (cliente:%d, origen:%d)\n", key->fd, clientData->clientFd, clientData->originFd);
     return ERROR;
 }
 
