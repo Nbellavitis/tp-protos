@@ -137,14 +137,13 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
     printf("[DEBUG] ADDR_RESOLVE_INIT: addressResolveDone retornó: %d\n", next);
 
     // Si la resolución fue exitosa, configurar el selector para escritura
-    if (next == CONNECTING) {
-        printf("[DEBUG] ADDR_RESOLVE_INIT: Configurando selector para escritura\n");
-        if(selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
-            printf("[ERROR] ADDR_RESOLVE_INIT: Error configurando selector para escritura\n");
+    if (next == ADDR_RESOLVE) {
+        if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
+            printf("[ERROR] ADDR_RESOLVE_INIT: Error reactivando eventos\n");
             closeConnection(key);
             return;
-
         }
+
     }
 }
 
@@ -172,7 +171,6 @@ unsigned addressResolveDone(struct selector_key *key) {
         free(clientData->originResolution);
         clientData->originResolution = NULL;
     }
-
     char port_str[6];
     snprintf(port_str, sizeof(port_str), "%u", ntohs(parser->port));
     int gai_ret = 0;
@@ -202,6 +200,7 @@ unsigned addressResolveDone(struct selector_key *key) {
                 .ai_socktype = SOCK_STREAM,
                 .ai_protocol = IPPROTO_TCP
           };
+
           return CONNECTING;
     } else if (parser->address_type == ATYP_IPV6) {
         printf("[DEBUG] ADDR_RESOLVE: Resolviendo IPv6 directa\n");
@@ -290,7 +289,10 @@ void requestConnectingInit(const unsigned state, struct selector_key *key) {
         sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
         return;
     }
-
+    if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
+        printf("[ERROR] Error desactivando eventos del cliente\n");
+        return;
+    }
     // IMPORTANTE: Hacer el socket no bloqueante
     selector_fd_set_nio(clientData->originFd);
     printf("[DEBUG] CONNECTING_INIT: Socket creado (fd=%d), intentando conectar\n", clientData->originFd);
@@ -309,6 +311,7 @@ void requestConnectingInit(const unsigned state, struct selector_key *key) {
             return;
         }
         // Marcar que la conexión está lista
+        selector_set_interest(key->s, key->fd, OP_WRITE);
         clientData->connection_ready = 1;
 
     } else if (errno == EINPROGRESS) {

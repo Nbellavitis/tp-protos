@@ -55,6 +55,7 @@ unsigned
 stm_handler_read(struct state_machine *stm, struct selector_key *key) {
     handle_first(stm, key);
     if(stm->current->on_read_ready == 0) {
+       printf( "[ERROR] Estado %d sin on_read_ready\n", stm->current->state);
         abort();
     }
     const unsigned int ret = stm->current->on_read_ready(key);

@@ -9,6 +9,11 @@ void socksv5HandleInit(const unsigned state, struct selector_key *key) {
         closeConnection(key);
         return;
     }
+    if(selector_set_interest(key->s, clientData->originFd, OP_READ) != SELECTOR_SUCCESS) {
+        printf("[ERROR] COPYING_INIT: Error configurando selector para lectura en el cliente\n");
+        closeConnection(key);
+        return;
+    }
 }
 
 unsigned socksv5HandleRead(struct selector_key *key) {
