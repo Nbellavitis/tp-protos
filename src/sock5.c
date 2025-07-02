@@ -64,6 +64,8 @@ void socksv5PassiveAccept(struct selector_key* key){
     clientData->clientFd = newClientSocket;
     clientData->clientAddress = clientAddress;
     clientData->originFd = -1;
+    clientData->originResolution = NULL;
+    clientData->resolution_from_getaddrinfo = false;
     clientData->connection_ready = 0; // No hay conexión pendiente
     clientData->dns_resolution_state = 0; // No hay resolución pendiente
     buffer_init(&clientData->clientBuffer, BUFFER_SIZE, clientData->inClientBuffer);
@@ -80,9 +82,9 @@ void socksv5PassiveAccept(struct selector_key* key){
 }
 static void socksv5Read(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
-    
+
     printf("[DEBUG] SOCKS5_READ: Leyendo datos del socket %d\n", key->fd);
-    
+
     const enum socks5State state = stm_handler_read(&clientData->stm, key);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
@@ -148,6 +150,21 @@ void closeConnection(struct selector_key *key) {
         selector_unregister_fd(key->s, clientData->clientFd);
         close(clientData->clientFd);
     }
+
+    // Cleanup DNS resolution memory
+    if (clientData->originResolution != NULL) {
+        if (clientData->resolution_from_getaddrinfo) {
+            // Memoria de getaddrinfo_a() - usar freeaddrinfo
+            freeaddrinfo(clientData->originResolution);
+        } else {
+            // Memoria manual - liberar ai_addr y estructura por separado
+            if (clientData->originResolution->ai_addr != NULL) {
+                free(clientData->originResolution->ai_addr);
+            }
+            free(clientData->originResolution);
+        }
+    }
+
     free(clientData);
 }
 fd_handler * getSocksv5Handler(void) {
@@ -157,9 +174,9 @@ fd_handler * getSocksv5Handler(void) {
 
 
 static void closeArrival(const unsigned state, struct selector_key *key) {
-    printf("Llegando al estado CLOSED\n");
+    printf("Llegando al estado CLOSED (state = %d, key = %p)\n", state, key);
 }
 
 static void errorArrival(const unsigned state, struct selector_key *key) {
-    printf("Llegando al estado ERROR\n");
+    printf("Llegando al estado ERROR (state = %d, key = %p)\n", state, key);
 }

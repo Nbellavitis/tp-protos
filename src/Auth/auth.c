@@ -29,7 +29,7 @@ bool validateUser(const char* username, const char* password) {
 }
 
 void authenticationReadInit(unsigned state,struct selector_key * key){
-    printf("Inicio autenticación\n");
+    printf("Inicio autenticación (state es %d)\n", state);
     struct ClientData *data = (struct ClientData *)key->data;
     initAuthParser(&data->client.authParser);
 }

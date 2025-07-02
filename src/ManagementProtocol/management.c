@@ -200,7 +200,7 @@ bool send_management_response(struct buffer *buffer, uint8_t status, const char 
 
 // State handlers
 void mgmt_auth_read_init(unsigned state, struct selector_key *key) {
-    printf("Management: Inicio autenticación\n");
+    printf("Management: Inicio autenticación (state = %d)\n", state);
     ManagementData *mgmt_data = (ManagementData *)key->data;
     init_management_parser(&mgmt_data->parser);
 }
@@ -284,7 +284,7 @@ unsigned mgmt_auth_write(struct selector_key *key) {
 }
 
 void mgmt_command_read_init(unsigned state, struct selector_key *key) {
-    printf("Management: Listo para comandos\n");
+    printf("Management: Listo para comandos, %d\n", state);
     ManagementData *mgmt_data = (ManagementData *)key->data;
     init_management_parser(&mgmt_data->parser);
 }
@@ -420,9 +420,9 @@ unsigned mgmt_command_write(struct selector_key *key) {
 }
 
 void mgmt_closed_arrival(unsigned state, struct selector_key *key) {
-    printf("Management connection closed\n");
+    printf("Management connection closed (state = %d , key = %p)\n", state, key);
 }
 
 void mgmt_error_arrival(unsigned state, struct selector_key *key) {
-    printf("Management connection error\n");
+    printf("Management connection error (state = %d , key = %p)\n", state, key);
 }
