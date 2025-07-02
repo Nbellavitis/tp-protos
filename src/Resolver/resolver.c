@@ -136,7 +136,7 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
     unsigned next = addressResolveDone(key);
     printf("[DEBUG] ADDR_RESOLVE_INIT: addressResolveDone retornó: %d\n", next);
 
-    if (next == CONNECTING || next == ADDR_RESOLVE) {
+    if (next == CONNECTING || next == REQ_WRITE) {
         if(selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
             printf("[ERROR] ADDR_RESOLVE_INIT: Error activando eventos para transición\n");
             closeConnection(key);
