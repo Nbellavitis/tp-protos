@@ -22,6 +22,7 @@
 #include "Logging/statistics.h"
 #include "Resolver/resolverParser.h"
 #include "args.h"
+#include "Copy/copy.h"
 #define BUFFER_SIZE 32768
 
 // Funciones para acceder a usuarios autorizados
@@ -33,7 +34,9 @@ struct dns_request {
     struct gaicb req;
     struct ClientData * clientData;
     fd_selector selector;
+    struct addrinfo hints;
     int fd;
+    char port[6]; // Puerto del destino
 };
 typedef struct ClientData {
     struct state_machine stm;
@@ -71,4 +74,5 @@ enum socks5State {
 };
 void socksv5PassiveAccept(struct selector_key* key);
 void closeConnection(struct selector_key *key);
+fd_handler * getSocksv5Handler(void);
 #endif //SOCK5_H

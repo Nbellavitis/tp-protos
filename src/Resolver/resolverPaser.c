@@ -98,10 +98,12 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
 
             case 5: // DST.PORT
                 if (p->bytes_read == 0) {
+                    printf("[DEBUG] Byte recibido: 0x%02x en estado \n", byte);
                     p->port = (uint16_t)byte << 8;
                     p->bytes_read = 1;
                 } else {
                     p->port |= byte;
+                    printf("[DEBUG] Byte recibido: 0x%02x en estado \n", byte);
                     p->done = true;
                     return REQUEST_PARSE_OK;
                 }
