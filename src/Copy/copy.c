@@ -3,7 +3,7 @@
 
 void socksv5HandleInit(const unsigned state, struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
-    printf("Iniciando copia de datos entre cliente y servidor\n");
+    printf("Iniciando copia de datos entre cliente y servidor (state es %d)\n", state);
     if(selector_set_interest(key->s, clientData->clientFd, OP_READ) != SELECTOR_SUCCESS) {
         printf("[ERROR] COPYING_INIT: Error configurando selector para lectura en el cliente\n");
         closeConnection(key);
@@ -130,5 +130,5 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
 
 void socksv5HandleClose(const unsigned state, struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
-    printf("Cerrando manejo de datos\n");
+    printf("Cerrando manejo de datos (state = %d, key = %p)\n", state, key);
 }

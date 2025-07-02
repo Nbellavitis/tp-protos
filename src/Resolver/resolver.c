@@ -31,7 +31,7 @@ void dnsResolutionDone(union sigval sv);
 void requestReadInit(const unsigned state, struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     initResolverParser(&clientData->client.reqParser);
-    printf("[DEBUG] REQ_READ_INIT: Iniciando lectura de request SOCKS5\n");
+    printf("[DEBUG] REQ_READ_INIT: Iniciando lectura de request SOCKS5 (state = %d)\n", state);
 }
 
 unsigned requestRead(struct selector_key *key) {
@@ -130,7 +130,7 @@ unsigned requestWrite(struct selector_key *key) {
 
 // Funciones para el estado ADDR_RESOLVE
 void addressResolveInit(const unsigned state, struct selector_key *key) {
-    printf("[DEBUG] ADDR_RESOLVE_INIT: Iniciando resolución de dirección\n");
+    printf("[DEBUG] ADDR_RESOLVE_INIT: Iniciando resolución de dirección (state = %d)\n", state);
 
     // Ejecutar la resolución inmediatamente
     unsigned next = addressResolveDone(key);

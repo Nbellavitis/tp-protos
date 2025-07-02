@@ -157,9 +157,9 @@ fd_handler * getSocksv5Handler(void) {
 
 
 static void closeArrival(const unsigned state, struct selector_key *key) {
-    printf("Llegando al estado CLOSED\n");
+    printf("Llegando al estado CLOSED (state = %d, key = %p)\n", state, key);
 }
 
 static void errorArrival(const unsigned state, struct selector_key *key) {
-    printf("Llegando al estado ERROR\n");
+    printf("Llegando al estado ERROR (state = %d, key = %p)\n", state, key);
 }
