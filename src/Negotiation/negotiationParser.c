@@ -15,7 +15,7 @@ negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
             }
         } else if (p->nmethods == 0) {
             p->nmethods = byte;
-            if (p->nmethods == 0 || p->nmethods > 255) { // maximo por rfc
+            if (p->nmethods == 0 /*|| p->nmethods > 255*/ /*nunca pasa por el tipo de dato*/) { // maximo por rfc
                 p->error = true;
                 return NEGOTIATION_PARSE_ERROR;
             }

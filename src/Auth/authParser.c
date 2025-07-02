@@ -29,7 +29,7 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
             }
             p->version = byte;
         }else if(p->nameLength == 0){
-                if(byte > 255 || byte == 0){
+                if(byte == 0){
                     p->error = true;
                     printf("Error: Invalid name \n");
                     return AUTH_PARSE_ERROR;
@@ -42,7 +42,7 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
                 p->name[p->offsetName] = '\0'; // Null-terminate the name
             }
         }else if (p->passwordLength == 0) {
-            if (byte > 255 || byte == 0) {
+            if (byte == 0) {
                 p->error = true;
                 printf("Error: Invalid password\n");
                 return AUTH_PARSE_ERROR;
