@@ -17,7 +17,9 @@
 
 static bool killed = false;
 
-void sig_handler(int signum) {
+static int endProgram(struct users * users,fd_selector selector, selector_status ss, int server, int mgmt_server,char * error);
+
+        void sig_handler(int signum) {
     if (signum == SIGTERM || signum == SIGINT) {
         printf("Received signal %d, shutting down...\n", signum);
         killed = true;
