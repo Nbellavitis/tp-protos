@@ -8,6 +8,7 @@
 #include <netdb.h>
 #include <stdint.h>
 #include <signal.h>
+#include "../src/args.h"
 
 // Variable global para detectar Ctrl+C
 volatile sig_atomic_t interrupted = 0;
@@ -34,6 +35,7 @@ typedef struct {
     int proxy_port;
     char username[256];
     char password[256];
+    int authenticated;
 } socks5_client_t;
 
 // Function declarations
@@ -288,36 +290,68 @@ void interactive_menu(socks5_client_t *client) {
     
     while (1) {
         printf("\n=== SOCKS5 Client ===\n");
-        printf("1. Test HTTP connection through proxy\n");
-        printf("2. Test specific website\n");
-        printf("3. Disconnect and Exit\n");
+        if (!client->authenticated) {
+            printf("Status: Not authenticated\n");
+            printf("1. Authenticate\n");
+            printf("2. Disconnect and Exit\n");
+            printf("Choice: ");
+            if (!fgets(input, sizeof(input), stdin)) {
+                break;
+            }
+            int choice = atoi(input);
+            switch (choice) {
+                case 1:
+                    printf("Username: ");
+                    if (fgets(client->username, sizeof(client->username), stdin)) {
+                        client->username[strcspn(client->username, "\n")] = 0;
+                    }
+                    printf("Password: ");
+                    if (fgets(client->password, sizeof(client->password), stdin)) {
+                        client->password[strcspn(client->password, "\n")] = 0;
+                    }
+                    if (socks5_connect_proxy(client) == 0 &&
+                        socks5_negotiate(client) == 0) {
+                        client->authenticated = 1;
+                        printf("Authentication successful!\n");
+                    } else {
+                        printf("Authentication failed!\n");
+                        client->authenticated = 0;
+                    }
+                    socks5_disconnect(client);
+                    break;
+                case 2:
+                    printf("Exiting...\n");
+                    return;
+                default:
+                    printf("Invalid choice\n");
+                    break;
+            }
+            continue;
+        }
+        printf("Status: Authenticated as %s\n", client->username);
+        printf("1. Re-authenticate\n");
+        printf("2. Test HTTP connection (basic test)\n");
+        printf("3. Custom HTTP request\n");
+        printf("4. Disconnect and Exit\n");
         printf("Choice: ");
-        
         if (!fgets(input, sizeof(input), stdin)) {
-            
             break;
         }
-        
         int choice = atoi(input);
-        
         switch (choice) {
             case 1:
-                
-                // Test predefinido
+                client->authenticated = 0;
+                break;
+            case 2:
                 if (socks5_connect_proxy(client) == 0 &&
                     socks5_negotiate(client) == 0) {
-                    
                     socks5_http_test(client, "httpbin.org", 80, "/ip");
-                    
                 } else {
-                    printf("[CLIENT_DEBUG] interactive_menu: Falló conexión o negociación\n");
+                    printf("Failed to connect or negotiate\n");
                 }
-                
                 socks5_disconnect(client);
-                
                 break;
-                
-            case 2:
+            case 3:
                 printf("Target host: ");
                 if (fgets(target_host, sizeof(target_host), stdin)) {
                     target_host[strcspn(target_host, "\n")] = 0;
@@ -332,18 +366,15 @@ void interactive_menu(socks5_client_t *client) {
                     path[strcspn(path, "\n")] = 0;
                     if (strlen(path) == 0) strcpy(path, "/");
                 }
-                
                 if (socks5_connect_proxy(client) == 0 &&
                     socks5_negotiate(client) == 0) {
                     socks5_http_test(client, target_host, target_port, path);
                 }
                 socks5_disconnect(client);
                 break;
-                
-            case 3:
+            case 4:
                 printf("Exiting...\n");
                 return;
-                
             default:
                 printf("Invalid choice\n");
                 break;
@@ -360,9 +391,10 @@ int main(int argc, char *argv[]) {
     socks5_client_t client = {0};
     
     // Valores por defecto
-    strcpy(client.proxy_host, "127.0.0.1");
-    client.proxy_port = 1080;
+    strcpy(client.proxy_host, DEFAULT_SOCKS5_HOST);
+    client.proxy_port = DEFAULT_SOCKS5_PORT;
     client.socket_fd = -1;
+    client.authenticated = 0;
     
     // Parsear argumentos
     if (argc >= 2) {
@@ -380,11 +412,10 @@ int main(int argc, char *argv[]) {
     
     printf("SOCKS5 Client\n");
     printf("Proxy: %s:%d\n", client.proxy_host, client.proxy_port);
-    if (strlen(client.username) > 0) {
-        printf("Credentials: %s:%s\n", client.username, client.password);
-    } else {
-        printf("No credentials provided\n");
-    }
+    printf("\nWelcome! You can:\n");
+    printf("- Authenticate to use custom HTTP requests\n");
+    printf("- Test basic connectivity without authentication\n");
+    printf("- Use Ctrl+C to exit at any time\n\n");
     
     
     interactive_menu(&client);

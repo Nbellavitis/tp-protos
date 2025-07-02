@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdint.h>
+#include "../src/args.h"
 
 // Comandos del protocolo de management
 #define MANAGEMENT_VERSION 0x01
@@ -366,8 +367,8 @@ int main(int argc, char *argv[]) {
     mgmt_client_t client = {0};
     
     // Valores por defecto
-    strcpy(client.server_host, "127.0.0.1");
-    client.server_port = 8080;
+    strcpy(client.server_host, DEFAULT_MGMT_HOST);
+    client.server_port = DEFAULT_MGMT_PORT;
     client.socket_fd = -1;
     client.authenticated = 0;
     

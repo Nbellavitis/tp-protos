@@ -4,6 +4,10 @@
 #include <stdbool.h>
 
 #define MAX_USERS 10
+#define DEFAULT_MGMT_HOST "127.0.0.1"
+#define DEFAULT_MGMT_PORT 8080
+#define DEFAULT_SOCKS5_HOST "127.0.0.1"
+#define DEFAULT_SOCKS5_PORT 1080
 
 struct users
 {
