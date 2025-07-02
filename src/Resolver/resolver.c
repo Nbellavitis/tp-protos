@@ -103,27 +103,27 @@ unsigned requestRead(struct selector_key *key) {
 unsigned requestWrite(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     printf("[DEBUG] REQ_WRITE: Escribiendo respuesta al cliente\n");
-    
+
     if (buffer_can_read(&clientData->originBuffer)) {
         size_t bytes_to_write;
         uint8_t *write_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
         // ssize_t bytes_written = write(clientData->clientFd, write_ptr, bytes_to_write);
         ssize_t bytes_written = send(clientData->clientFd, write_ptr, bytes_to_write, MSG_NOSIGNAL);
         // todo: cambie las lineas de arriba, revisen porfa. mati
-        
+
         if (bytes_written < 0) {
             printf("[DEBUG] REQ_WRITE: Error escribiendo al cliente\n");
             return ERROR;
         }
-        
+
         buffer_read_adv(&clientData->originBuffer, bytes_written);
-        
+
         if (buffer_can_read(&clientData->originBuffer)) {
             printf("[DEBUG] REQ_WRITE: Más datos para escribir\n");
             return REQ_WRITE;
         }
     }
-    
+
     printf("[DEBUG] REQ_WRITE: Respuesta enviada, cerrando conexión\n");
     return CLOSED;
 }
@@ -165,11 +165,18 @@ unsigned addressResolveDone(struct selector_key *key) {
     }
     // Limpiar resolución previa si existe
     if (clientData->originResolution != NULL) {
-        if (clientData->originResolution->ai_addr != NULL) {
-            free(clientData->originResolution->ai_addr);
+        if (clientData->resolution_from_getaddrinfo) {
+            // Memoria de getaddrinfo_a() - usar freeaddrinfo
+            freeaddrinfo(clientData->originResolution);
+        } else {
+            // Memoria manual - liberar ai_addr y estructura por separado
+            if (clientData->originResolution->ai_addr != NULL) {
+                free(clientData->originResolution->ai_addr);
+            }
+            free(clientData->originResolution);
         }
-        free(clientData->originResolution);
         clientData->originResolution = NULL;
+        clientData->resolution_from_getaddrinfo = false;
     }
     char port_str[6];
     snprintf(port_str, sizeof(port_str), "%u", ntohs(parser->port));
@@ -185,6 +192,7 @@ unsigned addressResolveDone(struct selector_key *key) {
           clientData->originResolution = calloc(1, sizeof(struct addrinfo));
           if(clientData->originResolution == NULL) {
                 printf("[DEBUG] ADDR_RESOLVE: Error al asignar memoria para resolución IPv4\n");
+                free(ipv4_addr);  // Fix memory leak: liberar ipv4_addr si calloc falla
                 sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
                 return REQ_WRITE;
           }
@@ -201,6 +209,7 @@ unsigned addressResolveDone(struct selector_key *key) {
                 .ai_protocol = IPPROTO_TCP
           };
 
+          clientData->resolution_from_getaddrinfo = false;  // Memoria manual
           return CONNECTING;
     } else if (parser->address_type == ATYP_IPV6) {
         printf("[DEBUG] ADDR_RESOLVE: Resolviendo IPv6 directa\n");
@@ -213,6 +222,7 @@ unsigned addressResolveDone(struct selector_key *key) {
         clientData->originResolution = calloc(1,sizeof(struct addrinfo));
         if(clientData->originResolution == NULL ) {
             printf("[DEBUG] ADDR_RESOLVE: Error al asignar memoria para resolución IPv6\n");
+            free(ipv6_addr);  // Fix memory leak: liberar ipv6_addr si calloc falla
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
             return REQ_WRITE;
         }
@@ -228,6 +238,7 @@ unsigned addressResolveDone(struct selector_key *key) {
                     .ai_socktype = SOCK_STREAM,
                     .ai_protocol = IPPROTO_TCP
         };
+        clientData->resolution_from_getaddrinfo = false;  // Memoria manual
         return CONNECTING;
 
     } else if (parser->address_type == ATYP_DOMAIN) {
@@ -467,6 +478,7 @@ void dnsResolutionDone(union sigval sv) {
         return;
     }
     clientData->originResolution = dns_req->req.ar_result;
+    clientData->resolution_from_getaddrinfo = true;  // Memoria de getaddrinfo_a
     clientData->dns_resolution_state = 2; // Indica que la resolución se completó exitosamente
     selector_notify_block(dns_req->selector,dns_req->fd);
     printf("[DEBUG] Resolución exitosa, usando dirección...\n");
