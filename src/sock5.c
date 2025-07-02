@@ -151,6 +151,15 @@ void closeConnection(struct selector_key *key) {
         close(clientData->clientFd);
     }
 
+    // Cancelar resolución DNS pendiente para evitar use-after-free
+    //SEM_DOWN  // Proteger acceso a dns_resolution_state
+    if (clientData->dns_resolution_state == 1) {
+        // Cancelar resolución pendiente
+        struct gaicb *reqs[] = { &clientData->dns_req.req };
+        gai_cancel(reqs[0]);
+    }
+    //SEM_UP
+
     // Cleanup DNS resolution memory
     if (clientData->originResolution != NULL) {
         if (clientData->resolution_from_getaddrinfo) {

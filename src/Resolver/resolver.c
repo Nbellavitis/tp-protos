@@ -152,17 +152,23 @@ unsigned addressResolveDone(struct selector_key *key) {
     resolver_parser *parser = &clientData->client.reqParser;
 
     printf("[DEBUG] ADDR_RESOLVE: Iniciando resolución de dirección\n");
+    //SEM_DOWN
     if (clientData->dns_resolution_state == 2){
         clientData->dns_resolution_state = 0;
+        //SEM_UP
         return CONNECTING;
     }else if (clientData->dns_resolution_state == 1) {
+        //SEM_UP
         printf("[DEBUG] ADDR_RESOLVE: Resolución de DNS ya en progreso, esperando\n");
         return ADDR_RESOLVE; // Esperar a que se complete la resolución
     }else if (clientData->dns_resolution_state == -1){
+        clientData->dns_resolution_state = 0;
+        //SEM_UP
         printf("[DEBUG] ADDR_RESOLVE: Resolución de DNS fallida, enviando error\n");
         sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
         return REQ_WRITE; // Enviar error y cerrar conexión
     }
+    //SEM_UP
     // Limpiar resolución previa si existe
     if (clientData->originResolution != NULL) {
         if (clientData->resolution_from_getaddrinfo) {
@@ -267,7 +273,9 @@ unsigned addressResolveDone(struct selector_key *key) {
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
             return REQ_WRITE;
         }
+        //SEM_DOWN
         clientData->dns_resolution_state = 1; // Indica que la resolución está en progreso
+        //SEM_UP
 
         return ADDR_RESOLVE;
     }
@@ -469,18 +477,27 @@ unsigned requestConnecting(struct selector_key *key) {
 void dnsResolutionDone(union sigval sv) {
     struct dns_request *dns_req = sv.sival_ptr;
     ClientData *clientData = (ClientData *)dns_req->clientData;
+    
+    //SEM_DOWN  // Proteger acceso a dns_resolution_state y clientData
+    
     int ret = gai_error(&dns_req->req);
     if (ret != 0) {
         printf("[DEBUG] Error en resolución: %s\n", gai_strerror(ret));
-        freeaddrinfo(dns_req->req.ar_result);
+        if (dns_req->req.ar_result != NULL) {
+            freeaddrinfo(dns_req->req.ar_result);
+        }
         clientData->dns_resolution_state = -1;
-        selector_notify_block(dns_req->selector,dns_req->fd);
+        //SEM_UP
+        selector_notify_block(dns_req->selector, dns_req->fd);
         return;
     }
+    
     clientData->originResolution = dns_req->req.ar_result;
     clientData->resolution_from_getaddrinfo = true;  // Memoria de getaddrinfo_a
     clientData->dns_resolution_state = 2; // Indica que la resolución se completó exitosamente
-    selector_notify_block(dns_req->selector,dns_req->fd);
+    //SEM_UP
+    
+    selector_notify_block(dns_req->selector, dns_req->fd);
     printf("[DEBUG] Resolución exitosa, usando dirección...\n");
     }
 
