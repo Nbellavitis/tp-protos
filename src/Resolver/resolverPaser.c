@@ -24,7 +24,7 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
         byte = buffer_read(buffer);
 
         switch (p->state) {
-            case 0: // VER
+            case 0: // en este estado vamos a leer VER
                 if (byte != 0x05) {
                     p->error = true;
                     return REQUEST_PARSE_ERROR;
@@ -33,7 +33,7 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
                 p->state = 1;
                 break;
 
-            case 1: // CMD
+            case 1: // leemos CMD
                 if (byte != CMD_CONNECT && byte != CMD_BIND && byte != CMD_UDP_ASSOCIATE) {
                     p->error = true;
                     return REQUEST_PARSE_ERROR;
@@ -42,7 +42,7 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
                 p->state = 2;
                 break;
 
-            case 2: // RSV
+            case 2: // leemos RSV
                 if (byte != 0x00) {
                     p->error = true;
                     return REQUEST_PARSE_ERROR;
@@ -51,7 +51,7 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
                 p->state = 3;
                 break;
 
-            case 3: // ATYP
+            case 3: // leemos ATYP
                 if (byte != ATYP_IPV4 && byte != ATYP_DOMAIN && byte != ATYP_IPV6) {
                     p->error = true;
                     return REQUEST_PARSE_ERROR;
@@ -60,7 +60,7 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
                 p->state = 4;
                 break;
 
-            case 4: // DST.ADDR
+            case 4: // leemos DST.ADDR
                 switch (p->address_type) {
                     case ATYP_IPV4:
                         p->ipv4_addr[p->bytes_read] = byte;
@@ -74,8 +74,18 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
                     case ATYP_DOMAIN:
                         if (p->bytes_read == 0) {
                             p->domain_length = byte;
-                            p->bytes_read = 1;
+                            // Validar que domain_length no exceda el buffer
+                            if (p->domain_length == 0 || p->domain_length > 255) {
+                                p->error = true;
+                                return REQUEST_PARSE_ERROR;
+                            }
+                            p->bytes_read = 1;  // Lee un byte que va a ser la longitud del dominio
                         } else {
+                            // Verificar bounds antes de escribir
+                            if (p->bytes_read - 1 >= 255) {
+                                p->error = true;
+                                return REQUEST_PARSE_ERROR;
+                            }
                             p->domain[p->bytes_read - 1] = byte;
                             p->bytes_read++;
                             if (p->bytes_read > p->domain_length) {
