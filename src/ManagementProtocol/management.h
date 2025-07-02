@@ -40,6 +40,7 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 #define CMD_LIST_USERS 0x03
 #define CMD_ADD_USER 0x04
 #define CMD_DELETE_USER 0x05
+#define CMD_CHANGE_PASSWORD 0x06
 
 // Status codes
 #define STATUS_OK 0x00
@@ -108,5 +109,7 @@ bool parse_management_command(management_parser *parser, struct buffer *buffer);
 
 // Funciones de respuesta
 bool send_management_response(struct buffer *buffer, uint8_t status, const char *payload);
+
+bool change_user_password(const char* username, const char* new_password);
 
 #endif //TP_PROTOS_MANAGEMENT_H

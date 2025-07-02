@@ -16,6 +16,7 @@ extern struct users* get_authorized_users(void);
 extern int get_num_authorized_users(void);
 extern bool add_user(const char* username, const char* password);
 extern bool delete_user(const char* username);
+extern bool change_user_password(const char* username, const char* new_password);
 
 // Credenciales hardcodeadas del admin
 static const char* ADMIN_USERNAME = "admin";
@@ -407,6 +408,27 @@ unsigned mgmt_command_read(struct selector_key *key) {
                     send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                 } else {
                     send_management_response(&mgmt_data->response_buffer, STATUS_NOT_FOUND, "User not found");
+                }
+                break;
+            }
+            case CMD_CHANGE_PASSWORD: {
+                // Payload: "usuario:nueva_contraseña"
+                char *colon = strchr(mgmt_data->parser.payload, ':');
+                if (colon == NULL) {
+                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid format. Use: username:newpassword");
+                } else {
+                    *colon = '\0';
+                    char *username = mgmt_data->parser.payload;
+                    char *new_password = colon + 1;
+                    if (strlen(username) == 0 || strlen(new_password) == 0) {
+                        send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username and new password cannot be empty");
+                    } else if (change_user_password(username, new_password)) {
+                        char response[256];
+                        snprintf(response, sizeof(response), "Password changed for user '%s'", username);
+                        send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
+                    } else {
+                        send_management_response(&mgmt_data->response_buffer, STATUS_NOT_FOUND, "User not found");
+                    }
                 }
                 break;
             }

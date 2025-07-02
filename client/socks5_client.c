@@ -13,7 +13,7 @@
 volatile sig_atomic_t interrupted = 0;
 
 void signal_handler(int sig) {
-    printf("\n[CLIENT_DEBUG] signal_handler: Recibida señal %d (Ctrl+C)\n", sig);
+  
     interrupted = 1;
 }
 
@@ -41,7 +41,7 @@ int socks5_authenticate(socks5_client_t *client);
 
 // Conectar al proxy SOCKS5
 int socks5_connect_proxy(socks5_client_t *client) {
-    printf("[DEBUG] Creating socket for SOCKS5 proxy\n");
+ 
     
     client->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (client->socket_fd < 0) {
@@ -49,7 +49,6 @@ int socks5_connect_proxy(socks5_client_t *client) {
         return -1;
     }
     
-    printf("[DEBUG] Connecting to %s:%d\n", client->proxy_host, client->proxy_port);
     
     struct sockaddr_in proxy_addr;
     memset(&proxy_addr, 0, sizeof(proxy_addr));
@@ -68,7 +67,6 @@ int socks5_connect_proxy(socks5_client_t *client) {
         return -1;
     }
     
-    printf("Connected to SOCKS5 proxy %s:%d\n", client->proxy_host, client->proxy_port);
     return 0;
 }
 
@@ -77,7 +75,6 @@ int socks5_negotiate(socks5_client_t *client) {
     uint8_t request[4];
     uint8_t response[2];
     
-    printf("[DEBUG] Starting SOCKS5 negotiation\n");
     
     // Enviar métodos de autenticación soportados
     request[0] = SOCKS5_VERSION;    // Version
@@ -85,8 +82,7 @@ int socks5_negotiate(socks5_client_t *client) {
     request[2] = AUTH_METHOD_NONE;  // No authentication
     request[3] = AUTH_METHOD_USERPASS; // Username/password
     
-    printf("[DEBUG] Sending negotiation: [0x%02x, 0x%02x, 0x%02x, 0x%02x]\n", 
-           request[0], request[1], request[2], request[3]);
+   
     
     if (send(client->socket_fd, request, 4, 0) != 4) {
         perror("Error sending negotiation request");
@@ -94,7 +90,6 @@ int socks5_negotiate(socks5_client_t *client) {
     }
     
     // Recibir respuesta del servidor
-    printf("[DEBUG] Waiting for negotiation response...\n");
     ssize_t received = recv(client->socket_fd, response, 2, 0);
     if (received != 2) {
         printf("Error receiving negotiation response, got %ld bytes\n", received);
@@ -104,7 +99,7 @@ int socks5_negotiate(socks5_client_t *client) {
         return -1;
     }
     
-    printf("[DEBUG] Received negotiation response: [0x%02x, 0x%02x]\n", response[0], response[1]);
+    
     
     if (response[0] != SOCKS5_VERSION) {
         printf("Invalid SOCKS version in response: 0x%02x\n", response[0]);
@@ -112,7 +107,6 @@ int socks5_negotiate(socks5_client_t *client) {
     }
     
     uint8_t selected_method = response[1];
-    printf("Server selected authentication method: 0x%02x\n", selected_method);
     
     if (selected_method == AUTH_METHOD_FAIL) {
         printf("No acceptable authentication method\n");
@@ -133,8 +127,7 @@ int socks5_authenticate(socks5_client_t *client) {
     uint8_t response[2];
     int pos = 0;
     
-    printf("[DEBUG] Starting SOCKS5 authentication\n");
-    printf("[DEBUG] Username: '%s', Password: '%s'\n", client->username, client->password);
+   
     
     // Construir request de autenticación
     request[pos++] = SOCKS5_AUTH_VERSION;           // Version
@@ -145,7 +138,7 @@ int socks5_authenticate(socks5_client_t *client) {
     memcpy(request + pos, client->password, strlen(client->password));
     pos += strlen(client->password);
     
-    printf("[DEBUG] Sending auth request (%d bytes)\n", pos);
+   
     
     if (send(client->socket_fd, request, pos, 0) != pos) {
         perror("Error sending authentication");
@@ -153,14 +146,14 @@ int socks5_authenticate(socks5_client_t *client) {
     }
     
     // Recibir respuesta
-    printf("[DEBUG] Waiting for auth response...\n");
+  
     ssize_t received = recv(client->socket_fd, response, 2, 0);
     if (received != 2) {
         printf("Error receiving authentication response, got %ld bytes\n", received);
         return -1;
     }
     
-    printf("[DEBUG] Received auth response: [0x%02x, 0x%02x]\n", response[0], response[1]);
+    
     
     if (response[0] != SOCKS5_AUTH_VERSION) {
         printf("Invalid auth version in response: 0x%02x\n", response[0]);
@@ -178,13 +171,12 @@ int socks5_authenticate(socks5_client_t *client) {
 
 // Conectar a través del proxy SOCKS5
 int socks5_connect_target(socks5_client_t *client, const char *target_host, int target_port) {
-    printf("[CLIENT_DEBUG] socks5_connect_target: Iniciando conexión a %s:%d\n", target_host, target_port);
     uint8_t request[512];
     uint8_t response[512];
     int pos = 0;
     
     // Construir request de conexión
-    printf("[CLIENT_DEBUG] socks5_connect_target: Construyendo request SOCKS5\n");
+
     request[pos++] = SOCKS5_VERSION;        // Version
     request[pos++] = SOCKS5_CMD_CONNECT;    // Command: CONNECT
     request[pos++] = 0x00;                  // Reserved
@@ -209,25 +201,16 @@ int socks5_connect_target(socks5_client_t *client, const char *target_host, int 
     memcpy(request + pos, &port_be, 2);
     pos += 2;
     
-    printf("[CLIENT_DEBUG] socks5_connect_target: Enviando request SOCKS5 (%d bytes)\n", pos);
-    for (int i = 0; i < pos; i++) {
-        printf("%02x ", request[i]);
-    }
-    printf("\n");
+
     
     if (send(client->socket_fd, request, pos, 0) != pos) {
-        printf("[CLIENT_DEBUG] socks5_connect_target: Error enviando request\n");
         perror("Error sending connect request");
         return -1;
     }
-    printf("[CLIENT_DEBUG] socks5_connect_target: Request enviado exitosamente\n");
     
     // Recibir respuesta
-    printf("[CLIENT_DEBUG] socks5_connect_target: Esperando respuesta del servidor...\n");
     ssize_t received = recv(client->socket_fd, response, sizeof(response), 0);
-    printf("[CLIENT_DEBUG] socks5_connect_target: Recibidos %ld bytes\n", received);
     if (received < 4) {
-        printf("[CLIENT_DEBUG] socks5_connect_target: Respuesta muy corta o error\n");
         perror("Error receiving connect response");
         return -1;
     }
@@ -284,16 +267,16 @@ int socks5_http_test(socks5_client_t *client, const char *target_host, int targe
 
 // Desconectar
 void socks5_disconnect(socks5_client_t *client) {
-    printf("[CLIENT_DEBUG] socks5_disconnect: Iniciando desconexión\n");
+    
     if (client->socket_fd >= 0) {
-        printf("[CLIENT_DEBUG] socks5_disconnect: Cerrando socket %d\n", client->socket_fd);
+        
         close(client->socket_fd);
-        printf("[CLIENT_DEBUG] socks5_disconnect: Socket cerrado\n");
+        
         client->socket_fd = -1;
     } else {
-        printf("[CLIENT_DEBUG] socks5_disconnect: Socket ya cerrado\n");
+        
     }
-    printf("[CLIENT_DEBUG] socks5_disconnect: Desconexión completada\n");
+    
 }
 
 // Menú interactivo
@@ -311,7 +294,7 @@ void interactive_menu(socks5_client_t *client) {
         printf("Choice: ");
         
         if (!fgets(input, sizeof(input), stdin)) {
-            printf("[CLIENT_DEBUG] interactive_menu: fgets retornó NULL (probablemente Ctrl+C)\n");
+            
             break;
         }
         
@@ -319,19 +302,19 @@ void interactive_menu(socks5_client_t *client) {
         
         switch (choice) {
             case 1:
-                printf("[CLIENT_DEBUG] interactive_menu: Opción 1 seleccionada - Test HTTP\n");
+                
                 // Test predefinido
                 if (socks5_connect_proxy(client) == 0 &&
                     socks5_negotiate(client) == 0) {
-                    printf("[CLIENT_DEBUG] interactive_menu: Conexión y negociación exitosas, iniciando HTTP test\n");
+                    
                     socks5_http_test(client, "httpbin.org", 80, "/ip");
-                    printf("[CLIENT_DEBUG] interactive_menu: HTTP test completado\n");
+                    
                 } else {
                     printf("[CLIENT_DEBUG] interactive_menu: Falló conexión o negociación\n");
                 }
-                printf("[CLIENT_DEBUG] interactive_menu: Llamando a socks5_disconnect\n");
+                
                 socks5_disconnect(client);
-                printf("[CLIENT_DEBUG] interactive_menu: socks5_disconnect completado\n");
+                
                 break;
                 
             case 2:
@@ -369,7 +352,7 @@ void interactive_menu(socks5_client_t *client) {
 }
 
 int main(int argc, char *argv[]) {
-    printf("[CLIENT_DEBUG] main: Iniciando cliente SOCKS5\n");
+   
     
     // Configurar manejador de señales
     signal(SIGINT, signal_handler);
@@ -403,12 +386,12 @@ int main(int argc, char *argv[]) {
         printf("No credentials provided\n");
     }
     
-    printf("[CLIENT_DEBUG] main: Llamando a interactive_menu\n");
+    
     interactive_menu(&client);
     
-    printf("[CLIENT_DEBUG] main: interactive_menu terminó, llamando a socks5_disconnect\n");
+   
     socks5_disconnect(&client);
-    printf("[CLIENT_DEBUG] main: Client disconnected\n");
+   
     
     if (interrupted) {
         printf("[CLIENT_DEBUG] main: El programa fue interrumpido por Ctrl+C\n");

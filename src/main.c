@@ -96,6 +96,28 @@ bool delete_user(const char* username) {
     return false; // Usuario no encontrado
 }
 
+// Cambiar la contraseña de un usuario
+bool change_user_password(const char* username, const char* new_password) {
+    if (username == NULL || new_password == NULL) {
+        return false;
+    }
+    for (int i = 0; i < num_authorized_users; i++) {
+        if (authorized_users[i].name != NULL && strcmp(authorized_users[i].name, username) == 0) {
+            // Cambiar la contraseña
+            free(authorized_users[i].pass);
+            char* pass_copy = malloc(strlen(new_password) + 1);
+            if (pass_copy == NULL) {
+                return false;
+            }
+            strcpy(pass_copy, new_password);
+            authorized_users[i].pass = pass_copy;
+            printf("Contraseña cambiada para usuario: %s\n", username);
+            return true;
+        }
+    }
+    return false; // Usuario no encontrado
+}
+
 static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t * lenResult) {
     int ipv6 = strchr(addr, ':') != NULL;
     if(ipv6){

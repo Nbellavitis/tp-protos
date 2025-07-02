@@ -14,6 +14,7 @@
 #define CMD_LIST_USERS 0x03
 #define CMD_ADD_USER 0x04
 #define CMD_DELETE_USER 0x05
+#define CMD_CHANGE_PASSWORD 0x06
 
 // Status codes
 #define STATUS_OK 0x00
@@ -242,6 +243,30 @@ int mgmt_delete_user(mgmt_client_t *client, const char *username) {
     return status == STATUS_OK ? 0 : -1;
 }
 
+// Cambiar contraseña de usuario
+int mgmt_change_password(mgmt_client_t *client, const char *username, const char *new_password) {
+    if (!client->authenticated) {
+        printf("Not authenticated\n");
+        return -1;
+    }
+    char payload[512];
+    snprintf(payload, sizeof(payload), "%s:%s", username, new_password);
+    if (send_mgmt_command(client, CMD_CHANGE_PASSWORD, payload) < 0) {
+        return -1;
+    }
+    uint8_t status;
+    char response[1024];
+    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
+        return -1;
+    }
+    if (status == STATUS_OK) {
+        printf("Success: %s\n", response);
+    } else {
+        printf("Error: %s\n", response);
+    }
+    return status == STATUS_OK ? 0 : -1;
+}
+
 // Desconectar
 void mgmt_disconnect(mgmt_client_t *client) {
     if (client->socket_fd >= 0) {
@@ -263,7 +288,8 @@ void interactive_menu(mgmt_client_t *client) {
         printf("3. List Users\n");
         printf("4. Add User\n");
         printf("5. Delete User\n");
-        printf("6. Disconnect and Exit\n");
+        printf("6. Change User Password\n");
+        printf("7. Disconnect and Exit\n");
         printf("Choice: ");
         
         if (!fgets(input, sizeof(input), stdin)) {
@@ -314,6 +340,18 @@ void interactive_menu(mgmt_client_t *client) {
                 break;
                 
             case 6:
+                printf("Username to change password: ");
+                if (fgets(username, sizeof(username), stdin)) {
+                    username[strcspn(username, "\n")] = 0;
+                }
+                printf("New password: ");
+                if (fgets(password, sizeof(password), stdin)) {
+                    password[strcspn(password, "\n")] = 0;
+                }
+                mgmt_change_password(client, username, password);
+                break;
+                
+            case 7:
                 printf("Disconnecting...\n");
                 return;
                 
