@@ -18,6 +18,11 @@ void signal_handler(int sig) {
     interrupted = 1;
 }
 
+/*
+ * @TODO hay que arreglar cuando haces curl a goolge.com en el puerto 81. 
+ */
+
+
 // SOCKS5 Protocol Constants
 #define SOCKS5_VERSION 0x05
 #define SOCKS5_AUTH_VERSION 0x01
