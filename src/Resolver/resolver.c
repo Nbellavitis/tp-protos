@@ -419,10 +419,10 @@ unsigned requestConnecting(struct selector_key *key) {
 
         if (so_error != 0) {
             printf("[DEBUG] requestConnecting: Error en conexión: %s\n", strerror(so_error));
-            close(clientData->originFd);
 
             // Intentar siguiente dirección si existe
             if (clientData->originResolution->ai_next != NULL) {
+                close(clientData->originFd);
                 struct addrinfo* next = clientData->originResolution->ai_next;
                 freeaddrinfo(clientData->originResolution);
                 clientData->originResolution = next;
@@ -431,7 +431,7 @@ unsigned requestConnecting(struct selector_key *key) {
                 return CONNECTING;
             }
 
-            clientData->originFd = -1;
+            //clientData->originFd = -1;
             sendRequestResponse(&clientData->originBuffer, 0x05, 0x05, ATYP_IPV4, parser->ipv4_addr, 0);
             return REQ_WRITE;
         }
