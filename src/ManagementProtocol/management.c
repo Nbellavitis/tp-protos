@@ -16,6 +16,7 @@ extern struct users* get_authorized_users(void);
 extern int get_num_authorized_users(void);
 extern bool add_user(const char* username, const char* password);
 extern bool delete_user(const char* username);
+extern bool change_user_password(const char* username, const char* new_password);
 
 // Credenciales hardcodeadas del admin
 static const char* ADMIN_USERNAME = "admin";
@@ -27,46 +28,52 @@ static void management_write(struct selector_key *key);
 static void management_close(struct selector_key *key);
 
 static fd_handler management_handler = {
-    .handle_read = management_read,
-    .handle_write = management_write,
-    .handle_close = management_close,
+        .handle_read = management_read,
+        .handle_write = management_write,
+        .handle_close = management_close,
 };
+
+// Handler dummy para estados que no procesan lectura
+static unsigned mgmt_dummy_read_handler(struct selector_key *key) {
+    printf("[DEBUG] mgmt_dummy_read_handler: Evento de lectura no esperado en estado actual\n");
+    return MGMT_ERROR; // Transición a estado de error
+}
 
 // Definición de la máquina de estados
 static const struct state_definition management_states[] = {
-    {.state = MGMT_AUTH_READ, .on_arrival = mgmt_auth_read_init, .on_read_ready = mgmt_auth_read},
-    {.state = MGMT_AUTH_WRITE, .on_write_ready = mgmt_auth_write},
-    {.state = MGMT_COMMAND_READ, .on_arrival = mgmt_command_read_init, .on_read_ready = mgmt_command_read},
-    {.state = MGMT_COMMAND_WRITE, .on_write_ready = mgmt_command_write},
-    {.state = MGMT_CLOSED, .on_arrival = mgmt_closed_arrival},
-    {.state = MGMT_ERROR, .on_arrival = mgmt_error_arrival}
+        {.state = MGMT_AUTH_READ, .on_arrival = mgmt_auth_read_init, .on_read_ready = mgmt_auth_read},
+        {.state = MGMT_AUTH_WRITE, .on_write_ready = mgmt_auth_write, .on_read_ready = mgmt_dummy_read_handler},
+        {.state = MGMT_COMMAND_READ, .on_arrival = mgmt_command_read_init, .on_read_ready = mgmt_command_read},
+        {.state = MGMT_COMMAND_WRITE, .on_write_ready = mgmt_command_write, .on_read_ready = mgmt_dummy_read_handler},
+        {.state = MGMT_CLOSED, .on_arrival = mgmt_closed_arrival, .on_read_ready = mgmt_dummy_read_handler},
+        {.state = MGMT_ERROR, .on_arrival = mgmt_error_arrival, .on_read_ready = mgmt_dummy_read_handler}
 };
 
 void management_passive_accept(struct selector_key* key) {
     struct sockaddr_storage client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     int new_client_socket = accept(key->fd, (struct sockaddr*)&client_addr, &client_addr_len);
-    
+
     if (new_client_socket < 0) {
         perror("Error accepting management connection");
         return;
     }
-    
+
     if (new_client_socket >= FD_SETSIZE) {
         fprintf(stdout, "Management client socket exceeds maximum file descriptor limit\n");
         close(new_client_socket);
         return;
     }
-    
+
     ManagementData* mgmt_data = calloc(1, sizeof(ManagementData));
     if (mgmt_data == NULL) {
         perror("Error allocating memory for management data");
         close(new_client_socket);
         return;
     }
-    
+
     printf("New management client connected: %d\n", new_client_socket);
-    
+
     // Inicializar estructura
     mgmt_data->stm.initial = MGMT_AUTH_READ;
     mgmt_data->stm.max_state = MGMT_ERROR;
@@ -74,13 +81,13 @@ void management_passive_accept(struct selector_key* key) {
     mgmt_data->closed = false;
     mgmt_data->authenticated = false;
     mgmt_data->client_fd = new_client_socket;
-    
+
     buffer_init(&mgmt_data->client_buffer, MANAGEMENT_BUFFER_SIZE, mgmt_data->in_client_buffer);
     buffer_init(&mgmt_data->response_buffer, MANAGEMENT_BUFFER_SIZE, mgmt_data->in_response_buffer);
-    
+
     init_management_parser(&mgmt_data->parser);
     stm_init(&mgmt_data->stm);
-    
+
     selector_status ss = selector_register(key->s, new_client_socket, &management_handler, OP_READ, mgmt_data);
     if (ss != SELECTOR_SUCCESS) {
         free(mgmt_data);
@@ -91,9 +98,9 @@ void management_passive_accept(struct selector_key* key) {
 
 static void management_read(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
-    
+
     printf("[DEBUG] Management read on socket %d\n", key->fd);
-    
+
     const enum management_state state = stm_handler_read(&mgmt_data->stm, key);
     if (state == MGMT_ERROR || state == MGMT_CLOSED) {
         close_management_connection(key);
@@ -103,9 +110,9 @@ static void management_read(struct selector_key *key) {
 
 static void management_write(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
-    
+
     printf("[DEBUG] Management write on socket %d\n", key->fd);
-    
+
     const enum management_state state = stm_handler_write(&mgmt_data->stm, key);
     if (state == MGMT_ERROR || state == MGMT_CLOSED) {
         close_management_connection(key);
@@ -124,10 +131,10 @@ void close_management_connection(struct selector_key *key) {
     if (mgmt_data->closed) {
         return;
     }
-    
+
     mgmt_data->closed = true;
     printf("Closing management connection: %d\n", mgmt_data->client_fd);
-    
+
     if (mgmt_data->client_fd >= 0) {
         selector_unregister_fd(key->s, mgmt_data->client_fd);
         close(mgmt_data->client_fd);
@@ -149,7 +156,7 @@ void init_management_parser(management_parser *parser) {
 bool parse_management_command(management_parser *parser, struct buffer *buffer) {
     while (buffer_can_read(buffer) && !parser->complete && !parser->error) {
         uint8_t byte = buffer_read(buffer);
-        
+
         if (parser->version == 0) {
             if (byte != MANAGEMENT_VERSION) {
                 parser->error = true;
@@ -174,55 +181,70 @@ bool parse_management_command(management_parser *parser, struct buffer *buffer) 
             }
         }
     }
-    
+
     return parser->complete;
 }
 
 bool send_management_response(struct buffer *buffer, uint8_t status, const char *payload) {
-    if (!buffer_can_write(buffer)) {
-        return false;
+
+    uint8_t payload_len = payload ? strlen(payload) : 0;
+    size_t total_bytes_needed = 3 + payload_len; // version + status + len + payload
+
+    size_t available_bytes;
+    buffer_write_ptr(buffer, &available_bytes);
+
+    if (available_bytes < total_bytes_needed) {
+        return false; // Not enough space in buffer
     }
-    
+
+
     buffer_write(buffer, MANAGEMENT_VERSION);
     buffer_write(buffer, status);
-    
-    uint8_t payload_len = payload ? strlen(payload) : 0;
+
     buffer_write(buffer, payload_len);
-    
+
     if (payload_len > 0) {
         for (int i = 0; i < payload_len; i++) {
             buffer_write(buffer, payload[i]);
         }
     }
-    
+
     return true;
 }
 
 // State handlers
 void mgmt_auth_read_init(unsigned state, struct selector_key *key) {
-    printf("Management: Inicio autenticación (state = %d)\n", state);
+    printf("Management: Inicio autenticación\n");
     ManagementData *mgmt_data = (ManagementData *)key->data;
     init_management_parser(&mgmt_data->parser);
 }
 
 unsigned mgmt_auth_read(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
-    
+
     size_t read_limit;
     uint8_t *buffer_ptr = buffer_write_ptr(&mgmt_data->client_buffer, &read_limit);
+    if (read_limit == 0) {
+        // Buffer full, compact and try again
+        buffer_compact(&mgmt_data->client_buffer);
+        buffer_ptr = buffer_write_ptr(&mgmt_data->client_buffer, &read_limit);
+        if (read_limit == 0) {
+            return MGMT_ERROR; // Still no space after compacting
+        }
+    }
     ssize_t read_count = recv(key->fd, buffer_ptr, read_limit, 0);
-    
+
     if (read_count <= 0) {
         return MGMT_ERROR;
     }
-    
+
     buffer_write_adv(&mgmt_data->client_buffer, read_count);
-    
+
     if (parse_management_command(&mgmt_data->parser, &mgmt_data->client_buffer)) {
         if (mgmt_data->parser.error) {
             return MGMT_ERROR;
         }
-        
+
         if (mgmt_data->parser.command != CMD_AUTH) {
             send_management_response(&mgmt_data->response_buffer, STATUS_AUTH_REQUIRED, "Authentication required");
         } else {
@@ -234,7 +256,7 @@ unsigned mgmt_auth_read(struct selector_key *key) {
                 *colon = '\0';
                 char *username = mgmt_data->parser.payload;
                 char *password = colon + 1;
-                
+
                 if (strcmp(username, ADMIN_USERNAME) == 0 && strcmp(password, ADMIN_PASSWORD) == 0) {
                     mgmt_data->authenticated = true;
                     send_management_response(&mgmt_data->response_buffer, STATUS_OK, "Authentication successful");
@@ -245,37 +267,37 @@ unsigned mgmt_auth_read(struct selector_key *key) {
                 }
             }
         }
-        
+
         if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
             return MGMT_ERROR;
         }
         return MGMT_AUTH_WRITE;
     }
-    
+
     return MGMT_AUTH_READ;
 }
 
 unsigned mgmt_auth_write(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
-    
+
     size_t read_limit;
     uint8_t *buffer_ptr = buffer_read_ptr(&mgmt_data->response_buffer, &read_limit);
     ssize_t write_count = send(key->fd, buffer_ptr, read_limit, MSG_NOSIGNAL);
-    
+
     if (write_count <= 0) {
         return MGMT_ERROR;
     }
-    
+
     buffer_read_adv(&mgmt_data->response_buffer, write_count);
-    
+
     if (buffer_can_read(&mgmt_data->response_buffer)) {
         return MGMT_AUTH_WRITE;
     }
-    
+
     if (selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         return MGMT_ERROR;
     }
-    
+
     if (mgmt_data->authenticated) {
         return MGMT_COMMAND_READ;
     } else {
@@ -284,39 +306,47 @@ unsigned mgmt_auth_write(struct selector_key *key) {
 }
 
 void mgmt_command_read_init(unsigned state, struct selector_key *key) {
-    printf("Management: Listo para comandos, %d\n", state);
+    printf("Management: Listo para comandos\n");
     ManagementData *mgmt_data = (ManagementData *)key->data;
     init_management_parser(&mgmt_data->parser);
 }
 
 unsigned mgmt_command_read(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
-    
+
     size_t read_limit;
     uint8_t *buffer_ptr = buffer_write_ptr(&mgmt_data->client_buffer, &read_limit);
+    if (read_limit == 0) {
+        // Buffer full, compact and try again
+        buffer_compact(&mgmt_data->client_buffer);
+        buffer_ptr = buffer_write_ptr(&mgmt_data->client_buffer, &read_limit);
+        if (read_limit == 0) {
+            return MGMT_ERROR; // Still no space after compacting
+        }
+    }
     ssize_t read_count = recv(key->fd, buffer_ptr, read_limit, 0);
-    
+
     if (read_count <= 0) {
         return MGMT_ERROR;
     }
-    
+
     buffer_write_adv(&mgmt_data->client_buffer, read_count);
-    
+
     if (parse_management_command(&mgmt_data->parser, &mgmt_data->client_buffer)) {
         if (mgmt_data->parser.error) {
             return MGMT_ERROR;
         }
-        
+
         // Procesar comando
         switch (mgmt_data->parser.command) {
             case CMD_STATS: {
                 char stats_response[512];
-                snprintf(stats_response, sizeof(stats_response), 
-                    "Connections opened: %u\nConnections closed: %u\nClient bytes: %u\nOrigin bytes: %u",
-                    stats_get_connections_opened(),
-                    stats_get_connections_closed(), 
-                    stats_get_client_bytes(),
-                    stats_get_origin_bytes());
+                snprintf(stats_response, sizeof(stats_response),
+                         "Connections opened: %u\nConnections closed: %u\nClient bytes: %u\nOrigin bytes: %u",
+                         stats_get_connections_opened(),
+                         stats_get_connections_closed(),
+                         stats_get_client_bytes(),
+                         stats_get_origin_bytes());
                 send_management_response(&mgmt_data->response_buffer, STATUS_OK, stats_response);
                 break;
             }
@@ -324,7 +354,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 char users_response[1024] = "Users:\n";
                 struct users* users = get_authorized_users();
                 int num_users = get_num_authorized_users();
-                
+
                 for (int i = 0; i < num_users; i++) {
                     if (users[i].name != NULL) {
                         char user_line[128];
@@ -332,11 +362,11 @@ unsigned mgmt_command_read(struct selector_key *key) {
                         strcat(users_response, user_line);
                     }
                 }
-                
+
                 if (num_users == 0) {
                     strcat(users_response, "(No users configured - using default admin:password123)");
                 }
-                
+
                 send_management_response(&mgmt_data->response_buffer, STATUS_OK, users_response);
                 break;
             }
@@ -349,7 +379,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
                     *colon = '\0';
                     char *username = mgmt_data->parser.payload;
                     char *password = colon + 1;
-                    
+
                     if (strlen(username) == 0 || strlen(password) == 0) {
                         send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username and password cannot be empty");
                     } else if (add_user(username, password)) {
@@ -369,7 +399,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
             case CMD_DELETE_USER: {
                 // El payload contiene solo el nombre de usuario a eliminar
                 char *username = mgmt_data->parser.payload;
-                
+
                 if (strlen(username) == 0) {
                     send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username cannot be empty");
                 } else if (delete_user(username)) {
@@ -381,48 +411,69 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 }
                 break;
             }
+            case CMD_CHANGE_PASSWORD: {
+                // Payload: "usuario:nueva_contraseña"
+                char *colon = strchr(mgmt_data->parser.payload, ':');
+                if (colon == NULL) {
+                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid format. Use: username:newpassword");
+                } else {
+                    *colon = '\0';
+                    char *username = mgmt_data->parser.payload;
+                    char *new_password = colon + 1;
+                    if (strlen(username) == 0 || strlen(new_password) == 0) {
+                        send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username and new password cannot be empty");
+                    } else if (change_user_password(username, new_password)) {
+                        char response[256];
+                        snprintf(response, sizeof(response), "Password changed for user '%s'", username);
+                        send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
+                    } else {
+                        send_management_response(&mgmt_data->response_buffer, STATUS_NOT_FOUND, "User not found");
+                    }
+                }
+                break;
+            }
             default:
                 send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Unknown command");
                 break;
         }
-        
+
         if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
             return MGMT_ERROR;
         }
         return MGMT_COMMAND_WRITE;
     }
-    
+
     return MGMT_COMMAND_READ;
 }
 
 unsigned mgmt_command_write(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
-    
+
     size_t read_limit;
     uint8_t *buffer_ptr = buffer_read_ptr(&mgmt_data->response_buffer, &read_limit);
     ssize_t write_count = send(key->fd, buffer_ptr, read_limit, MSG_NOSIGNAL);
-    
+
     if (write_count <= 0) {
         return MGMT_ERROR;
     }
-    
+
     buffer_read_adv(&mgmt_data->response_buffer, write_count);
-    
+
     if (buffer_can_read(&mgmt_data->response_buffer)) {
         return MGMT_COMMAND_WRITE;
     }
-    
+
     if (selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         return MGMT_ERROR;
     }
-    
+
     return MGMT_COMMAND_READ;
 }
 
 void mgmt_closed_arrival(unsigned state, struct selector_key *key) {
-    printf("Management connection closed (state = %d , key = %p)\n", state, key);
+    printf("Management connection closed\n");
 }
 
 void mgmt_error_arrival(unsigned state, struct selector_key *key) {
-    printf("Management connection error (state = %d , key = %p)\n", state, key);
+    printf("Management connection error\n");
 }
