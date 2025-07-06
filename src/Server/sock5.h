@@ -19,7 +19,7 @@
 #include "Negotiation/negotiationParser.h"
 #include "Auth/authParser.h"
 #include "Auth/auth.h"
-#include "Logging/statistics.h"
+#include "Statistics/statistics.h"
 #include "Resolver/resolverParser.h"
 #include "args.h"
 #include "Copy/copy.h"

@@ -6,7 +6,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdint.h>
-#include "../src/args.h"
+#include "../Server/args.h"
 
 // Comandos del protocolo de management
 #define MANAGEMENT_VERSION 0x01

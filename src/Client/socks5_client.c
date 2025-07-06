@@ -8,7 +8,7 @@
 #include <netdb.h>
 #include <stdint.h>
 #include <signal.h>
-#include "../src/args.h"
+#include "../Server/args.h"
 
 // Variable global para detectar Ctrl+C
 volatile sig_atomic_t interrupted = 0;

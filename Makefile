@@ -1,40 +1,25 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -g
+.PHONY: all server client clean clean-server clean-client
 
-SRC_DIR = src
-OBJ_DIR = obj
-BIN_DIR = bin
+SERVER_DIR := src/Server
+CLIENT_DIR := src/Client
 
-# Excluir archivos de test del build principal
-SRCS := $(shell find $(SRC_DIR) -name '*.c' ! -path '$(SRC_DIR)/Tests/*')
-OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
+OBJ_DIR := obj
+BIN_DIR := bin
 
-TARGET = $(BIN_DIR)/programa
+all: server client
 
-all: $(TARGET)
+server:
+	$(MAKE) -C $(SERVER_DIR)
 
-$(TARGET): $(OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ -lpthread -lanl
-
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BIN_DIR):
-	mkdir -p $@
-
-# Compilar tests solo si se invoca make tests
-test_srcs := $(shell find $(SRC_DIR)/Tests -name '*.c')
-test_objs := $(patsubst $(SRC_DIR)/Tests/%.c, $(OBJ_DIR)/Tests/%.o, $(test_srcs))
-
-tests: $(test_objs)
-	@echo "Tests compilados. Ejecuta manualmente los binarios de test si lo deseas."
-
-$(OBJ_DIR)/Tests/%.o: $(SRC_DIR)/Tests/%.c
-	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+client:
+	$(MAKE) -C $(CLIENT_DIR)
 
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-.PHONY: all clean tests
+clean-server:
+	$(MAKE) -C $(SERVER_DIR) clean
+
+clean-client:
+	$(MAKE) -C $(CLIENT_DIR) clean
+
