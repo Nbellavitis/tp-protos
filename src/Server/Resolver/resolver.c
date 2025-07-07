@@ -76,7 +76,7 @@ unsigned requestRead(struct selector_key *key) {
                 int copy_len = parser->domain_length < sizeof(clientData->target_host) - 1 ? 
                               parser->domain_length : sizeof(clientData->target_host) - 1; // todo: chequear esto
                 memcpy(clientData->target_host, parser->domain, copy_len);
-                clientData->target_host[copy_len] = '\0'; // todo:chequear
+                clientData->target_host[copy_len] = '\0'; // todo:chequear (LOGS)
             } else if (parser->address_type == ATYP_IPV4) {
                 LOG_DEBUG("REQ_READ: Target IPv4: %d.%d.%d.%d", 
                          parser->ipv4_addr[0], parser->ipv4_addr[1], 
