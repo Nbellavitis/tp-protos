@@ -11,11 +11,11 @@ bool validateUser(const char* username, const char* password) {
     int num_users = get_num_authorized_users();
     
     // Si no hay usuarios configurados, usamos usuario hardcodeado
-    if (num_users == 0) {
+   /* if (num_users == 0) {
         const char* valid_username = "admin";
         const char* valid_password = "password123";
         return (strcmp(username, valid_username) == 0 && strcmp(password, valid_password) == 0);
-    }
+    }*/
     
     // Buscar en la lista de usuarios autorizados
     for (int i = 0; i < num_users; i++) {
