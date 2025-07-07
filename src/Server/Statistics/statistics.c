@@ -4,6 +4,7 @@
 
 #include "statistics.h"
 #include <stdio.h>
+#include "../../logger.h"
 
 struct stats g_stats = {0};  //todo por ahora los hice gloables, es algo malo eso?
 
@@ -55,16 +56,10 @@ unsigned stats_get_origin_bytes(void) {
 void stats_print()
 {
 
-    fprintf(stdout,
-            "=== SOCKS5 STATISTICS ===\n"
-            "Conexiones históricas : %u\n"
-            "Conexiones actuales   : %u\n"
-            "Pico de conexiones    : %u\n"
-            "Bytes CLI → ORI       : %u\n"
-            "Bytes ORI → CLI       : %u\n",
-            g_stats.hist_conn,
-            g_stats.curr_conn,
-            g_stats.max_conn,
-            g_stats.bytes_c2o,
-            g_stats.bytes_o2c);
+    LOG_INFO("=== SOCKS5 STATISTICS ===");
+    LOG_INFO("Conexiones históricas : %u", g_stats.hist_conn);
+    LOG_INFO("Conexiones actuales   : %u", g_stats.curr_conn);
+    LOG_INFO("Pico de conexiones    : %u", g_stats.max_conn);
+    LOG_INFO("Bytes CLI → ORI       : %u", g_stats.bytes_c2o);
+    LOG_INFO("Bytes ORI → CLI       : %u", g_stats.bytes_o2c);
 }

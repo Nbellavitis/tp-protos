@@ -3,6 +3,7 @@
 //
 #include <stdio.h>
 #include "authParser.h"
+#include "../../logger.h"
 
 
 void initAuthParser(auth_parser *parser) {
@@ -18,20 +19,20 @@ void initAuthParser(auth_parser *parser) {
 
 
 unsigned authParse(auth_parser *p, struct buffer *b) {
-    printf("Parsing authentication data...\n");
+    LOG_DEBUG("AUTH_PARSE: Parsing authentication data");
     while (buffer_can_read(b)){
         uint8_t byte = buffer_read(b);
         if(p->version == 0){
             if(byte !=0x01){
                 p->error = true;
-                printf("Error: Invalid  version %d \n",byte);
+                LOG_ERROR("AUTH_PARSE: Invalid version %d", byte);
                 return AUTH_PARSE_ERROR;
             }
             p->version = byte;
         }else if(p->nameLength == 0){
                 if(byte == 0){
                     p->error = true;
-                    printf("Error: Invalid name \n");
+                    LOG_ERROR("AUTH_PARSE: Invalid name length");
                     return AUTH_PARSE_ERROR;
                 }
                 p->nameLength = byte;
@@ -44,7 +45,7 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
         }else if (p->passwordLength == 0) {
             if (byte == 0) {
                 p->error = true;
-                printf("Error: Invalid password\n");
+                LOG_ERROR("AUTH_PARSE: Invalid password length");
                 return AUTH_PARSE_ERROR;
             }
             p->passwordLength = byte;

@@ -5,6 +5,7 @@
 #include "management.h"
 #include "../Statistics/statistics.h"
 #include "../args.h"
+#include "../../logger.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +36,7 @@ static fd_handler management_handler = {
 
 // Handler dummy para estados que no procesan lectura
 static unsigned mgmt_dummy_read_handler(struct selector_key *key) {
-    printf("[DEBUG] mgmt_dummy_read_handler: Evento de lectura no esperado en estado actual\n");
+    LOG_DEBUG("mgmt_dummy_read_handler: Unexpected read event in current state");
     return MGMT_ERROR; // Transición a estado de error
 }
 
@@ -60,7 +61,7 @@ void management_passive_accept(struct selector_key* key) {
     }
 
     if (new_client_socket >= FD_SETSIZE) {
-        fprintf(stdout, "Management client socket exceeds maximum file descriptor limit\n");
+        LOG_ERROR("Management client socket exceeds maximum file descriptor limit");
         close(new_client_socket);
         return;
     }
@@ -72,7 +73,7 @@ void management_passive_accept(struct selector_key* key) {
         return;
     }
 
-    printf("New management client connected: %d\n", new_client_socket);
+    LOG_INFO("New management client connected: %d", new_client_socket);
 
     // Inicializar estructura
     mgmt_data->stm.initial = MGMT_AUTH_READ;
@@ -99,7 +100,7 @@ void management_passive_accept(struct selector_key* key) {
 static void management_read(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
 
-    printf("[DEBUG] Management read on socket %d\n", key->fd);
+    LOG_DEBUG("Management read on socket %d", key->fd);
 
     const enum management_state state = stm_handler_read(&mgmt_data->stm, key);
     if (state == MGMT_ERROR || state == MGMT_CLOSED) {
@@ -111,7 +112,7 @@ static void management_read(struct selector_key *key) {
 static void management_write(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
 
-    printf("[DEBUG] Management write on socket %d\n", key->fd);
+    LOG_DEBUG("Management write on socket %d", key->fd);
 
     const enum management_state state = stm_handler_write(&mgmt_data->stm, key);
     if (state == MGMT_ERROR || state == MGMT_CLOSED) {
@@ -133,7 +134,7 @@ void close_management_connection(struct selector_key *key) {
     }
 
     mgmt_data->closed = true;
-    printf("Closing management connection: %d\n", mgmt_data->client_fd);
+    LOG_INFO("Closing management connection: %d", mgmt_data->client_fd);
 
     if (mgmt_data->client_fd >= 0) {
         selector_unregister_fd(key->s, mgmt_data->client_fd);
@@ -160,7 +161,7 @@ bool parse_management_command(management_parser *parser, struct buffer *buffer) 
         if (parser->version == 0) {
             if (byte != MANAGEMENT_VERSION) {
                 parser->error = true;
-                printf("Invalid management version: 0x%02x\n", byte);
+                LOG_ERROR("Invalid management version: 0x%02x", byte);
                 return false;
             }
             parser->version = byte;
@@ -214,7 +215,7 @@ bool send_management_response(struct buffer *buffer, uint8_t status, const char 
 
 // State handlers
 void mgmt_auth_read_init(unsigned state, struct selector_key *key) {
-    printf("Management: Inicio autenticación\n");
+    LOG_DEBUG("Management: Starting authentication");
     ManagementData *mgmt_data = (ManagementData *)key->data;
     init_management_parser(&mgmt_data->parser);
 }
@@ -260,10 +261,10 @@ unsigned mgmt_auth_read(struct selector_key *key) {
                 if (strcmp(username, ADMIN_USERNAME) == 0 && strcmp(password, ADMIN_PASSWORD) == 0) {
                     mgmt_data->authenticated = true;
                     send_management_response(&mgmt_data->response_buffer, STATUS_OK, "Authentication successful");
-                    printf("Management: Autenticación exitosa para %s\n", username);
+                    LOG_INFO("Management: Authentication successful for %s", username);
                 } else {
                     send_management_response(&mgmt_data->response_buffer, STATUS_AUTH_FAILED, "Invalid credentials");
-                    printf("Management: Autenticación fallida para %s\n", username);
+                    LOG_WARN("Management: Authentication failed for %s", username);
                 }
             }
         }
@@ -306,7 +307,7 @@ unsigned mgmt_auth_write(struct selector_key *key) {
 }
 
 void mgmt_command_read_init(unsigned state, struct selector_key *key) {
-    printf("Management: Listo para comandos\n");
+    LOG_DEBUG("Management: Ready for commands");
     ManagementData *mgmt_data = (ManagementData *)key->data;
     init_management_parser(&mgmt_data->parser);
 }
@@ -471,9 +472,9 @@ unsigned mgmt_command_write(struct selector_key *key) {
 }
 
 void mgmt_closed_arrival(unsigned state, struct selector_key *key) {
-    printf("Management connection closed\n");
+    LOG_DEBUG("Management connection closed");
 }
 
 void mgmt_error_arrival(unsigned state, struct selector_key *key) {
-    printf("Management connection error\n");
+    LOG_ERROR("Management connection error");
 }

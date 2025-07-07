@@ -8,8 +8,12 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <time.h>
+#include <arpa/inet.h>
 #include "Auth/authParser.h"
 #include "Resolver/resolver.h"
+#include "Statistics/statistics.h"
+#include "../logger.h"
 static void socksv5Read(struct selector_key *key);
 static void socksv5Write(struct selector_key *key);
 static void socksv5Close(struct selector_key *key);
@@ -45,7 +49,7 @@ void socksv5PassiveAccept(struct selector_key* key){
         return;
     }
     if (newClientSocket >= FD_SETSIZE) {
-        fprintf(stdout, "New client socket exceeds maximum file descriptor limit\n");
+        LOG_ERROR("New client socket exceeds maximum file descriptor limit");
         close(newClientSocket);
         return;
     }
@@ -55,7 +59,7 @@ void socksv5PassiveAccept(struct selector_key* key){
         close(newClientSocket);
         return;
     }
-    printf("New client connected: %d\n", newClientSocket);
+    LOG_DEBUG("New client connected on socket %d", newClientSocket);
     stats_connection_opened();
     clientData->stm.initial = NEGOTIATION_READ;
     clientData->stm.max_state = ERROR;
@@ -66,8 +70,27 @@ void socksv5PassiveAccept(struct selector_key* key){
     clientData->originFd = -1;
     clientData->originResolution = NULL;
     clientData->resolution_from_getaddrinfo = false;
-    clientData->connection_ready = 0; // No hay conexión pendiente
-    clientData->dns_resolution_state = 0; // No hay resolución pendiente
+    clientData->connection_ready = 0;
+    clientData->dns_resolution_state = 0;
+    
+    // Inicializar campos de logging
+    memset(clientData->username, 0, sizeof(clientData->username));
+    memset(clientData->client_ip, 0, sizeof(clientData->client_ip));
+    memset(clientData->target_host, 0, sizeof(clientData->target_host));
+    clientData->client_port = 0;
+    clientData->target_port = 0;
+    clientData->socks_status = 0;
+    
+    // Extraer IP y puerto del cliente
+    if (clientAddress.ss_family == AF_INET) {
+        struct sockaddr_in *addr_in = (struct sockaddr_in *)&clientAddress;
+        inet_ntop(AF_INET, &addr_in->sin_addr, clientData->client_ip, INET6_ADDRSTRLEN);
+        clientData->client_port = ntohs(addr_in->sin_port);
+    } else if (clientAddress.ss_family == AF_INET6) {
+        struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6 *)&clientAddress;
+        inet_ntop(AF_INET6, &addr_in6->sin6_addr, clientData->client_ip, INET6_ADDRSTRLEN);
+        clientData->client_port = ntohs(addr_in6->sin6_port);
+    }
     buffer_init(&clientData->clientBuffer, BUFFER_SIZE, clientData->inClientBuffer);
     buffer_init(&clientData->originBuffer, BUFFER_SIZE, clientData->inOriginBuffer);
 
@@ -83,7 +106,7 @@ void socksv5PassiveAccept(struct selector_key* key){
 static void socksv5Read(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
 
-    printf("[DEBUG] SOCKS5_READ: Leyendo datos del socket %d\n", key->fd);
+    LOG_DEBUG("SOCKS5_READ: Reading data from socket %d", key->fd);
 
     const enum socks5State state = stm_handler_read(&clientData->stm, key);
     if (state == ERROR || state == CLOSED) {
@@ -92,19 +115,19 @@ static void socksv5Read(struct selector_key *key) {
     }
 }
 static void socksv5Write(struct selector_key *key) {
-    printf("[DEBUG] socksv5Write: Entrando a socksv5Write\n");
+    LOG_DEBUG("socksv5Write: Entering socksv5Write");
     if (key == NULL) {
-        printf("[ERROR] socksv5Write: key es NULL\n");
+        LOG_ERROR("socksv5Write: key is NULL");
         return;
     }
     if (key->data == NULL) {
-        printf("[ERROR] socksv5Write: key->data es NULL\n");
+        LOG_ERROR("socksv5Write: key->data is NULL");
         return;
     }
     ClientData *clientData = (ClientData *)key->data;
-    printf("[DEBUG] socksv5Write: Llamando a stm_handler_write\n");
+    LOG_DEBUG("socksv5Write: Calling stm_handler_write");
     const enum socks5State state = stm_handler_write(&clientData->stm, key);
-    printf("[DEBUG] socksv5Write: stm_handler_write retornó: %d\n", state);
+    LOG_DEBUG("socksv5Write: stm_handler_write returned: %d", state);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
         return;
@@ -116,19 +139,19 @@ static void socksv5Close(struct selector_key *key) {
     closeConnection(key);
 }
 static void socksv5Block(struct selector_key *key) {
-    printf("[DEBUG] socksv5Block: Entrando a socksv5Block\n");
+    LOG_DEBUG("socksv5Block: Entering socksv5Block");
     if (key == NULL) {
-        printf("[ERROR] socksv5Block: key es NULL\n");
+        LOG_ERROR("socksv5Block: key is NULL");
         return;
     }
     if (key->data == NULL) {
-        printf("[ERROR] socksv5Block: key->data es NULL\n");
+        LOG_ERROR("socksv5Block: key->data is NULL");
         return;
     }
     ClientData *clientData = (ClientData *)key->data;
-    printf("[DEBUG] socksv5Block: Llamando a stm_handler_block\n");
+    LOG_DEBUG("socksv5Block: Calling stm_handler_block");
     const enum socks5State state = stm_handler_block(&clientData->stm, key);
-    printf("[DEBUG] socksv5Block: stm_handler_block retornó: %d\n", state);
+    LOG_DEBUG("socksv5Block: stm_handler_block returned: %d", state);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
         return;
@@ -174,7 +197,50 @@ void closeConnection(struct selector_key *key) {
         }
     }
 
+    // Registro de acceso antes de liberar clientData
+    log_access_record(clientData);
+    
     free(clientData);
+}
+
+void log_access_record(ClientData *clientData) {
+    if (!clientData) return;
+    
+    // Fecha en formato ISO-8601
+    time_t now = time(NULL);
+    struct tm *utc_tm = gmtime(&now);
+    char timestamp[32];
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+    
+    // REGISTRO DE ACCESO: fecha\tusuario\tA\tip_origen\tpuerto_origen\tdestino\tpuerto_destino\tstatus
+    LOG_INFO("%s\t%s\tA\t%s\t%d\t%s\t%d\t%d",
+           timestamp,
+           clientData->username[0] ? clientData->username : "anonymous",
+           clientData->client_ip[0] ? clientData->client_ip : "unknown",
+           clientData->client_port,
+           clientData->target_host[0] ? clientData->target_host : "unknown",
+           clientData->target_port,
+           clientData->socks_status);
+}
+
+void log_password_record(const char *username, const char *protocol, 
+                        const char *target_host, int target_port, 
+                        const char *discovered_user, const char *discovered_pass) {
+    // Fecha en formato ISO-8601
+    time_t now = time(NULL);
+    struct tm *utc_tm = gmtime(&now);
+    char timestamp[32];
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
+    
+    // REGISTRO DE PASSWORDS: fecha\tusuario\tP\tprotocolo\tdestino\tpuerto_destino\tusuario_desc\tpass_desc
+    LOG_INFO("%s\t%s\tP\t%s\t%s\t%d\t%s\t%s",
+           timestamp,
+           username ? username : "anonymous",
+           protocol,
+           target_host,
+           target_port,
+           discovered_user,
+           discovered_pass);
 }
 fd_handler * getSocksv5Handler(void) {
     return &handler;
@@ -183,9 +249,9 @@ fd_handler * getSocksv5Handler(void) {
 
 
 static void closeArrival(const unsigned state, struct selector_key *key) {
-    printf("Llegando al estado CLOSED (state = %d, key = %p)\n", state, key);
+    LOG_DEBUG("Arriving at CLOSED state (state = %d, key = %p)", state, key);
 }
 
 static void errorArrival(const unsigned state, struct selector_key *key) {
-    printf("Llegando al estado ERROR (state = %d, key = %p)\n", state, key);
+    LOG_DEBUG("Arriving at ERROR state (state = %d, key = %p)", state, key);
 }

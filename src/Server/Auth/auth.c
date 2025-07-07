@@ -1,4 +1,5 @@
 #include "auth.h"
+#include "../../logger.h"
 
 bool validateUser(const char* username, const char* password) {
     if (username == NULL || password == NULL) {
@@ -29,14 +30,14 @@ bool validateUser(const char* username, const char* password) {
 }
 
 void authenticationReadInit(unsigned state,struct selector_key * key){
-    printf("Inicio autenticación (state es %d)\n", state);
+    LOG_DEBUG("Authentication phase initialized (state: %d)", state);
     struct ClientData *data = (struct ClientData *)key->data;
     initAuthParser(&data->client.authParser);
 }
 
 unsigned authenticationRead(struct selector_key * key){
     ClientData *data = key->data;
-    printf("Leyendo autenticación\n");
+    LOG_DEBUG("Reading authentication data");
     auth_parser *p = &data->client.authParser;
     size_t readLimit;
     size_t readCount;
@@ -53,14 +54,17 @@ unsigned authenticationRead(struct selector_key * key){
         case AUTH_PARSE_OK:
             // Validar las credenciales del usuario
             if (!validateUser(p->name, p->password)) {
-                printf("Autenticación fallida para usuario: %s\n", p->name);
+                LOG_WARN("Authentication failed for user: %s", p->name);
                 if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x01)) {
                     return ERROR;
                 }
                 return ERROR; // Rechazar conexión por credenciales inválidas
             }
             
-            printf("Autenticación exitosa para usuario: %s\n", p->name);
+            LOG_INFO("Authentication successful for user: %s", p->name);
+            // Guardar usuario para logging de acceso
+            strncpy(data->username, p->name, sizeof(data->username) - 1);
+            data->username[sizeof(data->username) - 1] = '\0'; // todo: chequear
             if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x00)) {
                 return ERROR;
             }
@@ -95,8 +99,8 @@ unsigned authenticationWrite(struct selector_key * key){
    if (p->error || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         return ERROR;
     }
-    printf("Autenticación exitosa\n");
-   printf("name: %s\n", p->name);
-    printf("password: %s\n", p->password);
+    LOG_DEBUG("Authentication process completed successfully");
+   LOG_DEBUG("Authenticated username: %s", p->name);
+    LOG_DEBUG("Authentication password validated");
     return REQ_READ; // Continuar con la lectura de la solicitud
 }

@@ -1,8 +1,9 @@
 #include "negotiation.h"
 #include "negotiationParser.h"
+#include "../../logger.h"
 #define VERSION_5 0x05
 void negotiationReadInit(unsigned state, struct selector_key *key) {
-    printf("Inicio negociación (state = %d)\n", state);
+    LOG_DEBUG("NEGOTIATION_INIT: Starting negotiation (state = %d)", state);
     struct ClientData *data = (struct ClientData *)key->data;
     initNegotiationParser(&data->client.negParser);
 
@@ -21,7 +22,7 @@ unsigned negotiationRead(struct selector_key *key) {
 
     buffer_write_adv(&data->clientBuffer, readCount);
     negotiation_parse result = negotiationParse(p, &data->clientBuffer);
-    printf("Resultado de negociación: %d\n", result);
+    LOG_DEBUG("NEGOTIATION_READ: Negotiation result: %d", result);
     switch (result) {
     case NEGOTIATION_PARSE_OK:
         if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendNegotiationResponse(&data->originBuffer, p->method_chosen)) {
@@ -39,7 +40,7 @@ unsigned negotiationRead(struct selector_key *key) {
 }
 
 unsigned negotiationWrite(struct selector_key *key) {
-    printf("Escribiendo respuesta de negociación\n");
+    LOG_DEBUG("NEGOTIATION_WRITE: Writing negotiation response");
     ClientData *data = key->data;
     negotiation_parser *p = &data->client.negParser;
     size_t writeLimit;
@@ -59,13 +60,13 @@ unsigned negotiationWrite(struct selector_key *key) {
     if (p->error || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         return ERROR;
     }
-    printf("Negociación exitosa, método elegido: %d\n", p->method_chosen);
+    LOG_DEBUG("NEGOTIATION_WRITE: Successful negotiation, chosen method: %d", p->method_chosen);
     
     if (p->method_chosen == 0x00) {
-        printf("[DEBUG] NEGOTIATION_WRITE: Avanzando a REQ_READ (sin autenticación)\n");
+        LOG_DEBUG("NEGOTIATION_WRITE: Advancing to REQ_READ (no authentication)");
         return REQ_READ;
     } else {
-        printf("[DEBUG] NEGOTIATION_WRITE: Avanzando a AUTHENTICATION_READ (con autenticación)\n");
+        LOG_DEBUG("NEGOTIATION_WRITE: Advancing to AUTHENTICATION_READ (with authentication)");
         return AUTHENTICATION_READ;
     }
 }

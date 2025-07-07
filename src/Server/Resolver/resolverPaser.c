@@ -1,4 +1,5 @@
 #include "resolverParser.h"
+#include "../../logger.h"
 
 void initResolverParser(resolver_parser *parser) {
     parser->version = 0;
@@ -108,12 +109,12 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
 
             case 5: // DST.PORT
                 if (p->bytes_read == 0) {
-                    printf("[DEBUG] Byte recibido: 0x%02x en estado \n", byte);
+                    LOG_DEBUG("Byte received: 0x%02x in state", byte);
                     p->port = (uint16_t)byte << 8;
                     p->bytes_read = 1;
                 } else {
                     p->port |= byte;
-                    printf("[DEBUG] Byte recibido: 0x%02x en estado \n", byte);
+                    LOG_DEBUG("Byte received: 0x%02x in state", byte);
                     p->done = true;
                     return REQUEST_PARSE_OK;
                 }
@@ -127,7 +128,7 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
 bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t reply, uint8_t atyp, const void *bnd_addr, uint16_t bnd_port) {
     // Verificar espacio disponible antes de escribir
     if (!buffer_can_write(originBuffer)) {
-        printf("[DEBUG] sendRequestResponse: Buffer lleno, no se puede escribir\n");
+        LOG_DEBUG("sendRequestResponse: Buffer full, cannot write");
         return false;
     }
 
@@ -136,7 +137,7 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
 
     // Verificar espacio para REP
     if (!buffer_can_write(originBuffer)) {
-        printf("[DEBUG] sendRequestResponse: Buffer lleno después de VER\n");
+        LOG_DEBUG("sendRequestResponse: Buffer full after VER");
         return false;
     }
 
@@ -145,7 +146,7 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
 
     // Verificar espacio para RSV
     if (!buffer_can_write(originBuffer)) {
-        printf("[DEBUG] sendRequestResponse: Buffer lleno después de REP\n");
+        LOG_DEBUG("sendRequestResponse: Buffer full after REP");
         return false;
     }
 
@@ -154,7 +155,7 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
 
     // Verificar espacio para ATYP
     if (!buffer_can_write(originBuffer)) {
-        printf("[DEBUG] sendRequestResponse: Buffer lleno después de RSV\n");
+        LOG_DEBUG("sendRequestResponse: Buffer full after RSV");
         return false;
     }
 
@@ -166,12 +167,12 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
         case ATYP_IPV4:
             // Verificar espacio para 4 bytes de IPv4
             if (!buffer_can_write(originBuffer)) {
-                printf("[DEBUG] sendRequestResponse: Buffer lleno para IPv4\n");
+                LOG_DEBUG("sendRequestResponse: Buffer full for IPv4");
                 return false;
             }
             for (int i = 0; i < 4; i++) {
                 if (!buffer_can_write(originBuffer)) {
-                    printf("[DEBUG] sendRequestResponse: Buffer lleno durante IPv4\n");
+                    LOG_DEBUG("sendRequestResponse: Buffer full during IPv4");
                     return false;
                 }
                 buffer_write(originBuffer, ((uint8_t*)bnd_addr)[i]);
@@ -180,12 +181,12 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
         case ATYP_IPV6:
             // Verificar espacio para 16 bytes de IPv6
             if (!buffer_can_write(originBuffer)) {
-                printf("[DEBUG] sendRequestResponse: Buffer lleno para IPv6\n");
+                LOG_DEBUG("sendRequestResponse: Buffer full for IPv6");
                 return false;
             }
             for (int i = 0; i < 16; i++) {
                 if (!buffer_can_write(originBuffer)) {
-                    printf("[DEBUG] sendRequestResponse: Buffer lleno durante IPv6\n");
+                    LOG_DEBUG("sendRequestResponse: Buffer full during IPv6");
                     return false;
                 }
                 buffer_write(originBuffer, ((uint8_t*)bnd_addr)[i]);
@@ -195,7 +196,7 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
             uint8_t domain_len = strlen((char*)bnd_addr);
             // Verificar espacio para longitud
             if (!buffer_can_write(originBuffer)) {
-                printf("[DEBUG] sendRequestResponse: Buffer lleno para longitud de dominio\n");
+                LOG_DEBUG("sendRequestResponse: Buffer full for domain length");
                 return false;
             }
             buffer_write(originBuffer, domain_len);
@@ -203,7 +204,7 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
             // Verificar espacio para dominio
             for (int i = 0; i < domain_len; i++) {
                 if (!buffer_can_write(originBuffer)) {
-                    printf("[DEBUG] sendRequestResponse: Buffer lleno durante dominio\n");
+                    LOG_DEBUG("sendRequestResponse: Buffer full during domain");
                     return false;
                 }
                 buffer_write(originBuffer, ((char*)bnd_addr)[i]);
@@ -214,7 +215,7 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
 
     // Verificar espacio para puerto (2 bytes)
     if (!buffer_can_write(originBuffer)) {
-        printf("[DEBUG] sendRequestResponse: Buffer lleno para puerto\n");
+        LOG_DEBUG("sendRequestResponse: Buffer full for port");
         return false;
     }
 
@@ -223,12 +224,12 @@ bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t r
     buffer_write(originBuffer, (port_network >> 8) & 0xFF);
 
     if (!buffer_can_write(originBuffer)) {
-        printf("[DEBUG] sendRequestResponse: Buffer lleno para segundo byte de puerto\n");
+        LOG_DEBUG("sendRequestResponse: Buffer full for second port byte");
         return false;
     }
 
     buffer_write(originBuffer, port_network & 0xFF);
 
-    printf("[DEBUG] sendRequestResponse: Respuesta SOCKS5 enviada al buffer\n");
+    LOG_DEBUG("sendRequestResponse: SOCKS5 response sent to buffer");
     return true;
 }

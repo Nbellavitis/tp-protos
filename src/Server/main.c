@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include "sock5.h"
 #include "ManagementProtocol/management.h"
+#include "../logger.h"
 #define MAXPENDING 10 //todo ME PINTO 10
 
 static bool killed = false;
@@ -21,7 +22,7 @@ static int endProgram(struct users * users,fd_selector selector, selector_status
 
         void sig_handler(int signum) {
     if (signum == SIGTERM || signum == SIGINT) {
-        printf("Received signal %d, shutting down...\n", signum);
+        LOG_INFO("Received signal %d, shutting down...", signum);
         killed = true;
     }
 }
@@ -72,7 +73,7 @@ bool add_user(const char* username, const char* password) {
     authorized_users[num_authorized_users].pass = pass_copy;
     num_authorized_users++;
     
-    printf("Usuario agregado: %s\n", username);
+    LOG_INFO("User added: %s", username);
     return true;
 }
 
@@ -98,7 +99,7 @@ bool delete_user(const char* username) {
             authorized_users[num_authorized_users - 1].pass = NULL;
             
             num_authorized_users--;
-            printf("Usuario eliminado: %s\n", username);
+            LOG_INFO("User deleted: %s", username);
             return true;
         }
     }
@@ -121,7 +122,7 @@ bool change_user_password(const char* username, const char* new_password) {
             }
             strcpy(pass_copy, new_password);
             authorized_users[i].pass = pass_copy;
-            printf("Contraseña cambiada para usuario: %s\n", username);
+            LOG_INFO("Password changed for user: %s", username);
             return true;
         }
     }
@@ -135,7 +136,7 @@ static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t
         sockipv6.sin6_family = AF_INET6;
         sockipv6.sin6_port = htons(port);
         if(inet_pton(AF_INET6, addr, &sockipv6.sin6_addr) <= 0) {
-            fprintf(stderr, "Invalid IPv6 address: %s\n", addr);
+            LOG_ERROR("Invalid IPv6 address: %s", addr);
             return -1;
         }
        *(struct sockaddr_in6 *) result = sockipv6;
@@ -148,7 +149,7 @@ static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t
     sockipv4.sin_family = AF_INET;
     sockipv4.sin_port = htons(port);
     if(inet_pton(AF_INET, addr, &sockipv4.sin_addr) <= 0) {
-        fprintf(stderr, "Invalid IPv4 address: %s\n", addr);
+        LOG_ERROR("Invalid IPv4 address: %s", addr);
         return -1;
     }
     *(struct sockaddr_in *) result = sockipv4;
@@ -158,7 +159,7 @@ static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t
 
 
 int main (int argc,char * argv[]){
-    printf("Starting SOCKS5 Proxy Server\n");
+    LOG_INFO("Starting SOCKS5 Proxy Server");
     signal(SIGTERM, sig_handler);
     signal(SIGINT, sig_handler);
     selector_status ss= SELECTOR_SUCCESS;
@@ -226,7 +227,7 @@ int main (int argc,char * argv[]){
         error = "Failed to register SOCKS5 server socket with selector";
         return endProgram(authorized_users, selector, ss, server, -1,error);
     }
-    printf("SOCKS5 Proxy Server listening on %s:%d\n", args.socks_addr, args.socks_port);
+    LOG_INFO("SOCKS5 Proxy Server listening on %s:%d", args.socks_addr, args.socks_port);
     
     // Configurar socket de management
     struct sockaddr_storage mgmtAddr;
@@ -269,16 +270,16 @@ int main (int argc,char * argv[]){
         return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
     }
     
-    printf("Management Server listening on %s:%d\n", args.mng_addr, args.mng_port);
+    LOG_INFO("Management Server listening on %s:%d", args.mng_addr, args.mng_port);
     
     while(!killed){
-        printf("[DEBUG] MAIN: Antes de selector_select\n");
+        LOG_DEBUG("Main event loop: Before selector_select");
         ss = selector_select(selector);
-        printf("[DEBUG] MAIN: Después de selector_select\n");
+        LOG_DEBUG("Main event loop: After selector_select");
         if (ss != SELECTOR_SUCCESS) {
             return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
         }
-        stats_print();
+        // stats_print();
     }
     return endProgram(authorized_users, selector, ss, server, mgmt_server,NULL);
 }
@@ -288,13 +289,13 @@ int endProgram(struct users * users,fd_selector selector, selector_status ss, in
        free(users);
     }
     if (ss != SELECTOR_SUCCESS) {
-        fprintf(stdout, "Selector error: %s\n", selector_error(ss));
+        LOG_ERROR("Selector error: %s", selector_error(ss));
         ret = -1; // Indicar error en el selector
     }else if (errno < 0) {
-        fprintf(stdout, "Error: %s\n", strerror(errno));
+        LOG_ERROR("System error: %s", strerror(errno));
         ret = -1; // Indicar error de sistema
     } else if (error != NULL) {
-        fprintf(stdout, "Error: %s\n", error);
+        LOG_ERROR("Application error: %s", error);
         ret = -1; // Indicar error específico
     }
     if (selector != NULL) {

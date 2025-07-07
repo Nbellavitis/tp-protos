@@ -58,6 +58,14 @@ typedef struct ClientData {
     struct buffer originBuffer;
     uint8_t inClientBuffer[BUFFER_SIZE];
     uint8_t inOriginBuffer[BUFFER_SIZE];
+    
+    // Para logging de acceso  
+    char username[256];          // Usuario autenticado
+    char client_ip[INET6_ADDRSTRLEN];   // IP del cliente
+    int client_port;             // Puerto del cliente
+    char target_host[256];       // Host de destino
+    int target_port;             // Puerto de destino
+    uint8_t socks_status;        // Status code SOCKS5
 }ClientData;
 
 enum socks5State {
@@ -76,4 +84,11 @@ enum socks5State {
 void socksv5PassiveAccept(struct selector_key* key);
 void closeConnection(struct selector_key *key);
 fd_handler * getSocksv5Handler(void);
+
+// Funciones de logging específicas
+void log_access_record(ClientData *clientData);
+void log_password_record(const char *username, const char *protocol, 
+                        const char *target_host, int target_port, 
+                        const char *discovered_user, const char *discovered_pass);
+
 #endif //SOCK5_H
