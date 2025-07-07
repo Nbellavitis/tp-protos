@@ -307,24 +307,21 @@ unsigned addressResolveDone(struct selector_key *key) {
 
     LOG_DEBUG("ADDR_RESOLVE_DONE: Processing resolution");
 
-    // Verificar estado de resolución DNS
-    if (parser->address_type == ATYP_DOMAIN) {
-        if (clientData->dns_resolution_state == 2) {
-            // DNS completada exitosamente
-            LOG_DEBUG("ADDR_RESOLVE_DONE: DNS resolved successfully");
-            clientData->dns_resolution_state = 0;
-            return CONNECTING;
-        } else if (clientData->dns_resolution_state == 1) {
-            // DNS aún en progreso
-            LOG_DEBUG("ADDR_RESOLVE_DONE: DNS still in progress");
-            return ADDR_RESOLVE;
-        } else if (clientData->dns_resolution_state == -1) {
-            // DNS falló
-            LOG_ERROR("ADDR_RESOLVE_DONE: DNS failed");
-            clientData->dns_resolution_state = 0;
-            sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-            return REQ_WRITE;
-        }
+    if (clientData->dns_resolution_state == 2) {
+        // DNS completada exitosamente
+        LOG_DEBUG("ADDR_RESOLVE_DONE: DNS resolved successfully");
+        clientData->dns_resolution_state = 0;
+        return CONNECTING;
+    } else if (clientData->dns_resolution_state == 1) {
+        // DNS aún en progreso
+        LOG_DEBUG("ADDR_RESOLVE_DONE: DNS still in progress");
+        return ADDR_RESOLVE;
+    } else if (clientData->dns_resolution_state == -1) {
+        // DNS falló
+        LOG_ERROR("ADDR_RESOLVE_DONE: DNS failed");
+        clientData->dns_resolution_state = 0;
+        sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
+        return REQ_WRITE;
     }
 
     LOG_ERROR("ADDR_RESOLVE_DONE: Unsupported address type");
