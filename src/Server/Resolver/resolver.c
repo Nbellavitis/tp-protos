@@ -24,12 +24,7 @@ extern void stm_handler_close(struct state_machine *stm, struct selector_key *ke
 // Funciones para registrar sockets en el selector
 void dnsResolutionDone(union sigval sv);
 
-
-
-
-// Función auxiliar para crear addrinfo para IPs directas
-static bool create_direct_addrinfo(ClientData *clientData, resolver_parser *parser) {
-    // Limpiar resolución previa si existe
+static void cleanup_previous_resolution(ClientData *clientData) {
     if (clientData->originResolution != NULL) {
         if (clientData->resolution_from_getaddrinfo) {
             freeaddrinfo(clientData->originResolution);
@@ -42,6 +37,13 @@ static bool create_direct_addrinfo(ClientData *clientData, resolver_parser *pars
         clientData->originResolution = NULL;
         clientData->resolution_from_getaddrinfo = false;
     }
+}
+
+
+// Función auxiliar para crear addrinfo para IPs directas
+static bool create_direct_addrinfo(ClientData *clientData, resolver_parser *parser) {
+    // Limpiar resolución previa si existe
+    cleanup_previous_resolution(clientData);
 
     if (parser->address_type == ATYP_IPV4) {
         struct sockaddr_in* ipv4_addr = malloc(sizeof(struct sockaddr_in));
