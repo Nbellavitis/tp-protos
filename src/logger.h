@@ -4,6 +4,9 @@
 #include <stdio.h>
 
 
+
+
+
 #define LOG_LEVEL_ERROR 0
 #define LOG_LEVEL_WARN  1
 #define LOG_LEVEL_INFO  2
@@ -40,4 +43,4 @@
 #  define LOG_DEBUG(fmt, ...) ((void)0)
 #endif
 
-#endif 
+#endif

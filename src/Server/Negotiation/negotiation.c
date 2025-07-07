@@ -34,7 +34,7 @@ unsigned negotiationRead(struct selector_key *key) {
 
     case NEGOTIATION_PARSE_ERROR:
     default:
-        p->method_chosen = 0xFF;
+        p->method_chosen = 0xFF; //@todo esa bien el flujo aca?
         return ERROR;
     }
 }

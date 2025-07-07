@@ -14,6 +14,8 @@ typedef enum {
     NEGOTIATION_PARSE_OK,          // parseo exitoso, método elegido
     NEGOTIATION_PARSE_ERROR        // error de protocolo (versión inválida, datos inconsistentes)
 } negotiation_parse;
+
+
 typedef struct negotiation_parser {
     struct parser *parser;
     struct parser_definition def;
