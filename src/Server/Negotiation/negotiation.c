@@ -34,7 +34,7 @@ unsigned negotiationRead(struct selector_key *key) {
 
     case NEGOTIATION_PARSE_ERROR:
     default:
-        p->method_chosen = 0xFF; //@todo esa bien el flujo aca?
+        p->method_chosen = 0xFF; //@todo: revisar, no se si hay que mandar este error o no
         return ERROR;
     }
 }
@@ -65,9 +65,12 @@ unsigned negotiationWrite(struct selector_key *key) {
     if (p->method_chosen == 0x00) {
         LOG_DEBUG("NEGOTIATION_WRITE: Advancing to REQ_READ (no authentication)");
         return REQ_READ;
-    } else {
-        LOG_DEBUG("NEGOTIATION_WRITE: Advancing to AUTHENTICATION_READ (with authentication)");
-        return AUTHENTICATION_READ;
     }
+
+    // todo, acá faltaría un if(p->method_chosen == 0xFF) para cerrar la conexión, ¿no?
+
+    LOG_DEBUG("NEGOTIATION_WRITE: Advancing to AUTHENTICATION_READ (with authentication)");
+    return AUTHENTICATION_READ;
+
 }
 
