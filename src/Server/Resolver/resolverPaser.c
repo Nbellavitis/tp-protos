@@ -125,7 +125,7 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
     return REQUEST_PARSE_INCOMPLETE;
 }
 
-bool sendRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t reply, uint8_t atyp, const void *bnd_addr, uint16_t bnd_port) {
+bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t reply, uint8_t atyp, const void *bnd_addr, uint16_t bnd_port) {
     // Verificar espacio disponible antes de escribir
     if (!buffer_can_write(originBuffer)) {
         LOG_DEBUG("sendRequestResponse: Buffer full, cannot write");

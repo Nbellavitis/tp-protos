@@ -34,7 +34,7 @@ static const struct state_definition clientActions[] = {
     {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite},
     {.state = REQ_READ,.on_arrival = requestReadInit,.on_read_ready = requestRead},
     {.state = ADDR_RESOLVE, .on_arrival = addressResolveInit, .on_write_ready = addressResolveDone,.on_block_ready = addressResolveDone}, //todo cambiar nombre!?
-    {.state = CONNECTING, .on_arrival = requestConnectingInit, .on_write_ready = requestConnecting},
+    {.state = CONNECTING, .on_arrival = NULL, .on_write_ready = requestConnecting},
     {.state = REQ_WRITE, .on_write_ready = requestWrite},
     {.state = COPYING,   .on_arrival = socksv5HandleInit,.on_read_ready = socksv5HandleRead,.on_write_ready = socksv5HandleWrite,.on_departure = socksv5HandleClose},
     {.state = CLOSED, .on_arrival = closeArrival},
