@@ -31,6 +31,13 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
  *
  */
 
+
+#define ADMIN_DEFAULT_USER "admin"
+#define ADMIN_DEFAULT_PASSWORD "admin123"
+#define ADMIN_USER_ENV_VAR "ADMIN_USERNAME"
+#define ADMIN_PASSWORD_ENV_VAR "ADMIN_PASSWORD"
+
+
 #define MANAGEMENT_VERSION 0x01
 #define MANAGEMENT_BUFFER_SIZE 4096
 
@@ -111,5 +118,7 @@ bool parse_management_command(management_parser *parser, struct buffer *buffer);
 bool send_management_response(struct buffer *buffer, uint8_t status, const char *payload);
 
 bool change_user_password(const char* username, const char* new_password);
+
+void mgtm_init_admin();
 
 #endif //TP_PROTOS_MANAGEMENT_H
