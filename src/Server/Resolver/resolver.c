@@ -24,8 +24,92 @@ extern void stm_handler_close(struct state_machine *stm, struct selector_key *ke
 // Funciones para registrar sockets en el selector
 void dnsResolutionDone(union sigval sv);
 
+static void cleanup_previous_resolution(ClientData *clientData) {
+    if (clientData->originResolution != NULL) {
+        if (clientData->resolution_from_getaddrinfo) {
+            freeaddrinfo(clientData->originResolution);
+        } else {
+            if (clientData->originResolution->ai_addr != NULL) {
+                free(clientData->originResolution->ai_addr);
+            }
+            free(clientData->originResolution);
+        }
+        clientData->originResolution = NULL;
+        clientData->resolution_from_getaddrinfo = false;
+    }
+}
 
 
+// Función auxiliar para crear addrinfo para IPs directas
+static bool create_direct_addrinfo(ClientData *clientData, resolver_parser *parser) {
+    // Limpiar resolución previa si existe
+    cleanup_previous_resolution(clientData);
+
+    if (parser->address_type == ATYP_IPV4) {
+        struct sockaddr_in* ipv4_addr = malloc(sizeof(struct sockaddr_in));
+        if (ipv4_addr == NULL) {
+            LOG_ERROR("create_direct_addrinfo: Error allocating memory for IPv4");
+            return false;
+        }
+
+        clientData->originResolution = calloc(1, sizeof(struct addrinfo));
+        if(clientData->originResolution == NULL) {
+            LOG_ERROR("create_direct_addrinfo: Error allocating memory for addrinfo IPv4");
+            free(ipv4_addr);
+            return false;
+        }
+
+        *ipv4_addr = (struct sockaddr_in){
+            .sin_family = AF_INET,
+            .sin_port = htons(parser->port),
+            .sin_addr = *(struct in_addr *)parser->ipv4_addr
+        };
+
+        *clientData->originResolution = (struct addrinfo){
+            .ai_family = AF_INET,
+            .ai_addrlen = sizeof(*ipv4_addr),
+            .ai_addr = (struct sockaddr *)ipv4_addr,
+            .ai_socktype = SOCK_STREAM,
+            .ai_protocol = IPPROTO_TCP
+        };
+
+        clientData->resolution_from_getaddrinfo = false;
+        return true;
+
+    } else if (parser->address_type == ATYP_IPV6) {
+        struct sockaddr_in6* ipv6_addr = malloc(sizeof(struct sockaddr_in6));
+        if (ipv6_addr == NULL) {
+            LOG_ERROR("create_direct_addrinfo: Error allocating memory for IPv6");
+            return false;
+        }
+
+        clientData->originResolution = calloc(1, sizeof(struct addrinfo));
+        if(clientData->originResolution == NULL) {
+            LOG_ERROR("create_direct_addrinfo: Error allocating memory for addrinfo IPv6");
+            free(ipv6_addr);
+            return false;
+        }
+
+        *ipv6_addr = (struct sockaddr_in6){
+            .sin6_family = AF_INET6,
+            .sin6_port = htons(parser->port),
+        };
+        memcpy(&ipv6_addr->sin6_addr, parser->ipv6_addr, 16);
+
+        *clientData->originResolution = (struct addrinfo){
+            .ai_family = AF_INET6,
+            .ai_addrlen = sizeof(*ipv6_addr),
+            .ai_addr = (struct sockaddr *)ipv6_addr,
+            .ai_socktype = SOCK_STREAM,
+            .ai_protocol = IPPROTO_TCP
+        };
+
+        clientData->resolution_from_getaddrinfo = false;
+        return true;
+    }
+
+    return false;
+}
 
 // Funciones para la máquina de estados
 
@@ -85,6 +169,11 @@ unsigned requestRead(struct selector_key *key) {
                 snprintf(clientData->target_host, sizeof(clientData->target_host), 
                         "%d.%d.%d.%d", parser->ipv4_addr[0], parser->ipv4_addr[1], 
                         parser->ipv4_addr[2], parser->ipv4_addr[3]);
+            } else if (parser->address_type == ATYP_IPV6) {
+                LOG_DEBUG("REQ_READ: Target IPv6");
+                // Convertir IPv6 a string para logging
+                inet_ntop(AF_INET6, parser->ipv6_addr, clientData->target_host, 
+                         sizeof(clientData->target_host));
             }
 
             // Por ahora solo soportamos CONNECT
@@ -96,8 +185,21 @@ unsigned requestRead(struct selector_key *key) {
                 return REQ_WRITE;
             }
 
-            LOG_DEBUG("REQ_READ: Advancing to ADDR_RESOLVE");
-            // Para CONNECT, necesitamos resolver la dirección
+            // Optimización: Para IPv4/IPv6 directas, saltear ADDR_RESOLVE
+            if (parser->address_type == ATYP_IPV4 || parser->address_type == ATYP_IPV6) {
+                LOG_DEBUG("REQ_READ: Direct IP address, skipping ADDR_RESOLVE and going to CONNECTING");
+                if (create_direct_addrinfo(clientData, parser)) {
+                    return CONNECTING;
+                }
+                LOG_ERROR("REQ_READ: Failed to create addrinfo for direct IP");
+                clientData->socks_status = 0x01; // General SOCKS server failure
+                sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
+                return REQ_WRITE;
+
+            }
+
+            LOG_DEBUG("REQ_READ: Domain name, advancing to ADDR_RESOLVE");
+            // Para dominios, necesitamos resolver con DNS
             return ADDR_RESOLVE;
 
         case REQUEST_PARSE_ERROR:
@@ -146,18 +248,7 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
     resolver_parser *parser = &clientData->client.reqParser;
 
     // Limpiar resolución previa si existe
-    if (clientData->originResolution != NULL) {
-        if (clientData->resolution_from_getaddrinfo) {
-            freeaddrinfo(clientData->originResolution);
-        } else {
-            if (clientData->originResolution->ai_addr != NULL) {
-                free(clientData->originResolution->ai_addr);
-            }
-            free(clientData->originResolution);
-        }
-        clientData->originResolution = NULL;
-        clientData->resolution_from_getaddrinfo = false;
-    }
+    cleanup_previous_resolution(clientData);
 
     if (parser->address_type == ATYP_DOMAIN) {
         LOG_DEBUG("ADDR_RESOLVE_INIT: Starting asynchronous DNS resolution");
