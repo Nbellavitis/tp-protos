@@ -132,13 +132,6 @@ unsigned requestRead(struct selector_key *key) {
     }
     buffer_write_adv(&clientData->clientBuffer, readCount);
 
-    // Log buffer contents for debugging
-    size_t nbytes;
-    uint8_t *ptr = buffer_read_ptr(&clientData->clientBuffer, &nbytes);
-    if (nbytes > 0) {
-        LOG_DEBUG("REQ_READ: Buffer contains %zu bytes", nbytes);
-    }
-
     LOG_DEBUG("REQ_READ: Parsing request...");
     request_parse result = resolverParse(parser, &clientData->clientBuffer);
 
@@ -152,7 +145,7 @@ unsigned requestRead(struct selector_key *key) {
                      parser->command, parser->address_type, htons(parser->port));
             
             // Capturar información del destino para logging de acceso
-            clientData->target_port = htons(parser->port);
+            clientData->target_port = htons(parser->port); // todo: chequear, puede que htons o shifteo lo este haciendo el parser
 
             if (parser->address_type == ATYP_DOMAIN) {
                 LOG_DEBUG("REQ_READ: Target domain: %.*s", parser->domain_length, parser->domain);
@@ -181,7 +174,12 @@ unsigned requestRead(struct selector_key *key) {
                 LOG_WARN("REQ_READ: Unsupported command (%d), sending error", parser->command);
                 clientData->socks_status = 0x07; // Command not supported
                 // Enviar error: Command not supported
-                sendRequestResponse(&clientData->originBuffer, 0x05, 0x07, ATYP_IPV4, parser->ipv4_addr, 0);
+                if (!sendRequestResponse(&clientData->originBuffer, 0x05, 0x07, ATYP_IPV4, parser->ipv4_addr, 0)) {
+                    return ERROR;
+                }
+                if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
+                    return ERROR;
+                }
                 return REQ_WRITE;
             }
 
@@ -189,6 +187,9 @@ unsigned requestRead(struct selector_key *key) {
             if (parser->address_type == ATYP_IPV4 || parser->address_type == ATYP_IPV6) {
                 LOG_DEBUG("REQ_READ: Direct IP address, skipping ADDR_RESOLVE and going to CONNECTING");
                 if (create_direct_addrinfo(clientData, parser)) {
+                    if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
+                        return ERROR;
+                    }
                     return CONNECTING;
                 }
                 LOG_ERROR("REQ_READ: Failed to create addrinfo for direct IP");
@@ -250,55 +251,51 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
     // Limpiar resolución previa si existe
     cleanup_previous_resolution(clientData);
 
-    if (parser->address_type == ATYP_DOMAIN) {
-        LOG_DEBUG("ADDR_RESOLVE_INIT: Starting asynchronous DNS resolution");
+    LOG_DEBUG("ADDR_RESOLVE_INIT: Starting asynchronous DNS resolution");
 
-        // Configurar estructura DNS
-        struct dns_request *dns_req = &clientData->dns_req;
-        snprintf(dns_req->port, sizeof(dns_req->port), "%u", (parser->port));
-        memset(&dns_req->hints, 0, sizeof(dns_req->hints));
+    // Configurar estructura DNS
+    struct dns_request *dns_req = &clientData->dns_req;
+    snprintf(dns_req->port, sizeof(dns_req->port), "%u", (parser->port));
+    memset(&dns_req->hints, 0, sizeof(dns_req->hints));
 
-        struct gaicb *reqs[] = { &dns_req->req };
-        dns_req->hints.ai_family = AF_UNSPEC;
-        dns_req->hints.ai_socktype = SOCK_STREAM;
-        dns_req->hints.ai_protocol = IPPROTO_TCP;
-        dns_req->req.ar_name = parser->domain;
-        dns_req->req.ar_service = dns_req->port;
-        dns_req->req.ar_request = &dns_req->hints;
-        dns_req->req.ar_result = NULL;
-        dns_req->clientData = clientData;
-        dns_req->selector = key->s;
-        dns_req->fd = key->fd;
+    struct gaicb *reqs[] = { &dns_req->req };
+    dns_req->hints.ai_family = AF_UNSPEC;
+    dns_req->hints.ai_socktype = SOCK_STREAM;
+    dns_req->hints.ai_protocol = IPPROTO_TCP;
+    dns_req->req.ar_name = parser->domain;
+    dns_req->req.ar_service = dns_req->port;
+    dns_req->req.ar_request = &dns_req->hints;
+    dns_req->req.ar_result = NULL;
+    dns_req->clientData = clientData;
+    dns_req->selector = key->s;
+    dns_req->fd = key->fd;
 
-        struct sigevent sev = {0};
-        sev.sigev_notify = SIGEV_THREAD;
-        sev.sigev_notify_function = dnsResolutionDone;
-        sev.sigev_value.sival_ptr = dns_req;
+    struct sigevent sev = {0};
+    sev.sigev_notify = SIGEV_THREAD;
+    sev.sigev_notify_function = dnsResolutionDone;
+    sev.sigev_value.sival_ptr = dns_req;
 
-        if (getaddrinfo_a(GAI_NOWAIT, reqs, 1, &sev) != 0) {
-            LOG_ERROR("ADDR_RESOLVE_INIT: Error starting DNS resolution");
-            sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-            selector_set_interest(key->s, key->fd, OP_WRITE);
-            return;
-        }
-
-        // Desactivar eventos hasta que termine la resolución DNS
-        clientData->dns_resolution_state = 1; // En progreso
-        if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
-            LOG_ERROR("ADDR_RESOLVE_INIT: Error disabling events");
+    if (getaddrinfo_a(GAI_NOWAIT, reqs, 1, &sev) != 0) {
+        LOG_ERROR("ADDR_RESOLVE_INIT: Error starting DNS resolution");
+        // sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
+        clientData->dns_resolution_state = -1;
+        if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
             closeConnection(key);
-            return;
         }
 
-    } else {
-        // Para IPv4/IPv6 directas: activar OP_WRITE para llamar addressResolveDone
-        LOG_DEBUG("ADDR_RESOLVE_INIT: Direct IP, activating OP_WRITE");
-        if(selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
-            LOG_ERROR("ADDR_RESOLVE_INIT: Error activating OP_WRITE");
-            closeConnection(key);
-            return;
-        }
+        return;
     }
+
+    // Desactivar eventos hasta que termine la resolución DNS
+    clientData->dns_resolution_state = 1; // En progreso
+    if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
+        LOG_ERROR("ADDR_RESOLVE_INIT: Error disabling events");
+        closeConnection(key);
+        return;
+    }
+
+
+
 }
 
 unsigned addressResolveDone(struct selector_key *key) {
@@ -307,26 +304,30 @@ unsigned addressResolveDone(struct selector_key *key) {
 
     LOG_DEBUG("ADDR_RESOLVE_DONE: Processing resolution");
 
+    // Como probamos, la única forma de llegar a este estado es con un ATYP_DOMAIN.
+    // Por lo tanto, toda la lógica puede centrarse en el resultado de la resolución DNS,
+    // que se comunica a través del flag `dns_resolution_state`.
+
     if (clientData->dns_resolution_state == 2) {
         // DNS completada exitosamente
         LOG_DEBUG("ADDR_RESOLVE_DONE: DNS resolved successfully");
-        clientData->dns_resolution_state = 0;
+        clientData->dns_resolution_state = 0; // Reseteamos el flag
         return CONNECTING;
-    } else if (clientData->dns_resolution_state == 1) {
-        // DNS aún en progreso
+
+    }
+    if (clientData->dns_resolution_state == 1) {
+        // DNS aún en progreso. Nos mantenemos en el estado.
         LOG_DEBUG("ADDR_RESOLVE_DONE: DNS still in progress");
         return ADDR_RESOLVE;
-    } else if (clientData->dns_resolution_state == -1) {
-        // DNS falló
-        LOG_ERROR("ADDR_RESOLVE_DONE: DNS failed");
-        clientData->dns_resolution_state = 0;
-        sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-        return REQ_WRITE;
-    }
 
-    LOG_ERROR("ADDR_RESOLVE_DONE: Unsupported address type");
-    sendRequestResponse(&clientData->originBuffer, 0x05, 0x04, ATYP_IPV4, parser->ipv4_addr, 0);
+    }
+    // Cubre el fallo del DNS (estado -1) y el fallo en init (estado 0)
+    // DNS falló o hubo un error inmediato al iniciar la resolución.
+    LOG_ERROR("ADDR_RESOLVE_DONE: DNS failed or init error");
+    clientData->dns_resolution_state = 0; // Reseteamos el flag
+    sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0); // General SOCKS server failure
     return REQ_WRITE;
+
 }
 
 void requestConnectingInit(const unsigned state, struct selector_key *key) {
