@@ -435,6 +435,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
             }
             case CMD_AUTH: {
                 send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid operation: already authenticated");
+                break;
             };
             default:
                 send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Unknown command");
