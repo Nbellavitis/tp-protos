@@ -248,18 +248,7 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
     resolver_parser *parser = &clientData->client.reqParser;
 
     // Limpiar resolución previa si existe
-    if (clientData->originResolution != NULL) {
-        if (clientData->resolution_from_getaddrinfo) {
-            freeaddrinfo(clientData->originResolution);
-        } else {
-            if (clientData->originResolution->ai_addr != NULL) {
-                free(clientData->originResolution->ai_addr);
-            }
-            free(clientData->originResolution);
-        }
-        clientData->originResolution = NULL;
-        clientData->resolution_from_getaddrinfo = false;
-    }
+    cleanup_previous_resolution(clientData);
 
     if (parser->address_type == ATYP_DOMAIN) {
         LOG_DEBUG("ADDR_RESOLVE_INIT: Starting asynchronous DNS resolution");
