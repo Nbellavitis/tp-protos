@@ -20,8 +20,8 @@ extern bool delete_user(const char* username);
 extern bool change_user_password(const char* username, const char* new_password);
 
 // Credenciales hardcodeadas del admin
-static const char* ADMIN_USERNAME = "admin";
-static const char* ADMIN_PASSWORD = "secret123";
+static char* ADMIN_USERNAME = ADMIN_DEFAULT_USER;
+static char* ADMIN_PASSWORD = ADMIN_DEFAULT_PASSWORD;
 
 // Handlers del selector
 static void management_read(struct selector_key *key);
@@ -49,6 +49,15 @@ static const struct state_definition management_states[] = {
         {.state = MGMT_CLOSED, .on_arrival = mgmt_closed_arrival, .on_read_ready = mgmt_dummy_read_handler},
         {.state = MGMT_ERROR, .on_arrival = mgmt_error_arrival, .on_read_ready = mgmt_dummy_read_handler}
 };
+
+void mgtm_init_admin() {
+    const char *env_user = getenv(ADMIN_USER_ENV_VAR);
+    const char *env_pass = getenv(ADMIN_PASSWORD_ENV_VAR);
+
+    ADMIN_USERNAME = (env_user != NULL) ? env_user : ADMIN_DEFAULT_USER;
+    ADMIN_PASSWORD = (env_pass != NULL) ? env_pass : ADMIN_DEFAULT_PASSWORD;
+}
+
 
 void management_passive_accept(struct selector_key* key) {
     struct sockaddr_storage client_addr;
@@ -365,7 +374,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 }
 
                 if (num_users == 0) {
-                    strcat(users_response, "(No users configured - using default admin:password123)");
+                    strcat(users_response, "No users configured");
                 }
 
                 send_management_response(&mgmt_data->response_buffer, STATUS_OK, users_response);
@@ -433,6 +442,10 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 }
                 break;
             }
+            case CMD_AUTH: {
+                send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid operation: already authenticated");
+                break;
+            };
             default:
                 send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Unknown command");
                 break;

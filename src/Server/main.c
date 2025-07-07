@@ -230,6 +230,7 @@ int main (int argc,char * argv[]){
     LOG_INFO("SOCKS5 Proxy Server listening on %s:%d", args.socks_addr, args.socks_port);
     
     // Configurar socket de management
+
     struct sockaddr_storage mgmtAddr;
     memset(&mgmtAddr, 0, sizeof(mgmtAddr));
     socklen_t mgmtAddrLen = sizeof(mgmtAddr);
@@ -269,7 +270,7 @@ int main (int argc,char * argv[]){
     if (ss != SELECTOR_SUCCESS) {
         return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
     }
-    
+    mgtm_init_admin();
     LOG_INFO("Management Server listening on %s:%d", args.mng_addr, args.mng_port);
     
     while(!killed){

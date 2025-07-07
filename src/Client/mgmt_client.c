@@ -278,6 +278,7 @@ void mgmt_disconnect(mgmt_client_t *client) {
 }
 
 // Menú interactivo
+/*
 void interactive_menu(mgmt_client_t *client) {
     char input[512];
     char username[256], password[256];
@@ -361,7 +362,96 @@ void interactive_menu(mgmt_client_t *client) {
                 break;
         }
     }
+}*/
+
+void interactive_menu(mgmt_client_t *client) {
+    char input[512];
+    char username[256], password[256];
+
+    /* ---------- AUTENTICACIÓN OBLIGATORIA ---------- */
+    while (!client->authenticated) {
+        printf("\nPLEASE AUTHENTICATE:\n");
+        printf("Username: ");
+        if (!fgets(username, sizeof(username), stdin)) {
+            return;
+        }
+        username[strcspn(username, "\n")] = 0;
+
+        printf("Password: ");
+        if (!fgets(password, sizeof(password), stdin)) {
+            return;
+        }
+        password[strcspn(password, "\n")] = 0;
+
+        if (mgmt_authenticate(client, username, password) != 0) {
+            printf("Invalid credentials, try again.\n");
+        }
+    }
+
+    /* ---------- MENÚ DE COMANDOS ---------- */
+    while (1) {
+        printf("\n=== Management Client ===\n");
+        printf("1. Get Statistics\n");
+        printf("2. List Users\n");
+        printf("3. Add User\n");
+        printf("4. Delete User\n");
+        printf("5. Change User Password\n");
+        printf("6. Disconnect and Exit\n");
+        printf("Choice: ");
+
+        if (!fgets(input, sizeof(input), stdin)) {
+            break;
+        }
+
+        int choice = atoi(input);
+
+        switch (choice) {
+            case 1:
+                mgmt_get_stats(client);
+                break;
+            case 2:
+                mgmt_list_users(client);
+                break;
+            case 3:
+                printf("New username: ");
+                if (fgets(username, sizeof(username), stdin)) {
+                    username[strcspn(username, "\n")] = 0;
+                }
+                printf("New password: ");
+                if (fgets(password, sizeof(password), stdin)) {
+                    password[strcspn(password, "\n")] = 0;
+                }
+                mgmt_add_user(client, username, password);
+                break;
+            case 4:
+                printf("Username to delete: ");
+                if (fgets(username, sizeof(username), stdin)) {
+                    username[strcspn(username, "\n")] = 0;
+                }
+                mgmt_delete_user(client, username);
+                break;
+            case 5:
+                printf("Username to change password: ");
+                if (fgets(username, sizeof(username), stdin)) {
+                    username[strcspn(username, "\n")] = 0;
+                }
+                printf("New password: ");
+                if (fgets(password, sizeof(password), stdin)) {
+                    password[strcspn(password, "\n")] = 0;
+                }
+                mgmt_change_password(client, username, password);
+                break;
+            case 6:
+                printf("Disconnecting...\n");
+                return;
+            default:
+                printf("Invalid choice\n");
+                break;
+        }
+    }
 }
+
+
 
 int main(int argc, char *argv[]) {
     mgmt_client_t client = {0};
