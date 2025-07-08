@@ -24,6 +24,8 @@ unsigned startConnection(struct selector_key * key);
 unsigned preSetRequestResponse(struct selector_key * key,int errorStatus);
 // Funciones para registrar sockets en el selector
 void dnsResolutionDone(union sigval sv);
+static unsigned handle_request_error(int error, struct selector_key *key);
+
 
 static void cleanup_previous_resolution(ClientData *clientData) {
     if (clientData->originResolution != NULL) {
@@ -39,6 +41,7 @@ static void cleanup_previous_resolution(ClientData *clientData) {
         clientData->resolution_from_getaddrinfo = false;
     }
 }
+
 
 
 // Función auxiliar para crear addrinfo para IPs directas
@@ -362,7 +365,8 @@ unsigned requestConnecting(struct selector_key *key) {
             // Si no hay más direcciones o la resolución es manual, liberar memoria y responder error
             close(clientData->originFd);
 
-            if (clientData->resolution_from_getaddrinfo) {   //todo checkear si hace falta eso
+            cleanup_previous_resolution(clientData);         // todo revisar. no es exactamente igual pero creo que si.
+           /* if (clientData->resolution_from_getaddrinfo) {   //todo checkear si hace falta eso
                 freeaddrinfo(clientData->dns_req.req.ar_result);
                 clientData->originResolution = NULL;
                 clientData->resolution_from_getaddrinfo = false;
@@ -374,7 +378,10 @@ unsigned requestConnecting(struct selector_key *key) {
                     free(clientData->originResolution);
                     clientData->originResolution = NULL;
                 }
-            }
+            }*/
+
+
+            /*
             switch(so_error) {
                 case ECONNREFUSED:
                     LOG_ERROR("requestConnecting: Connection refused");
@@ -394,7 +401,9 @@ unsigned requestConnecting(struct selector_key *key) {
                 default:
                     LOG_ERROR("requestConnecting: General SOCKS server failure");
                     return preSetRequestResponse(key, GENERAL_FAILURE);
-            }
+            }*/
+            return handle_request_error(so_error, key);
+
         }
 
         LOG_DEBUG("requestConnecting: Successful connection");
@@ -545,7 +554,8 @@ unsigned startConnection(struct selector_key * key) {
             return startConnection(key);
         }
 
-        switch (errno) {
+        return handle_request_error(errno, key);
+       /* switch (errno) {
             case ECONNREFUSED:
                 LOG_ERROR("CONNECTING_INIT: Connection refused");
                 return preSetRequestResponse(key, CONNECTION_REFUSED);
@@ -564,12 +574,38 @@ unsigned startConnection(struct selector_key * key) {
             default:
                 LOG_ERROR("CONNECTING_INIT: General SOCKS server failure");
                 return preSetRequestResponse(key, GENERAL_FAILURE);
-        }
+        }*/
     }
 
     LOG_DEBUG("CONNECTING_INIT: Waiting for connection to complete...");
     return CONNECTING;
 }
+
+
+
+static unsigned handle_request_error(int error, struct selector_key *key) {
+    switch (error) {
+        case ECONNREFUSED:
+            LOG_ERROR("requestConnecting: Connection refused");
+            return preSetRequestResponse(key, CONNECTION_REFUSED);
+        case ENETUNREACH:
+            LOG_ERROR("requestConnecting: Network unreachable");
+            return preSetRequestResponse(key, NETWORK_UNREACHABLE);
+        case EHOSTUNREACH:
+            LOG_ERROR("requestConnecting: Host unreachable");
+            return preSetRequestResponse(key, HOST_UNREACHABLE);
+        case ETIMEDOUT:
+            LOG_ERROR("requestConnecting: TTL expired / Timeout");
+            return preSetRequestResponse(key, TTL_EXPIRED);
+        case EACCES:
+            LOG_ERROR("requestConnecting: Connection not allowed");
+            return preSetRequestResponse(key, NOT_ALLOWED);
+        default:
+            LOG_ERROR("requestConnecting: General SOCKS server failure");
+            return preSetRequestResponse(key, GENERAL_FAILURE);
+    }
+}
+
 
 unsigned preSetRequestResponse(struct selector_key * key,int errorStatus){
     ClientData *clientData = (ClientData *)key->data;
