@@ -13,7 +13,7 @@
 #define LOG_LEVEL_DEBUG 3
 
 #ifndef LOG_LEVEL
-#define LOG_LEVEL LOG_LEVEL_INFO
+#define LOG_LEVEL LOG_LEVEL_DEBUG
 #endif
 
 #define _LOG_PRINT(stream, tag, fmt, ...) \

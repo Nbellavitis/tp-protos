@@ -21,7 +21,7 @@ extern unsigned stm_handler_write(struct state_machine *stm, struct selector_key
 extern unsigned stm_handler_block(struct state_machine *stm, struct selector_key *key);
 extern void stm_handler_close(struct state_machine *stm, struct selector_key *key);
 unsigned startConnection(struct selector_key * key);
-
+unsigned preSetRequestResponse(struct selector_key * key,int errorStatus);
 // Funciones para registrar sockets en el selector
 void dnsResolutionDone(union sigval sv);
 
@@ -175,13 +175,7 @@ unsigned requestRead(struct selector_key *key) {
                 LOG_WARN("REQ_READ: Unsupported command (%d), sending error", parser->command);
                 clientData->socks_status = 0x07; // Command not supported
                 // Enviar error: Command not supported
-                if (!prepareRequestResponse(&clientData->originBuffer, 0x05, 0x07, ATYP_IPV4, parser->ipv4_addr, 0)) {
-                    return ERROR;
-                }
-                if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
-                    return ERROR;
-                }
-                return REQ_WRITE;
+                return preSetRequestResponse(key, COMMAND_NOT_SUPPORTED); // Command not supported
             }
 
             // Optimización: Para IPv4/IPv6 directas, saltear ADDR_RESOLVE
@@ -195,8 +189,7 @@ unsigned requestRead(struct selector_key *key) {
                 }
                 LOG_ERROR("REQ_READ: Failed to create addrinfo for direct IP");
                 clientData->socks_status = 0x01; // General SOCKS server failure
-                prepareRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-                return REQ_WRITE;
+                return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
 
             }
 
@@ -208,8 +201,7 @@ unsigned requestRead(struct selector_key *key) {
             LOG_ERROR("REQ_READ: Error parsing request");
             clientData->socks_status = 0x01; // General SOCKS server failure
             // Enviar error: General SOCKS server failure
-            prepareRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-            return REQ_WRITE;
+            return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
     }
 
     return ERROR;
@@ -326,95 +318,11 @@ unsigned addressResolveDone(struct selector_key *key) {
     // DNS falló o hubo un error inmediato al iniciar la resolución.
     LOG_ERROR("ADDR_RESOLVE_DONE: DNS failed or init error");
     clientData->dns_resolution_state = 0; // Reseteamos el flag
-    prepareRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0); // General SOCKS server failure
-    return REQ_WRITE;
+    return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
 
 }
 
-void requestConnectingInit(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("CONNECTING_INIT: Entering requestConnectingInit");
-    ClientData *clientData = (ClientData *)key->data;
-    resolver_parser *parser = &clientData->client.reqParser;
 
-    LOG_DEBUG("CONNECTING_INIT: Starting connection to target");
-
-    // Crear socket para conectar al destino
-    struct addrinfo *ai = clientData->originResolution;
-    clientData->originFd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-    if (clientData->originFd < 0) {
-        LOG_ERROR("CONNECTING_INIT: ai->ai_family: %d, ai->ai_socktype: %d, ai->ai_protocol: %d",
-               ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-        LOG_ERROR("CONNECTING_INIT: Error creating socket: %s", strerror(errno));
-        prepareRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-        return;
-    }
-    if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
-        LOG_ERROR("CONNECTING_INIT: Error disabling client events");
-        return;
-    }
-    // IMPORTANTE: Hacer el socket no bloqueante
-    selector_fd_set_nio(clientData->originFd);
-    LOG_DEBUG("CONNECTING_INIT: Socket created (fd=%d), attempting to connect", clientData->originFd);
-
-    // Intentar conectar
-    int connect_result = connect(clientData->originFd, ai->ai_addr, ai->ai_addrlen);
-
-    if (connect_result == 0) {
-        // Conexión inmediata (poco común pero posible)
-        LOG_DEBUG("CONNECTING_INIT: Connection completed immediately");
-        // Registrar para poder manejar el estado exitoso
-        if (selector_register(key->s, clientData->originFd, getSocksv5Handler(), OP_WRITE, clientData)) {
-            LOG_ERROR("CONNECTING_INIT: Error registering origin socket");
-            close(clientData->originFd);
-            clientData->originFd = -1;
-            return;
-        }
-        // Marcar que la conexión está lista
-        selector_set_interest(key->s, key->fd, OP_WRITE);
-        clientData->connection_ready = 1;
-
-    } else if (errno == EINPROGRESS) {
-        // Conexión en progreso - esto es lo normal
-        LOG_DEBUG("CONNECTING_INIT: Connection in progress (EINPROGRESS)");
-
-        // Registrar el socket para detectar cuando esté listo para escritura
-        if (selector_register(key->s, clientData->originFd, getSocksv5Handler(), OP_WRITE, clientData)) {
-            LOG_ERROR("CONNECTING_INIT: Error registering origin socket");
-            close(clientData->originFd);
-            clientData->originFd = -1;
-            return;
-        }
-        // La conexión aún no está lista
-        clientData->connection_ready = 0;
-
-    } else {
-        // Error inmediato en connect()
-        LOG_ERROR("CONNECTING_INIT: Error connecting: %s", strerror(errno));
-        close(clientData->originFd);
-
-        // Intentar siguiente dirección si existe
-        if (clientData->originResolution->ai_next != NULL) {
-            struct addrinfo* next = clientData->originResolution->ai_next;
-            if (clientData->resolution_from_getaddrinfo) {
-                freeaddrinfo(clientData->originResolution);
-            } else {
-                if (clientData->originResolution->ai_addr != NULL) {
-                    free(clientData->originResolution->ai_addr);
-                }
-                free(clientData->originResolution);
-            }
-            clientData->originResolution = next;
-            requestConnectingInit(state, key);
-            return;
-        }
-        clientData->originFd = -1;
-        prepareRequestResponse(&clientData->originBuffer, 0x05, 0x05, ATYP_IPV4, parser->ipv4_addr, 0);
-        return;
-    }
-
-    // No configurar el cliente para escritura todavía - esperamos que la conexión termine
-    LOG_DEBUG("CONNECTING_INIT: Waiting for connection to complete...");
-}
 
 unsigned requestConnecting(struct selector_key *key) {
     LOG_DEBUG("requestConnecting: Checking connection status");
@@ -437,15 +345,14 @@ unsigned requestConnecting(struct selector_key *key) {
 
         if (getsockopt(clientData->originFd, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
             LOG_ERROR("requestConnecting: Error in getsockopt: %s", strerror(errno));
-            prepareRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-            return REQ_WRITE;
+            return preSetRequestResponse(key, GENERAL_FAILURE);
         }
         LOG_DEBUG("requestConnecting: getsockopt SO_ERROR = %d (%s)", so_error, strerror(so_error));
 
         if (so_error != 0) {
             printf("[DEBUG] requestConnecting: Error en conexión: %s\n", strerror(so_error));
 
-            // Intentar siguiente dirección si existe y la resolución vino de getaddrinfo_a
+
             if (clientData->resolution_from_getaddrinfo && clientData->originResolution->ai_next != NULL) {
                 close(clientData->originFd);
                 clientData->originResolution = clientData->originResolution->ai_next;
@@ -455,7 +362,7 @@ unsigned requestConnecting(struct selector_key *key) {
             // Si no hay más direcciones o la resolución es manual, liberar memoria y responder error
             close(clientData->originFd);
 
-            if (clientData->resolution_from_getaddrinfo) {
+            if (clientData->resolution_from_getaddrinfo) {   //todo checkear si hace falta eso
                 freeaddrinfo(clientData->dns_req.req.ar_result);
                 clientData->originResolution = NULL;
                 clientData->resolution_from_getaddrinfo = false;
@@ -468,9 +375,26 @@ unsigned requestConnecting(struct selector_key *key) {
                     clientData->originResolution = NULL;
                 }
             }
-
-            prepareRequestResponse(&clientData->originBuffer, 0x05, 0x05, ATYP_IPV4, parser->ipv4_addr, 0);
-            return REQ_WRITE;
+            switch(so_error) {
+                case ECONNREFUSED:
+                    LOG_ERROR("requestConnecting: Connection refused");
+                    return preSetRequestResponse(key, CONNECTION_REFUSED);
+                case ENETUNREACH:
+                    LOG_ERROR("requestConnecting: Network unreachable");
+                    return preSetRequestResponse(key, NETWORK_UNREACHABLE);
+                case EHOSTUNREACH:
+                    LOG_ERROR("requestConnecting: Host unreachable");
+                    return preSetRequestResponse(key, HOST_UNREACHABLE);
+                case ETIMEDOUT:
+                    LOG_ERROR("requestConnecting: TTL expired / Timeout");
+                    return preSetRequestResponse(key, TTL_EXPIRED);
+                case EACCES:
+                    LOG_ERROR("requestConnecting: Connection not allowed");
+                    return preSetRequestResponse(key, NOT_ALLOWED);
+                default:
+                    LOG_ERROR("requestConnecting: General SOCKS server failure");
+                    return preSetRequestResponse(key, GENERAL_FAILURE);
+            }
         }
 
         LOG_DEBUG("requestConnecting: Successful connection");
@@ -495,10 +419,8 @@ unsigned requestConnecting(struct selector_key *key) {
 
     // Preparar respuesta de éxito
     LOG_DEBUG("requestConnecting: Preparing success response");
-    prepareRequestResponse(&clientData->originBuffer, 0x05, 0x00, ATYP_IPV4, parser->ipv4_addr, 0);
-
     // Configurar cliente para escribir la respuesta
-    if(selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
+    if(selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS || !prepareRequestResponse(&clientData->originBuffer, 0x05, SUCCESS, ATYP_IPV4, parser->ipv4_addr, 0)) {
         LOG_ERROR("requestConnecting: Error configuring client for writing");
         return ERROR;
     }
@@ -561,67 +483,54 @@ void dnsResolutionDone(union sigval sv) {
     }
 
 unsigned startConnection(struct selector_key * key) {
-    LOG_DEBUG("CONNECTING_INIT: Entering requestConnectingInit");
+    LOG_DEBUG("CONNECTING_INIT: Entering startConnection");
     ClientData *clientData = (ClientData *)key->data;
     resolver_parser *parser = &clientData->client.reqParser;
 
     LOG_DEBUG("CONNECTING_INIT: Starting connection to target");
 
-    // Crear socket para conectar al destino
     struct addrinfo *ai = clientData->originResolution;
     clientData->originFd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
     if (clientData->originFd < 0) {
         LOG_ERROR("CONNECTING_INIT: ai->ai_family: %d, ai->ai_socktype: %d, ai->ai_protocol: %d",
-               ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+                  ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         LOG_ERROR("CONNECTING_INIT: Error creating socket: %s", strerror(errno));
-        prepareRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-        return REQ_WRITE;
+        return preSetRequestResponse(key, GENERAL_FAILURE);
     }
     if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
         LOG_ERROR("CONNECTING_INIT: Error disabling client events");
+        close(clientData->originFd);
         return ERROR;
     }
-    // IMPORTANTE: Hacer el socket no bloqueante
+
     selector_fd_set_nio(clientData->originFd);
     LOG_DEBUG("CONNECTING_INIT: Socket created (fd=%d), attempting to connect", clientData->originFd);
 
-    // Intentar conectar
     int connect_result = connect(clientData->originFd, ai->ai_addr, ai->ai_addrlen);
 
     if (connect_result == 0) {
-        // Conexión inmediata (poco común pero posible)
         LOG_DEBUG("CONNECTING_INIT: Connection completed immediately");
-        // Registrar para poder manejar el estado exitoso
         if (selector_register(key->s, clientData->originFd, getSocksv5Handler(), OP_WRITE, clientData)) {
-            LOG_ERROR("CONNECTING_INIT: Error registering origin socket");
+            LOG_ERROR("CONNECTING_INIT: Error registering origin socket (immediate)");
             close(clientData->originFd);
-            clientData->originFd = -1;
             return ERROR;
         }
-        // Marcar que la conexión está lista
         selector_set_interest(key->s, key->fd, OP_WRITE);
         clientData->connection_ready = 1;
 
     } else if (errno == EINPROGRESS) {
-        // Conexión en progreso - esto es lo normal
         LOG_DEBUG("CONNECTING_INIT: Connection in progress (EINPROGRESS)");
 
-        // Registrar el socket para detectar cuando esté listo para escritura
         if (selector_register(key->s, clientData->originFd, getSocksv5Handler(), OP_WRITE, clientData)) {
-            LOG_ERROR("CONNECTING_INIT: Error registering origin socket");
+            LOG_ERROR("CONNECTING_INIT: Error registering origin socket (in progress)");
             close(clientData->originFd);
-            clientData->originFd = -1;
             return ERROR;
         }
-        // La conexión aún no está lista
         clientData->connection_ready = 0;
 
     } else {
-        // Error inmediato en connect()
         LOG_ERROR("CONNECTING_INIT: Error connecting: %s", strerror(errno));
         close(clientData->originFd);
-
-        // Intentar siguiente dirección si existe
         if (clientData->originResolution->ai_next != NULL) {
             struct addrinfo* next = clientData->originResolution->ai_next;
             if (clientData->resolution_from_getaddrinfo) {
@@ -635,12 +544,39 @@ unsigned startConnection(struct selector_key * key) {
             clientData->originResolution = next;
             return startConnection(key);
         }
-        clientData->originFd = -1;
-        prepareRequestResponse(&clientData->originBuffer, 0x05, 0x05, ATYP_IPV4, parser->ipv4_addr, 0);
-        return REQ_WRITE;
+
+        switch (errno) {
+            case ECONNREFUSED:
+                LOG_ERROR("CONNECTING_INIT: Connection refused");
+                return preSetRequestResponse(key, CONNECTION_REFUSED);
+            case ENETUNREACH:
+                LOG_ERROR("CONNECTING_INIT: Network unreachable");
+                return preSetRequestResponse(key, NETWORK_UNREACHABLE);
+            case EHOSTUNREACH:
+                LOG_ERROR("CONNECTING_INIT: Host unreachable");
+                return preSetRequestResponse(key, HOST_UNREACHABLE);
+            case ETIMEDOUT:
+                LOG_ERROR("CONNECTING_INIT: TTL expired / Timeout");
+                return preSetRequestResponse(key, TTL_EXPIRED);
+            case EACCES:
+                LOG_ERROR("CONNECTING_INIT: Connection not allowed");
+                return preSetRequestResponse(key, NOT_ALLOWED);
+            default:
+                LOG_ERROR("CONNECTING_INIT: General SOCKS server failure");
+                return preSetRequestResponse(key, GENERAL_FAILURE);
+        }
     }
 
-    // No configurar el cliente para escritura todavía - esperamos que la conexión termine
     LOG_DEBUG("CONNECTING_INIT: Waiting for connection to complete...");
     return CONNECTING;
+}
+
+unsigned preSetRequestResponse(struct selector_key * key,int errorStatus){
+    ClientData *clientData = (ClientData *)key->data;
+    if(!prepareRequestResponse(&clientData->originBuffer, 0x05, errorStatus, ATYP_IPV4, clientData->client.reqParser.ipv4_addr, 0) ||
+            selector_set_interest(key->s,clientData->clientFd,OP_WRITE) != SELECTOR_SUCCESS) {
+        LOG_ERROR("preSetRequestResponse: Error preparing request response");
+        return ERROR;
+    }
+    return REQ_WRITE;
 }
