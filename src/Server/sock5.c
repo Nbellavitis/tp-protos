@@ -135,6 +135,11 @@ static void socksv5Write(struct selector_key *key) {
 }
 static void socksv5Close(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
+
+    if (clientData->unregistering_origin) {
+        return;
+    }
+
     stm_handler_close(&clientData->stm, key);
     closeConnection(key);
 }

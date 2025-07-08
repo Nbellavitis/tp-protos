@@ -66,6 +66,8 @@ typedef struct ClientData {
     char target_host[256];       // Host de destino
     int target_port;             // Puerto de destino
     uint8_t socks_status;        // Status code SOCKS5
+
+    bool unregistering_origin;
 }ClientData;
 
 enum socks5State {

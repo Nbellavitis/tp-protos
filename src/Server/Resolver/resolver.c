@@ -356,7 +356,10 @@ unsigned requestConnecting(struct selector_key *key) {
         if (so_error != 0) {
             printf("[DEBUG] requestConnecting: Error en conexión: %s\n", strerror(so_error));
 
+            //selector_unregister_fd(key->s, clientData->originFd);
+            clientData->unregistering_origin = true;
             selector_unregister_fd(key->s, clientData->originFd);
+            clientData->unregistering_origin = false;
             close(clientData->originFd);
 
             if (clientData->resolution_from_getaddrinfo && clientData->originResolution->ai_next != NULL) {
@@ -504,8 +507,9 @@ unsigned startConnection(struct selector_key * key) {
 
     } else {
         LOG_ERROR("CONNECTING_INIT: Error connecting: %s", strerror(errno));
-
+        clientData->unregistering_origin = true;
         selector_unregister_fd(key->s, clientData->originFd);
+        clientData->unregistering_origin = false;
         close(clientData->originFd);
 
         if (clientData->originResolution->ai_next != NULL) {
