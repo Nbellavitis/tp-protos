@@ -146,10 +146,10 @@ unsigned requestRead(struct selector_key *key) {
 
         case REQUEST_PARSE_OK:
             LOG_DEBUG("REQ_READ: Request parsed successfully - Command: %d, AddressType: %d, Port: %d", 
-                     parser->command, parser->address_type, htons(parser->port));
+                     parser->command, parser->address_type, parser->port);
             
             // Capturar información del destino para logging de acceso
-            clientData->target_port = htons(parser->port); // todo: chequear, puede que htons o shifteo lo este haciendo el parser
+            clientData->target_port = parser->port;
 
             if (parser->address_type == ATYP_DOMAIN) {
                 LOG_DEBUG("REQ_READ: Target domain: %.*s", parser->domain_length, parser->domain);
