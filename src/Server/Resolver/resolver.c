@@ -352,54 +352,23 @@ unsigned requestConnecting(struct selector_key *key) {
         }
         LOG_DEBUG("requestConnecting: getsockopt SO_ERROR = %d (%s)", so_error, strerror(so_error));
 
+
         if (so_error != 0) {
             printf("[DEBUG] requestConnecting: Error en conexión: %s\n", strerror(so_error));
 
+            selector_unregister_fd(key->s, clientData->originFd);
+            close(clientData->originFd);
 
             if (clientData->resolution_from_getaddrinfo && clientData->originResolution->ai_next != NULL) {
-                close(clientData->originFd);
                 clientData->originResolution = clientData->originResolution->ai_next;
                 return startConnection(key);
             }
 
             // Si no hay más direcciones o la resolución es manual, liberar memoria y responder error
-            close(clientData->originFd);
 
-            cleanup_previous_resolution(clientData);         // todo revisar. no es exactamente igual pero creo que si.
-           /* if (clientData->resolution_from_getaddrinfo) {   //todo checkear si hace falta eso
-                freeaddrinfo(clientData->dns_req.req.ar_result);
-                clientData->originResolution = NULL;
-                clientData->resolution_from_getaddrinfo = false;
-            } else {
-                if (clientData->originResolution != NULL) {
-                    if (clientData->originResolution->ai_addr != NULL) {
-                        free(clientData->originResolution->ai_addr);
-                    }
-                    free(clientData->originResolution);
-                    clientData->originResolution = NULL;
-                }
-            }*/
-            /*
-            switch(so_error) {
-                case ECONNREFUSED:
-                    LOG_ERROR("requestConnecting: Connection refused");
-                    return preSetRequestResponse(key, CONNECTION_REFUSED);
-                case ENETUNREACH:
-                    LOG_ERROR("requestConnecting: Network unreachable");
-                    return preSetRequestResponse(key, NETWORK_UNREACHABLE);
-                case EHOSTUNREACH:
-                    LOG_ERROR("requestConnecting: Host unreachable");
-                    return preSetRequestResponse(key, HOST_UNREACHABLE);
-                case ETIMEDOUT:
-                    LOG_ERROR("requestConnecting: TTL expired / Timeout");
-                    return preSetRequestResponse(key, TTL_EXPIRED);
-                case EACCES:
-                    LOG_ERROR("requestConnecting: Connection not allowed");
-                    return preSetRequestResponse(key, NOT_ALLOWED);
-                default:
-                    LOG_ERROR("requestConnecting: General SOCKS server failure");
-                    return preSetRequestResponse(key, GENERAL_FAILURE);
-            }*/
+//            selector_unregister_fd(key->s, clientData->originFd);
+//            close(clientData->originFd);
+
             return handle_request_error(so_error, key);
 
         }
@@ -465,9 +434,7 @@ unsigned requestConnecting(struct selector_key *key) {
 void dnsResolutionDone(union sigval sv) {
     struct dns_request *dns_req = sv.sival_ptr;
     ClientData *clientData = (ClientData *)dns_req->clientData;
-    
-    //SEM_DOWN  // Proteger acceso a dns_resolution_state y clientData
-    
+
     int ret = gai_error(&dns_req->req);
     if (ret != 0) {
         LOG_ERROR("DNS resolution error: %s", gai_strerror(ret));
@@ -537,42 +504,17 @@ unsigned startConnection(struct selector_key * key) {
 
     } else {
         LOG_ERROR("CONNECTING_INIT: Error connecting: %s", strerror(errno));
+
+        selector_unregister_fd(key->s, clientData->originFd);
         close(clientData->originFd);
+
         if (clientData->originResolution->ai_next != NULL) {
             struct addrinfo* next = clientData->originResolution->ai_next;
-            if (clientData->resolution_from_getaddrinfo) {
-                freeaddrinfo(clientData->originResolution);
-            } else {
-                if (clientData->originResolution->ai_addr != NULL) {
-                    free(clientData->originResolution->ai_addr);
-                }
-                free(clientData->originResolution);
-            }
             clientData->originResolution = next;
             return startConnection(key);
         }
 
         return handle_request_error(errno, key);
-       /* switch (errno) {
-            case ECONNREFUSED:
-                LOG_ERROR("CONNECTING_INIT: Connection refused");
-                return preSetRequestResponse(key, CONNECTION_REFUSED);
-            case ENETUNREACH:
-                LOG_ERROR("CONNECTING_INIT: Network unreachable");
-                return preSetRequestResponse(key, NETWORK_UNREACHABLE);
-            case EHOSTUNREACH:
-                LOG_ERROR("CONNECTING_INIT: Host unreachable");
-                return preSetRequestResponse(key, HOST_UNREACHABLE);
-            case ETIMEDOUT:
-                LOG_ERROR("CONNECTING_INIT: TTL expired / Timeout");
-                return preSetRequestResponse(key, TTL_EXPIRED);
-            case EACCES:
-                LOG_ERROR("CONNECTING_INIT: Connection not allowed");
-                return preSetRequestResponse(key, NOT_ALLOWED);
-            default:
-                LOG_ERROR("CONNECTING_INIT: General SOCKS server failure");
-                return preSetRequestResponse(key, GENERAL_FAILURE);
-        }*/
     }
 
     LOG_DEBUG("CONNECTING_INIT: Waiting for connection to complete...");
@@ -607,8 +549,7 @@ static unsigned handle_request_error(int error, struct selector_key *key) {
 
 unsigned preSetRequestResponse(struct selector_key * key,int errorStatus){
     ClientData *clientData = (ClientData *)key->data;
-    if(!prepareRequestResponse(&clientData->originBuffer, 0x05, errorStatus, ATYP_IPV4, clientData->client.reqParser.ipv4_addr, 0) ||
-            selector_set_interest(key->s,clientData->clientFd,OP_WRITE) != SELECTOR_SUCCESS) {
+    if(!prepareRequestResponse(&clientData->originBuffer, 0x05, errorStatus, ATYP_IPV4, clientData->client.reqParser.ipv4_addr, 0) || selector_set_interest(key->s,clientData->clientFd,OP_WRITE) != SELECTOR_SUCCESS) {
         LOG_ERROR("preSetRequestResponse: Error preparing request response");
         return ERROR;
     }
