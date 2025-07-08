@@ -58,6 +58,7 @@ typedef struct ClientData {
     struct buffer originBuffer;
     uint8_t inClientBuffer[BUFFER_SIZE];
     uint8_t inOriginBuffer[BUFFER_SIZE];
+    bool unregistering_origin;
     
     // Para logging de acceso  
     char username[256];          // Usuario autenticado
@@ -67,7 +68,6 @@ typedef struct ClientData {
     int target_port;             // Puerto de destino
     uint8_t socks_status;        // Status code SOCKS5
 
-    bool unregistering_origin;
 }ClientData;
 
 enum socks5State {

@@ -72,6 +72,7 @@ void socksv5PassiveAccept(struct selector_key* key){
     clientData->resolution_from_getaddrinfo = false;
     clientData->connection_ready = 0;
     clientData->dns_resolution_state = 0;
+    clientData->unregistering_origin = false;
     
     // Inicializar campos de logging
     memset(clientData->username, 0, sizeof(clientData->username));
