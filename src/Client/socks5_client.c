@@ -198,11 +198,17 @@ int socks5_connect_target(socks5_client_t *client, const char *target_host, int 
     
     // Determinar tipo de dirección
     struct in_addr addr;
+    struct in6_addr addr6;
     if (inet_pton(AF_INET, target_host, &addr) == 1) {
         // Es una dirección IPv4
         request[pos++] = SOCKS5_ATYP_IPV4;
         memcpy(request + pos, &addr, 4);
         pos += 4;
+    } else if (inet_pton(AF_INET6, target_host, &addr6) == 1) {
+        // Es una dirección IPv6
+        request[pos++] = 0x04; // SOCKS5_ATYP_IPV6
+        memcpy(request + pos, &addr6, 16);
+        pos += 16;
     } else {
         // Es un nombre de dominio
         request[pos++] = SOCKS5_ATYP_DOMAIN;
