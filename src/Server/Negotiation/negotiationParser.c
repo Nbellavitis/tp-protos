@@ -26,13 +26,20 @@ negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
 
             if (p->i == p->nmethods) {
                 p->method_chosen = 0xFF;
+                // Preferir sin autenticación (0x00) si está disponible
                 for (int i = 0; i < p->nmethods; i++) {
-                    if (p->methods[i] == 0x02) { // auth
-                        p->method_chosen = 0x02;
+                    if (p->methods[i] == 0x00) { // no auth
+                        p->method_chosen = 0x00;
                         break;
                     }
-                    if(p->methods[i] == 0x00 ) { // no auth
-                        p->method_chosen = 0x00;
+                }
+                // Si no está 0x00, buscar autenticación (0x02)
+                if (p->method_chosen == 0xFF) {
+                    for (int i = 0; i < p->nmethods; i++) {
+                        if (p->methods[i] == 0x02) { // auth
+                            p->method_chosen = 0x02;
+                            break;
+                        }
                     }
                 }
                 return NEGOTIATION_PARSE_OK;
