@@ -474,7 +474,7 @@ unsigned startConnection(struct selector_key * key) {
         LOG_ERROR("CONNECTING_INIT: Error creating socket: %s", strerror(errno));
         return preSetRequestResponse(key, GENERAL_FAILURE);
     }
-    if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
+    if(selector_set_interest(key->s, clientData->clientFd, OP_NOOP) != SELECTOR_SUCCESS) {
         LOG_ERROR("CONNECTING_INIT: Error disabling client events");
         close(clientData->originFd);
         return ERROR;
