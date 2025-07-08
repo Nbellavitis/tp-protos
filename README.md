@@ -5,6 +5,14 @@ Este proyecto implementa un servidor SOCKS5 flexible y dos clientes:
 - **mgmt_client**: Cliente para administrar el servidor (usuarios, estadísticas, etc.).
 
 ---
+## ¿Como compilar?
+make clean para limpiar los binario y ejecutables.
+
+make all para compilar todo.
+
+## ¿Como correr el proxy sockv5?
+./bin/server/programa
+
 
 ## socks5_client
 
@@ -25,13 +33,13 @@ Un cliente interactivo en C que permite:
 
 ### Ejecución
 ```sh
-./socks5_client [proxy_host] [proxy_port] [username] [password]
+./bin/client/socks5_client [proxy_host] [proxy_port] [username] [password]
 ```
 - Si no se pasan argumentos, usa los valores por defecto.
 
 ### Ejemplo de uso
 ```sh
-./socks5_client 127.0.0.1 1080
+./bin/client/socks5_client 127.0.0.1 1080
 ```
 - Menú interactivo:
   1. Autenticarse (opcional)
@@ -66,13 +74,13 @@ Un cliente de administración para el protocolo de management del servidor. Perm
 
 ### Ejecución
 ```sh
-./mgmt_client [mgmt_host] [mgmt_port]
+./bin/client/mgmt_client [mgmt_host] [mgmt_port]
 ```
 - Si no se pasan argumentos, usa los valores por defecto.
 
 ### Ejemplo de uso
 ```sh
-./mgmt_client 127.0.0.1 9090
+./bin/client/mgmt_client 127.0.0.1 9090
 ```
 
 ---
