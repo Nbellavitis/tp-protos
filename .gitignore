@@ -51,5 +51,6 @@ Module.symvers
 Mkfile.old
 dkms.conf
 .idea/
-/bin/
-/obj/
+/.gdb_history
+./src/bin/
+./src/obj/
