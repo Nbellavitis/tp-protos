@@ -379,8 +379,6 @@ unsigned requestConnecting(struct selector_key *key) {
                     clientData->originResolution = NULL;
                 }
             }*/
-
-
             /*
             switch(so_error) {
                 case ECONNREFUSED:
