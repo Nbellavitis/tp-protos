@@ -110,10 +110,11 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
             case 5: // DST.PORT
                 if (p->bytes_read == 0) {
                     LOG_DEBUG("Byte received: 0x%02x in state", byte);
-                    p->port = (uint16_t)byte << 8;
+                    p->port = ((uint16_t)byte) << 8; // high byte
                     p->bytes_read = 1;
                 } else {
-                    p->port |= byte;
+                    p->port |= byte; // low byte
+                    // Convertir a host order (ya está en host order por el armado manual)
                     LOG_DEBUG("Byte received: 0x%02x in state", byte);
                     p->done = true;
                     return REQUEST_PARSE_OK;
