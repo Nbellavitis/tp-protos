@@ -106,7 +106,7 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
         }
 
         // Cambiar a lectura en el socket del cliente
-        if(selector_set_interest(key->s, clientData->clientFd, OP_READ)){
+        if(selector_set_interest(key->s, clientData->clientFd, OP_READ) != SELECTOR_SUCCESS) {
             LOG_ERROR("socksv5HandleWrite: Error setting selector for read on client");
             return ERROR;
         }
