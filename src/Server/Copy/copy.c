@@ -76,6 +76,7 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         }
 
         buffer_write_adv(&clientData->originBuffer, bytes_read);
+        stats_add_client_bytes(bytes_read);
     } else if (key->fd == clientData->originFd) {
         // Datos del servidor de origen -> cliente
         size_t bytes_to_write;
@@ -88,6 +89,7 @@ unsigned socksv5HandleRead(struct selector_key *key) {
         }
 
         buffer_write_adv(&clientData->clientBuffer, bytes_read);
+        stats_add_origin_bytes(bytes_read);
     }
 
     if (!copy_update_interests(key)) {
