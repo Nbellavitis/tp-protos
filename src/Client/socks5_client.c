@@ -180,7 +180,7 @@ int socks5_authenticate(socks5_client_t *client) {
         return -1;
     }
     
-    printf("[SOCKS5] Authentication successful!\n");
+    
     return 0;
 }
 
@@ -376,6 +376,8 @@ void interactive_menu(socks5_client_t *client) {
                         path[strcspn(path, "\n")] = 0;
                         if (strlen(path) == 0) strcpy(path, "/");
                     }
+                    printf("\n[INFO] Intentando conectar a %s:%d a través del proxy...\n", target_host, target_port);
+                    printf("[INFO] Si el destino no responde, la conexión puede demorar varios segundos (timeout de red). La aplicación NO está colgada.\n");
                     if (socks5_connect_proxy(client) == 0) {
                         int method = socks5_negotiate(client, 0); // SOLO sin autenticación
                         if (method == AUTH_METHOD_NONE) {
@@ -441,6 +443,8 @@ void interactive_menu(socks5_client_t *client) {
                         path[strcspn(path, "\n")] = 0;
                         if (strlen(path) == 0) strcpy(path, "/");
                     }
+                    printf("\n[INFO] Intentando conectar a %s:%d a través del proxy...\n", target_host, target_port);
+                    printf("[INFO] Si el destino no responde, la conexión puede demorar varios segundos (timeout de red). La aplicación NO está colgada.\n");
                     if (socks5_connect_proxy(client) == 0) {
                         int method = socks5_negotiate(client, 1); // autenticado
                         if (method == AUTH_METHOD_USERPASS) {
