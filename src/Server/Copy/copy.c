@@ -4,14 +4,26 @@
 
 void socksv5HandleInit(const unsigned state, struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
-    LOG_DEBUG("COPYING_INIT: Starting data copy between client and server (state = %d)", state);
-    if(selector_set_interest(key->s, clientData->clientFd, OP_READ) != SELECTOR_SUCCESS) {
-        LOG_ERROR("COPYING_INIT: Error setting selector for read on client");
+    LOG_DEBUG("COPYING_INIT: Starting data copy between client and origin (state = %d)", state);
+
+    // Determinar el interés inicial para el FILE DESCRIPTOR DEL CLIENTE.
+    // Si ya tenemos datos del origen --> OP_WRITE
+    // Si no --> OP_READ
+    fd_interest client_interest = buffer_can_read(&clientData->clientBuffer) ? OP_WRITE : OP_READ;
+
+    // Determinar el interés inicial para el FILE DESCRIPTOR DE DESTINO (ORIGIN).
+    // Si ya tenemos datos del cliente para enviarle al destino (el caso que te preocupa),
+    // entonces nos interesa escribir en el destino. Si no, nos interesa leer de él.
+    fd_interest origin_interest = buffer_can_read(&clientData->originBuffer) ? OP_WRITE : OP_READ;
+
+    // Registrar los intereses correctos en el selector.
+    if (selector_set_interest(key->s, clientData->clientFd, client_interest) != SELECTOR_SUCCESS) {
+        LOG_ERROR("COPYING_INIT: Error setting initial interest for client");
         closeConnection(key);
         return;
     }
-    if(selector_set_interest(key->s, clientData->originFd, OP_READ) != SELECTOR_SUCCESS) {
-        LOG_ERROR("COPYING_INIT: Error setting selector for read on origin");
+    if (selector_set_interest(key->s, clientData->originFd, origin_interest) != SELECTOR_SUCCESS) {
+        LOG_ERROR("COPYING_INIT: Error setting initial interest for origin");
         closeConnection(key);
         return;
     }
