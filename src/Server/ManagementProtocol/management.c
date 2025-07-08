@@ -352,9 +352,10 @@ unsigned mgmt_command_read(struct selector_key *key) {
             case CMD_STATS: {
                 char stats_response[512];
                 snprintf(stats_response, sizeof(stats_response),
-                         "Connections opened: %u\nConnections closed: %u\nClient bytes: %u\nOrigin bytes: %u",
+                         "Connections opened: %u\nConnections closed: %u\nCurrent connections: %u\nClient bytes: %u\nOrigin bytes: %u",
                          stats_get_connections_opened(),
                          stats_get_connections_closed(),
+                         stats_get_current_connections(),
                          stats_get_client_bytes(),
                          stats_get_origin_bytes());
                 send_management_response(&mgmt_data->response_buffer, STATUS_OK, stats_response);
