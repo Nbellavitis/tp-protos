@@ -1,5 +1,6 @@
 #include "negotiation.h"
 #include "negotiationParser.h"
+#include <errno.h>
 #include "../../logger.h"
 #define VERSION_5 0x05
 void negotiationReadInit(unsigned state, struct selector_key *key) {
@@ -24,18 +25,18 @@ unsigned negotiationRead(struct selector_key *key) {
     negotiation_parse result = negotiationParse(p, &data->clientBuffer);
     LOG_DEBUG("NEGOTIATION_READ: Negotiation result: %d", result);
     switch (result) {
-    case NEGOTIATION_PARSE_OK:
-        if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendNegotiationResponse(&data->originBuffer, p->method_chosen)) {
-            return ERROR;
-        }
-        return NEGOTIATION_WRITE;
-    case NEGOTIATION_PARSE_INCOMPLETE:
-        return NEGOTIATION_READ;
+        case NEGOTIATION_PARSE_OK:
+            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendNegotiationResponse(&data->originBuffer, p->method_chosen)) {
+                return ERROR;
+            }
+            return negotiationWrite(key);
+        case NEGOTIATION_PARSE_INCOMPLETE:
+            return NEGOTIATION_READ;
 
-    case NEGOTIATION_PARSE_ERROR:
-    default:
-        p->method_chosen = 0xFF;
-        return ERROR;
+        case NEGOTIATION_PARSE_ERROR:
+        default:
+            p->method_chosen = 0xFF;
+            return ERROR;
     }
 }
 
@@ -47,9 +48,20 @@ unsigned negotiationWrite(struct selector_key *key) {
     size_t writeCount;
     uint8_t * b = buffer_read_ptr(&data->originBuffer, &writeLimit);
     writeCount = send(key->fd, b, writeLimit, MSG_NOSIGNAL );
+
+    /*
     if (writeCount <= 0) {
         return ERROR; // error o desconexión
+    }*/
+
+    if (writeCount <= 0) {
+        return (errno == EAGAIN || errno == EWOULDBLOCK)
+               ? NEGOTIATION_WRITE
+               : ERROR;
     }
+
+
+
     buffer_read_adv(&data->originBuffer, writeCount);
     stats_add_origin_bytes(writeCount);
 
@@ -61,21 +73,18 @@ unsigned negotiationWrite(struct selector_key *key) {
         return ERROR;
     }
     LOG_DEBUG("NEGOTIATION_WRITE: Successful negotiation, chosen method: %d", p->method_chosen);
-    
+
     if (p->method_chosen == 0x00) {
         LOG_DEBUG("NEGOTIATION_WRITE: Advancing to REQ_READ (no authentication)");
         return REQ_READ;
     }
-
     // todo, revisar lo de abajo:
     if (p->method_chosen == 0xFF) {
         // Ya notificamos al cliente que ninguno de sus métodos es aceptado.
         // Ahora cerramos la conexión.
         return ERROR;
     }
-
     LOG_DEBUG("NEGOTIATION_WRITE: Advancing to AUTHENTICATION_READ (with authentication)");
     return AUTHENTICATION_READ;
 
 }
-
