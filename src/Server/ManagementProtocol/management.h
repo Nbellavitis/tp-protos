@@ -22,7 +22,7 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 
 /*
  *    VER --> solo es valido 0x01
- *    CMD --> Valido de 0x01 hasta .... todo definir
+ *    CMD --> Valido de 0x01 hasta 0x06
  *    PAYLOAD LEN: Valido de 0x00 hasta 0xFF
  *    Payload: Son como mucho 255 caracteres. Depende del CMD.
  *

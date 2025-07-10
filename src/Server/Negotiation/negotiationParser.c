@@ -56,6 +56,7 @@ void initNegotiationParser(negotiation_parser *parser){
     parser->method_chosen = 0x02; //default pass y user
     parser->i = 0;
 }
+
 bool sendNegotiationResponse(struct buffer *originBuffer, uint8_t method) {
     if (!buffer_can_write(originBuffer)) {
         return false;
