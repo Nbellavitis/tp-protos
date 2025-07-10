@@ -2,6 +2,7 @@
 #define AUTH_H
 #define _GNU_SOURCE
 #include "../sock5.h"
+#include <errno.h>
 #include <stdbool.h>
 #include <string.h>
 

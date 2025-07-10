@@ -9,14 +9,14 @@ bool validateUser(const char* username, const char* password) {
     // todo: revisar lo hicimos con get porque no sabemos si estaría bien que desde acá pueda acceder al struct users users[MAX_USERS];
     struct users* users = get_authorized_users();
     int num_users = get_num_authorized_users();
-    
+
     // Si no hay usuarios configurados, usamos usuario hardcodeado
-   /* if (num_users == 0) {
-        const char* valid_username = "admin";
-        const char* valid_password = "password123";
-        return (strcmp(username, valid_username) == 0 && strcmp(password, valid_password) == 0);
-    }*/
-    
+    /* if (num_users == 0) {
+         const char* valid_username = "admin";
+         const char* valid_password = "password123";
+         return (strcmp(username, valid_username) == 0 && strcmp(password, valid_password) == 0);
+     }*/
+
     // Buscar en la lista de usuarios autorizados
     for (int i = 0; i < num_users; i++) {
         if (users[i].name != NULL && users[i].pass != NULL) {
@@ -25,7 +25,7 @@ bool validateUser(const char* username, const char* password) {
             }
         }
     }
-    
+
     return false;
 }
 
@@ -60,7 +60,7 @@ unsigned authenticationRead(struct selector_key * key){
                 }
                 return ERROR; // Rechazar conexión por credenciales inválidas
             }
-            
+
             LOG_INFO("Authentication successful for user: %s", p->name);
             // Guardar usuario para logging de acceso
             strncpy(data->username, p->name, sizeof(data->username) - 1);
@@ -68,7 +68,7 @@ unsigned authenticationRead(struct selector_key * key){
             if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendAuthResponse(&data->originBuffer,p->version,0x00)) {
                 return ERROR;
             }
-            return AUTHENTICATION_WRITE;
+            return authenticationWrite(key);
 
         case AUTH_PARSE_INCOMPLETE:
             return AUTHENTICATION_READ;
@@ -86,9 +86,15 @@ unsigned authenticationWrite(struct selector_key * key){
     size_t readCount;
     uint8_t  * b = buffer_read_ptr(&data->originBuffer, &readLimit);
     readCount = send(key->fd, b, readLimit, MSG_NOSIGNAL);
+
     if (readCount <= 0) {
-        return ERROR; // error o desconexión
+        return (errno == EAGAIN || errno == EWOULDBLOCK)
+               ? AUTHENTICATION_WRITE
+               : ERROR;
     }
+
+
+
     stats_add_origin_bytes(readCount); //@Todo check donde va esto.
     buffer_read_adv(&data->originBuffer, readCount);
 
@@ -96,11 +102,11 @@ unsigned authenticationWrite(struct selector_key * key){
         return AUTHENTICATION_WRITE;
     }
 
-   if (p->error || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
+    if (p->error || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         return ERROR;
     }
     LOG_DEBUG("Authentication process completed successfully");
-   LOG_DEBUG("Authenticated username: %s", p->name);
+    LOG_DEBUG("Authenticated username: %s", p->name);
     LOG_DEBUG("Authentication password validated");
     return REQ_READ; // Continuar con la lectura de la solicitud
 }
