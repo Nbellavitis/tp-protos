@@ -8,6 +8,7 @@
 #include <netdb.h>
 #include "../buffer.h"
 #include <stdio.h>
+#include <errno.h>
 #include "../sock5.h"
 // Funciones para el estado COPYING
 void socksv5HandleInit(const unsigned state, struct selector_key *key);
