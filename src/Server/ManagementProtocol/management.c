@@ -455,6 +455,29 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid operation: already authenticated");
                 break;
             };
+            case CMD_SET_BUFFER_SIZE: {
+                // Payload: tamaño del buffer como string
+                size_t new_size = (size_t)atoi(mgmt_data->parser.payload);
+                if (set_buffer_size(new_size)) {
+                    char response[256];
+                    snprintf(response, sizeof(response), "Buffer size changed to %zu bytes", new_size);
+                    send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
+                } else {
+                    char response[512];
+                    snprintf(response, sizeof(response), 
+                             "Invalid buffer size. Available sizes: 4096, 8192, 16384, 32768, 65536, 131072");
+                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, response);
+                }
+                break;
+            };
+            case CMD_GET_BUFFER_INFO: {
+                char response[512];
+                snprintf(response, sizeof(response), 
+                         "Current buffer size: %zu bytes\nAvailable sizes: 4096, 8192, 16384, 32768, 65536, 131072",
+                         get_current_buffer_size());
+                send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
+                break;
+            };
             default:
                 send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Unknown command");
                 break;

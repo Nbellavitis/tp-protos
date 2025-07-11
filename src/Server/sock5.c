@@ -14,6 +14,9 @@
 #include "Resolver/resolver.h"
 #include "Statistics/statistics.h"
 #include "../logger.h"
+
+// Declaración de función externa
+extern size_t get_current_buffer_size(void);
 static void socksv5Read(struct selector_key *key);
 static void socksv5Write(struct selector_key *key);
 static void socksv5Close(struct selector_key *key);
@@ -92,8 +95,22 @@ void socksv5PassiveAccept(struct selector_key* key){
         inet_ntop(AF_INET6, &addr_in6->sin6_addr, clientData->client_ip, INET6_ADDRSTRLEN);
         clientData->client_port = ntohs(addr_in6->sin6_port);
     }
-    buffer_init(&clientData->clientBuffer, BUFFER_SIZE, clientData->inClientBuffer);
-    buffer_init(&clientData->originBuffer, BUFFER_SIZE, clientData->inOriginBuffer);
+    // Asignar buffers dinámicos con el tamaño actual
+    clientData->bufferSize = get_current_buffer_size();
+    clientData->inClientBuffer = malloc(clientData->bufferSize);
+    clientData->inOriginBuffer = malloc(clientData->bufferSize);
+    
+    if (clientData->inClientBuffer == NULL || clientData->inOriginBuffer == NULL) {
+        LOG_ERROR("Failed to allocate dynamic buffers for client");
+        if (clientData->inClientBuffer) free(clientData->inClientBuffer);
+        if (clientData->inOriginBuffer) free(clientData->inOriginBuffer);
+        free(clientData);
+        close(newClientSocket);
+        return;
+    }
+    
+    buffer_init(&clientData->clientBuffer, clientData->bufferSize, clientData->inClientBuffer);
+    buffer_init(&clientData->originBuffer, clientData->bufferSize, clientData->inOriginBuffer);
 
     stm_init(&clientData->stm);
     selector_status ss = selector_register(key->s, newClientSocket, &handler, OP_READ, clientData);
@@ -201,6 +218,14 @@ void closeConnection(struct selector_key *key) {
 
     // Registro de acceso antes de liberar clientData
     log_access_record(clientData);
+    
+    // Liberar buffers dinámicos
+    if (clientData->inClientBuffer != NULL) {
+        free(clientData->inClientBuffer);
+    }
+    if (clientData->inOriginBuffer != NULL) {
+        free(clientData->inOriginBuffer);
+    }
     
     free(clientData);
 }

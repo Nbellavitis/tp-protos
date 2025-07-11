@@ -18,6 +18,8 @@
 #define CMD_ADD_USER 0x04
 #define CMD_DELETE_USER 0x05
 #define CMD_CHANGE_PASSWORD 0x06
+#define CMD_SET_BUFFER_SIZE 0x07
+#define CMD_GET_BUFFER_INFO 0x08
 
 // Status codes
 #define STATUS_OK 0x00
@@ -288,6 +290,52 @@ int mgmt_change_password(mgmt_client_t *client, const char *username, const char
     return status == STATUS_OK ? 0 : -1;
 }
 
+// Obtener información del buffer
+int mgmt_get_buffer_info(mgmt_client_t *client) {
+    if (!client->authenticated) {
+        printf("Not authenticated\n");
+        return -1;
+    }
+    
+    if (send_mgmt_command(client, CMD_GET_BUFFER_INFO, NULL) < 0) {
+        return -1;
+    }
+    
+    uint8_t status;
+    char response[1024];
+    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
+        return -1;
+    }
+    
+    printf("Buffer Information:\n%s\n", response);
+    return 0;
+}
+
+// Cambiar tamaño del buffer
+int mgmt_set_buffer_size(mgmt_client_t *client, const char *buffer_size_str) {
+    if (!client->authenticated) {
+        printf("Not authenticated\n");
+        return -1;
+    }
+    
+    if (send_mgmt_command(client, CMD_SET_BUFFER_SIZE, buffer_size_str) < 0) {
+        return -1;
+    }
+    
+    uint8_t status;
+    char response[1024];
+    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
+        return -1;
+    }
+    
+    if (status == STATUS_OK) {
+        printf("Success: %s\n", response);
+    } else {
+        printf("Error: %s\n", response);
+    }
+    return status == STATUS_OK ? 0 : -1;
+}
+
 // Desconectar
 void mgmt_disconnect(mgmt_client_t *client) {
     if (client->socket_fd >= 0) {
@@ -329,7 +377,9 @@ void interactive_menu(mgmt_client_t *client) {
         printf("3. Add User\n");
         printf("4. Delete User\n");
         printf("5. Change User Password\n");
-        printf("6. Disconnect and Exit\n");
+        printf("6. Get Buffer Info\n");
+        printf("7. Set Buffer Size\n");
+        printf("8. Disconnect and Exit\n");
         printf("Choice: ");
 
         if (!fgets(input, sizeof(input), stdin)) {
@@ -375,6 +425,16 @@ void interactive_menu(mgmt_client_t *client) {
                 mgmt_change_password(client, username, password);
                 break;
             case 6:
+                mgmt_get_buffer_info(client);
+                break;
+            case 7:
+                printf("New buffer size (4096, 8192, 16384, 32768, 65536, 131072): ");
+                if (fgets(username, sizeof(username), stdin)) {
+                    username[strcspn(username, "\n")] = 0;
+                }
+                mgmt_set_buffer_size(client, username);
+                break;
+            case 8:
                 printf("Disconnecting...\n");
                 return;
             default:
