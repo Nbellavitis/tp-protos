@@ -38,6 +38,8 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 #define ADMIN_PASSWORD_ENV_VAR "ADMIN_PASSWORD"
 
 
+
+
 #define MANAGEMENT_VERSION 0x01
 #define MANAGEMENT_BUFFER_SIZE 4096
 

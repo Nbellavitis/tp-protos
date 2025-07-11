@@ -5,8 +5,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <stdint.h>
-#include "../Server/args.h"
+
+
+#define DEFAULT_MGMT_HOST "127.0.0.1"
+#define DEFAULT_MGMT_PORT 8080
 
 // Comandos del protocolo de management
 #define MANAGEMENT_VERSION 0x01
@@ -276,93 +278,6 @@ void mgmt_disconnect(mgmt_client_t *client) {
     }
     client->authenticated = 0;
 }
-
-// Menú interactivo
-/*
-void interactive_menu(mgmt_client_t *client) {
-    char input[512];
-    char username[256], password[256];
-    
-    while (1) {
-        printf("\n=== Management Client ===\n");
-        printf("1. Authenticate\n");
-        printf("2. Get Statistics\n");
-        printf("3. List Users\n");
-        printf("4. Add User\n");
-        printf("5. Delete User\n");
-        printf("6. Change User Password\n");
-        printf("7. Disconnect and Exit\n");
-        printf("Choice: ");
-        
-        if (!fgets(input, sizeof(input), stdin)) {
-            break;
-        }
-        
-        int choice = atoi(input);
-        
-        switch (choice) {
-            case 1:
-                printf("Username: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0; // Remove newline
-                }
-                printf("Password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0; // Remove newline
-                }
-                mgmt_authenticate(client, username, password);
-                break;
-                
-            case 2:
-                mgmt_get_stats(client);
-                break;
-                
-            case 3:
-                mgmt_list_users(client);
-                break;
-                
-            case 4:
-                printf("New username: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                printf("New password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0;
-                }
-                mgmt_add_user(client, username, password);
-                break;
-                
-            case 5:
-                printf("Username to delete: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                mgmt_delete_user(client, username);
-                break;
-                
-            case 6:
-                printf("Username to change password: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                printf("New password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0;
-                }
-                mgmt_change_password(client, username, password);
-                break;
-                
-            case 7:
-                printf("Disconnecting...\n");
-                return;
-                
-            default:
-                printf("Invalid choice\n");
-                break;
-        }
-    }
-}*/
 
 void interactive_menu(mgmt_client_t *client) {
     char input[512];
