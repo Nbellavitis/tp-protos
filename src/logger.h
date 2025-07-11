@@ -11,6 +11,10 @@
 #define LOG_LEVEL_INFO  2
 #define LOG_LEVEL_DEBUG 3
 
+#ifndef LOG_LEVEL
+#define LOG_LEVEL LOG_LEVEL_INFO
+#endif
+
 #ifdef DEBUG
 #define LOG_LEVEL LOG_LEVEL_DEBUG
 #endif

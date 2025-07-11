@@ -23,7 +23,7 @@ static bool flush_buffer(int fd, buffer *b) {
     }
 
     if (bytes_sent == 0 && write_len > 0) {
-        LOG_ERROR("flush_buffer: send() returned 0, peer closed connection.");
+        LOG_ERROR("%s" ,"flush_buffer: send() returned 0, peer closed connection.");
         return false;
     }
 
