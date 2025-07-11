@@ -116,8 +116,8 @@ buffer_flush(buffer *b, const int fd, ssize_t *bytes_sent) {
     }
 
     size_t write_len;
-    uint8_t *ptr = buffer_read_ptr(b, &write_len);
-    ssize_t sent = send(fd, ptr, write_len, MSG_NOSIGNAL);
+    const uint8_t *ptr = buffer_read_ptr(b, &write_len); // write_len > 0, pues buffer_can_read(b)
+    const ssize_t sent = send(fd, ptr, write_len, MSG_NOSIGNAL);
 
     // Guardamos el resultado de send() en el parámetro de salida si no es nulo.
     if (bytes_sent != NULL) {
@@ -130,8 +130,7 @@ buffer_flush(buffer *b, const int fd, ssize_t *bytes_sent) {
         return true;
     }
 
-    if (sent == 0) {
-        // El otro extremo cerró la conexión. Es una condición de cierre.
+    if (sent == 0) { // recordar que write_len > 0
         return false;
     }
 
@@ -141,6 +140,6 @@ buffer_flush(buffer *b, const int fd, ssize_t *bytes_sent) {
         return true;
     }
 
-    // Es un error de escritura irrecuperable.
+    // Error irrecuperable.
     return false;
 }
