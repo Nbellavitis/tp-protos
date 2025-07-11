@@ -120,7 +120,6 @@ static bool create_direct_addrinfo(ClientData *clientData, resolver_parser *pars
 void requestReadInit(const unsigned state, struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     initResolverParser(&clientData->client.reqParser);
-    LOG_DEBUG("%s" ,"REQ_READ_INIT: Starting SOCKS5 request reading (state = %d)", state);
 }
 
 unsigned requestRead(struct selector_key *key) {

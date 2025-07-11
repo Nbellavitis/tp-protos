@@ -127,6 +127,6 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
 
 // TODO: creo que no tiene sentido esto:
 void socksv5HandleClose(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("COPYING_CLOSE: Closing data handling (state = %d, key = %p)", state, key);
+    LOG_DEBUG("%s" , "COPYING_CLOSE: Closing data handling");
 }
 

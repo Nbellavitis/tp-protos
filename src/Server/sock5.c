@@ -249,11 +249,11 @@ fd_handler * getSocksv5Handler(void) {
 }
 
 
-
+//@TODO tiene sentido esto?
 static void closeArrival(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("Arriving at CLOSED state (state = %d, key = %p)", state, key);
+    LOG_DEBUG("Arriving at CLOSED state (state = %d, key = %p)", state, (void *)key);
 }
 
 static void errorArrival(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("Arriving at ERROR state (state = %d, key = %p)", state, key);
+    LOG_DEBUG("Arriving at ERROR state (state = %d, key = %p)", state, (void *)key);
 }
