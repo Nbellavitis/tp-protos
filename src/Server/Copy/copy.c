@@ -1,6 +1,7 @@
 #include "copy.h"
 #include "../../logger.h"
 
+// flushea el buffer b en el fd, si hay error retorna false
 static bool flush_buffer(int fd, buffer *b) {
     if (!buffer_can_read(b)) {
         // No hay nada para escribir, no es un error.
@@ -13,7 +14,7 @@ static bool flush_buffer(int fd, buffer *b) {
 
     if (bytes_sent < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            // El buffer del sistema operativo está lleno, pero no es un error.
+            // El buffer asociado al fd está lleno, no es un error
             return true;
         }
 
