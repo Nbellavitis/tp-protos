@@ -11,13 +11,15 @@
 #define LOG_LEVEL_INFO  2
 #define LOG_LEVEL_DEBUG 3
 
-#ifndef LOG_LEVEL
-#define LOG_LEVEL LOG_LEVEL_INFO
-#endif
 
 #ifdef DEBUG
 #define LOG_LEVEL LOG_LEVEL_DEBUG
 #endif
+
+#ifndef LOG_LEVEL
+#define LOG_LEVEL LOG_LEVEL_INFO
+#endif
+
 
 #define _LOG_PRINT(stream, tag, fmt, ...) \
         fprintf(stream, "[" tag "] " fmt "\n", ##__VA_ARGS__)
