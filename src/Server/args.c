@@ -3,6 +3,7 @@
 #include <limits.h>    /* LONG_MIN et al */
 #include <string.h>    /* memset */
 #include <errno.h>
+#include "ManagementProtocol/management.h"
 #include <getopt.h>
 
 #include "args.h"
@@ -33,13 +34,17 @@ user(char* s, struct users* user)
         fprintf(stderr, "password not found\n");
         exit(1);
     }
-    else
-    {
-        *p = 0;
-        p++;
-        user->name = s;
-        user->pass = p;
+
+    *p = 0;
+    p++;
+    user->name = s;
+    user->pass = p;
+
+    if(strlen(user->name) > MAX_USERNAME_LEN || strlen(user->pass) > MAX_PASSWORD_LEN){
+        fprintf(stderr, "Username or password length is higher than allowed\n");
+        exit(1);
     }
+
 }
 
 static void

@@ -266,7 +266,10 @@ unsigned mgmt_auth_read(struct selector_key *key) {
                 char *username = mgmt_data->parser.payload;
                 char *password = colon + 1;
 
-                if (strcmp(username, ADMIN_USERNAME) == 0 && strcmp(password, ADMIN_PASSWORD) == 0) {
+                if(strlen(username) > MAX_USERNAME_LEN || strlen(ADMIN_PASSWORD) > MAX_PASSWORD_LEN){
+                    send_management_response(&mgmt_data->response_buffer, STATUS_AUTH_FAILED, "Username or password length is longer than allowed");
+                }
+                else if (strcmp(username, ADMIN_USERNAME) == 0 && strcmp(password, ADMIN_PASSWORD) == 0) {
                     mgmt_data->authenticated = true;
                     send_management_response(&mgmt_data->response_buffer, STATUS_OK, "Authentication successful");
                     LOG_INFO("Management: Authentication successful for %s", username);
@@ -390,11 +393,17 @@ unsigned mgmt_command_read(struct selector_key *key) {
                     char *username = mgmt_data->parser.payload;
                     char *password = colon + 1;
 
-                    if (strlen(username) == 0 || strlen(password) == 0) {
+                    unsigned int user_len = strlen(username);
+                    unsigned int pass_len = strlen(password);
+
+                    if (user_len == 0 || pass_len == 0) {
                         send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username and password cannot be empty");
-                    } else if (add_user(username, password)) {
+                    }else if(user_len > MAX_USERNAME_LEN || pass_len > MAX_PASSWORD_LEN){
+                        send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username or password length is longer than allowed");
+                    }
+                    else if (add_user(username, password)) {
                         char response[256];
-                        snprintf(response, sizeof(response), "User '%s' added successfully", username);
+                        snprintf(response, sizeof(response), "User '%.*s' added successfully", MAX_USERNAME_LEN, username);
                         send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                     } else {
                         if (get_num_authorized_users() >= MAX_USERS) {
@@ -414,7 +423,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
                     send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username cannot be empty");
                 } else if (delete_user(username)) {
                     char response[256];
-                    snprintf(response, sizeof(response), "User '%s' deleted successfully", username);
+                    snprintf(response, sizeof(response), "User '%.*s' deleted successfully", MAX_USERNAME_LEN,  username);
                     send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                 } else {
                     send_management_response(&mgmt_data->response_buffer, STATUS_NOT_FOUND, "User not found");
@@ -434,7 +443,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
                         send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username and new password cannot be empty");
                     } else if (change_user_password(username, new_password)) {
                         char response[256];
-                        snprintf(response, sizeof(response), "Password changed for user '%s'", username);
+                        snprintf(response, sizeof(response), "Password changed for user '%.*s'",MAX_USERNAME_LEN, username);
                         send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                     } else {
                         send_management_response(&mgmt_data->response_buffer, STATUS_NOT_FOUND, "User not found");

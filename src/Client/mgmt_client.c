@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include "../Server/ManagementProtocol/management.h"
 
 #define DEFAULT_MGMT_HOST "127.0.0.1"
 #define DEFAULT_MGMT_PORT 8080
@@ -128,6 +128,11 @@ int mgmt_connect(mgmt_client_t *client) {
 
 // Autenticar con el servidor
 int mgmt_authenticate(mgmt_client_t *client, const char *username, const char *password) {
+    if (strlen(username) > MAX_USERNAME_LEN || strlen(password) > MAX_PASSWORD_LEN) {
+        printf( "Username/password must be smaller or equal than %d characters\n", MAX_USERNAME_LEN);
+        return -1;
+    }
+
     char credentials[512];
     snprintf(credentials, sizeof(credentials), "%s:%s", username, password);
     
@@ -195,8 +200,13 @@ int mgmt_list_users(mgmt_client_t *client) {
 
 // Agregar usuario
 int mgmt_add_user(mgmt_client_t *client, const char *username, const char *password) {
+
     if (!client->authenticated) {
         printf("Not authenticated\n");
+        return -1;
+    }
+    if (strlen(username) > MAX_USERNAME_LEN || strlen(password) > MAX_PASSWORD_LEN) {
+        printf( "Username/password must be smaller or equal than %d characters\n", MAX_USERNAME_LEN);
         return -1;
     }
     
@@ -227,6 +237,10 @@ int mgmt_delete_user(mgmt_client_t *client, const char *username) {
         printf("Not authenticated\n");
         return -1;
     }
+    if (strlen(username) > MAX_USERNAME_LEN ) {
+        printf( "Username must be smaller or equal than %d characters\n", MAX_USERNAME_LEN);
+        return -1;
+    }
     
     if (send_mgmt_command(client, CMD_DELETE_USER, username) < 0) {
         return -1;
@@ -250,6 +264,10 @@ int mgmt_delete_user(mgmt_client_t *client, const char *username) {
 int mgmt_change_password(mgmt_client_t *client, const char *username, const char *new_password) {
     if (!client->authenticated) {
         printf("Not authenticated\n");
+        return -1;
+    }
+    if (strlen(username) > MAX_USERNAME_LEN || strlen(new_password) > MAX_PASSWORD_LEN) {
+        printf( "Username/password must be smaller or equal than %d characters\n", MAX_USERNAME_LEN);
         return -1;
     }
     char payload[512];
