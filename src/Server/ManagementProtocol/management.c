@@ -310,7 +310,8 @@ unsigned mgmt_auth_write(struct selector_key *key) {
     if (mgmt_data->authenticated) {
         return MGMT_COMMAND_READ;
     } else {
-        return MGMT_CLOSED;
+        // Allow multiple authentication attempts
+        return MGMT_AUTH_READ;
     }
 }
 

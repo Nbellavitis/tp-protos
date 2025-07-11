@@ -284,6 +284,14 @@ int main (int argc,char * argv[]){
 int endProgram(struct users * users,fd_selector selector, selector_status ss, int server, int mgmt_server,char * error) {
     int ret= 0;
     if (users != NULL) {
+        for (int i = 0; i < num_authorized_users; i++) {
+            if (users[i].name != NULL) {
+                free(users[i].name);  // Liberar username
+            }
+            if (users[i].pass != NULL) {
+                free(users[i].pass);  // Liberar password
+            }
+        }
        free(users);
     }
     if (ss != SELECTOR_SUCCESS) {

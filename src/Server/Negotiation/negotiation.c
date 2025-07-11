@@ -7,8 +7,10 @@ void negotiationReadInit(unsigned state, struct selector_key *key) {
     LOG_DEBUG("NEGOTIATION_INIT: Starting negotiation (state = %d)", state);
     struct ClientData *data = (struct ClientData *)key->data;
     initNegotiationParser(&data->client.negParser);
-
 }
+
+
+
 unsigned negotiationRead(struct selector_key *key) {
     ClientData *data = key->data;
     negotiation_parser *p = &data->client.negParser;
@@ -24,55 +26,47 @@ unsigned negotiationRead(struct selector_key *key) {
     buffer_write_adv(&data->clientBuffer, readCount);
     negotiation_parse result = negotiationParse(p, &data->clientBuffer);
     LOG_DEBUG("NEGOTIATION_READ: Negotiation result: %d", result);
-    switch (result) {
-        case NEGOTIATION_PARSE_OK:
-            if(selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS || !sendNegotiationResponse(&data->originBuffer, p->method_chosen)) {
-                return ERROR;
-            }
-            return negotiationWrite(key);
-        case NEGOTIATION_PARSE_INCOMPLETE:
-            return NEGOTIATION_READ;
 
-        case NEGOTIATION_PARSE_ERROR:
-        default:
-            p->method_chosen = 0xFF;
-            return ERROR;
+    if (result == NEGOTIATION_PARSE_INCOMPLETE) {
+        return NEGOTIATION_READ;
     }
+
+    if (result != NEGOTIATION_PARSE_OK) {
+        p->method_chosen = 0xFF;
+        return ERROR;
+    }
+
+    if (!sendNegotiationResponse(&data->originBuffer, p->method_chosen)) {
+        return ERROR;
+    }
+
+    const unsigned ret = negotiationWrite(key);
+    if (ret == NEGOTIATION_WRITE && selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
+        return ERROR;
+    }
+
+    return ret;
 }
 
 unsigned negotiationWrite(struct selector_key *key) {
     LOG_DEBUG("%s" ,"NEGOTIATION_WRITE: Writing negotiation response");
     ClientData *data = key->data;
-    negotiation_parser *p = &data->client.negParser;
-    size_t writeLimit;
-    size_t writeCount;
-    uint8_t * b = buffer_read_ptr(&data->originBuffer, &writeLimit);
-    writeCount = send(key->fd, b, writeLimit, MSG_NOSIGNAL );
 
-    /*
-    if (writeCount <= 0) {
-        return ERROR; // error o desconexión
-    }*/
-
-    if (writeCount <= 0) {
-        return (errno == EAGAIN || errno == EWOULDBLOCK)
-               ? NEGOTIATION_WRITE
-               : ERROR;
+    ssize_t bytes_written;
+    if (!buffer_flush(&data->originBuffer, key->fd, &bytes_written)) {
+        return ERROR;
     }
 
-
-
-    buffer_read_adv(&data->originBuffer, writeCount);
-    stats_add_origin_bytes(writeCount);
+    stats_add_origin_bytes(bytes_written);
 
     if (buffer_can_read(&data->originBuffer)) {
         return NEGOTIATION_WRITE;
     }
 
-    if (p->error || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
+    negotiation_parser *p = &data->client.negParser;
+    if (p->method_chosen == 0xFF || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         return ERROR;
     }
-    LOG_DEBUG("NEGOTIATION_WRITE: Successful negotiation, chosen method: %d", p->method_chosen);
 
     if (p->method_chosen == 0x00) {
         return REQ_READ;
@@ -83,6 +77,7 @@ unsigned negotiationWrite(struct selector_key *key) {
         // Ahora cerramos la conexión.
         return ERROR;
     }
+
     return AUTHENTICATION_READ;
 
 }
