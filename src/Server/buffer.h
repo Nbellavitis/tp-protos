@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <unistd.h>  // size_t, ssize_t
 #include <stdint.h> // uint8_t
+#include <errno.h>
+#include <sys/socket.h>
+#include "../logger.h"
+
 /**
  * buffer.c - buffer con acceso directo (útil para I/O) que mantiene
  *            mantiene puntero de lectura y de escritura.
@@ -145,5 +149,11 @@ buffer_can_read(buffer *b);
 bool
 buffer_can_write(buffer *b);
 
+/**
+ * Flushea el buffer 'b' en el socket indicado por el fd
+ * Si hay error retorna false
+ */
+bool
+buffer_flush(buffer *b, int fd, ssize_t *bytes_sent);
 
 #endif
