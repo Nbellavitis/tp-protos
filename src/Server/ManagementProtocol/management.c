@@ -20,8 +20,8 @@ extern bool delete_user(const char* username);
 extern bool change_user_password(const char* username, const char* new_password);
 
 // Credenciales hardcodeadas del admin
-static char* ADMIN_USERNAME = ADMIN_DEFAULT_USER;
-static char* ADMIN_PASSWORD = ADMIN_DEFAULT_PASSWORD;
+static const char* ADMIN_USERNAME = ADMIN_DEFAULT_USER;
+static const char* ADMIN_PASSWORD = ADMIN_DEFAULT_PASSWORD;
 
 // Handlers del selector
 static void management_read(struct selector_key *key);
@@ -223,7 +223,7 @@ bool send_management_response(struct buffer *buffer, uint8_t status, const char 
 }
 
 // State handlers
-void mgmt_auth_read_init(unsigned state, struct selector_key *key) {
+void mgmt_auth_read_init(unsigned state __attribute__((unused)), struct selector_key *key) {
     LOG_DEBUG("Management: Starting authentication");
     ManagementData *mgmt_data = (ManagementData *)key->data;
     init_management_parser(&mgmt_data->parser);
@@ -315,7 +315,7 @@ unsigned mgmt_auth_write(struct selector_key *key) {
     }
 }
 
-void mgmt_command_read_init(unsigned state, struct selector_key *key) {
+void mgmt_command_read_init(unsigned state __attribute__((unused)), struct selector_key *key) {
     LOG_DEBUG("Management: Ready for commands");
     ManagementData *mgmt_data = (ManagementData *)key->data;
     init_management_parser(&mgmt_data->parser);
@@ -485,10 +485,11 @@ unsigned mgmt_command_write(struct selector_key *key) {
     return MGMT_COMMAND_READ;
 }
 
-void mgmt_closed_arrival(unsigned state, struct selector_key *key) {
+// TODO: no creo que tengan sentido estas funciones. Eliminar
+void mgmt_closed_arrival(unsigned state __attribute__((unused)), struct selector_key *key __attribute__((unused))) {
     LOG_DEBUG("Management connection closed");
 }
 
-void mgmt_error_arrival(unsigned state, struct selector_key *key) {
+void mgmt_error_arrival(unsigned state __attribute__((unused)), struct selector_key *key __attribute__((unused))) {
     LOG_ERROR("Management connection error");
 }

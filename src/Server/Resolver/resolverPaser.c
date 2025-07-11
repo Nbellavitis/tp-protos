@@ -75,8 +75,8 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
                     case ATYP_DOMAIN:
                         if (p->bytes_read == 0) {
                             p->domain_length = byte;
-                            // Validar que domain_length no exceda el buffer
-                            if (p->domain_length == 0 || p->domain_length > 255) {
+                            // Validar que domain_length no sea cero
+                            if (p->domain_length == 0) {
                                 p->error = true;
                                 return REQUEST_PARSE_ERROR;
                             }

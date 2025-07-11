@@ -296,7 +296,6 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
 
 unsigned addressResolveDone(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
-    resolver_parser *parser = &clientData->client.reqParser;
 
     LOG_DEBUG("ADDR_RESOLVE_DONE: Processing resolution");
 
@@ -462,7 +461,6 @@ void dnsResolutionDone(union sigval sv) {
 unsigned startConnection(struct selector_key * key) {
     LOG_DEBUG("CONNECTING_INIT: Entering startConnection");
     ClientData *clientData = (ClientData *)key->data;
-    resolver_parser *parser = &clientData->client.reqParser;
 
     LOG_DEBUG("CONNECTING_INIT: Starting connection to target");
 

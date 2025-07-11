@@ -56,7 +56,6 @@ static bool copy_update_interests(struct selector_key *key) {
 
 
 void socksv5HandleInit(const unsigned state, struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
     LOG_DEBUG("COPYING_INIT: Starting data copy between client and origin (state = %d)", state);
     if (!copy_update_interests(key)) {
         closeConnection(key);
@@ -120,8 +119,8 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
     return copy_update_interests(key) ? COPYING : ERROR;
 }
 
+// TODO: creo que no tiene sentido esto:
 void socksv5HandleClose(const unsigned state, struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
     LOG_DEBUG("COPYING_CLOSE: Closing data handling (state = %d, key = %p)", state, key);
 }
 
