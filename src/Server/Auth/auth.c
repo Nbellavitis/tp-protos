@@ -82,9 +82,8 @@ unsigned authenticationWrite(struct selector_key * key){
     ClientData *data = key->data;
     auth_parser *p = &data->client.authParser;
     size_t readLimit;
-    size_t readCount;
-    uint8_t  * b = buffer_read_ptr(&data->originBuffer, &readLimit);
-    readCount = send(key->fd, b, readLimit, MSG_NOSIGNAL);
+    const uint8_t  * b = buffer_read_ptr(&data->originBuffer, &readLimit);
+    const size_t readCount = send(key->fd, b, readLimit, MSG_NOSIGNAL);
 
     if (readCount <= 0) {
         return (errno == EAGAIN || errno == EWOULDBLOCK)
