@@ -16,7 +16,7 @@ endif
 SRC_DIR := .
 OBJ_DIR := ../../obj/server
 BIN_DIR := ../../bin/server
-TARGET  := $(BIN_DIR)/programa
+TARGET  := $(BIN_DIR)/socks5d
 
 SRCS := $(shell find $(SRC_DIR) -name '*.c' ! -path '$(SRC_DIR)/Tests/*')
 OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
