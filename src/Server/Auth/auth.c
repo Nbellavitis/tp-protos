@@ -77,6 +77,34 @@ unsigned authenticationRead(struct selector_key * key){
 
 }
 
+unsigned authenticationWrite(struct selector_key *key) {
+    ClientData *data = (ClientData *)key->data;
+
+    ssize_t bytes_written;
+    if (!buffer_flush(&data->originBuffer, key->fd, &bytes_written)) {
+        return ERROR;
+    }
+
+    stats_add_origin_bytes(bytes_written);
+
+    // Si el buffer no se vació, es porque tenemos que esperar para poder seguir escribiendo en el socket. Nos quedamos en este estado.
+    if (buffer_can_read(&data->originBuffer)) {
+        return AUTHENTICATION_WRITE;
+    }
+
+    // Si la respuesta se envió por completo, seteamos el interés en read y pasamos al siguiente estado
+    // todo: borre el p->error, porque creo que no podemos haber llegado hasta acá si hubo error en el parser, pero chequear por favor
+    if (/* p->error || */ selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
+        return ERROR;
+    }
+
+    return REQ_READ;
+}
+
+
+// función vieja:
+/*
+
 unsigned authenticationWrite(struct selector_key * key){
     ClientData *data = key->data;
     auth_parser *p = &data->client.authParser;
@@ -89,8 +117,6 @@ unsigned authenticationWrite(struct selector_key * key){
                ? AUTHENTICATION_WRITE
                : ERROR;
     }
-
-
 
     stats_add_origin_bytes(readCount); //@Todo check donde va esto.
     buffer_read_adv(&data->originBuffer, readCount);
@@ -105,3 +131,5 @@ unsigned authenticationWrite(struct selector_key * key){
     LOG_DEBUG("Authenticated username: %s", p->name);
     return REQ_READ; // Continuar con la lectura de la solicitud
 }
+
+*/
