@@ -129,7 +129,6 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
 bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t reply, uint8_t atyp, const void *bnd_addr, uint16_t bnd_port) {
     // Verificar espacio disponible antes de escribir
     if (!buffer_can_write(originBuffer)) {
-        LOG_DEBUG("sendRequestResponse: Buffer full, cannot write");
         return false;
     }
 
@@ -138,7 +137,6 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
 
     // Verificar espacio para REP
     if (!buffer_can_write(originBuffer)) {
-        LOG_DEBUG("sendRequestResponse: Buffer full after VER");
         return false;
     }
 
@@ -147,7 +145,6 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
 
     // Verificar espacio para RSV
     if (!buffer_can_write(originBuffer)) {
-        LOG_DEBUG("sendRequestResponse: Buffer full after REP");
         return false;
     }
 
@@ -156,7 +153,6 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
 
     // Verificar espacio para ATYP
     if (!buffer_can_write(originBuffer)) {
-        LOG_DEBUG("sendRequestResponse: Buffer full after RSV");
         return false;
     }
 
@@ -168,12 +164,10 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
         case ATYP_IPV4:
             // Verificar espacio para 4 bytes de IPv4
             if (!buffer_can_write(originBuffer)) {
-                LOG_DEBUG("sendRequestResponse: Buffer full for IPv4");
                 return false;
             }
             for (int i = 0; i < 4; i++) {
                 if (!buffer_can_write(originBuffer)) {
-                    LOG_DEBUG("sendRequestResponse: Buffer full during IPv4");
                     return false;
                 }
                 buffer_write(originBuffer, ((uint8_t*)bnd_addr)[i]);
@@ -182,12 +176,10 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
         case ATYP_IPV6:
             // Verificar espacio para 16 bytes de IPv6
             if (!buffer_can_write(originBuffer)) {
-                LOG_DEBUG("sendRequestResponse: Buffer full for IPv6");
                 return false;
             }
             for (int i = 0; i < 16; i++) {
                 if (!buffer_can_write(originBuffer)) {
-                    LOG_DEBUG("sendRequestResponse: Buffer full during IPv6");
                     return false;
                 }
                 buffer_write(originBuffer, ((uint8_t*)bnd_addr)[i]);
@@ -197,7 +189,6 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
             uint8_t domain_len = strlen((char*)bnd_addr);
             // Verificar espacio para longitud
             if (!buffer_can_write(originBuffer)) {
-                LOG_DEBUG("sendRequestResponse: Buffer full for domain length");
                 return false;
             }
             buffer_write(originBuffer, domain_len);
@@ -205,7 +196,6 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
             // Verificar espacio para dominio
             for (int i = 0; i < domain_len; i++) {
                 if (!buffer_can_write(originBuffer)) {
-                    LOG_DEBUG("sendRequestResponse: Buffer full during domain");
                     return false;
                 }
                 buffer_write(originBuffer, ((char*)bnd_addr)[i]);
@@ -216,7 +206,6 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
 
     // Verificar espacio para puerto (2 bytes)
     if (!buffer_can_write(originBuffer)) {
-        LOG_DEBUG("sendRequestResponse: Buffer full for port");
         return false;
     }
 
@@ -225,12 +214,10 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
     buffer_write(originBuffer, (port_network >> 8) & 0xFF);
 
     if (!buffer_can_write(originBuffer)) {
-        LOG_DEBUG("sendRequestResponse: Buffer full for second port byte");
         return false;
     }
 
     buffer_write(originBuffer, port_network & 0xFF);
 
-    LOG_DEBUG("sendRequestResponse: SOCKS5 response sent to buffer");
     return true;
 }

@@ -49,7 +49,7 @@ void socksv5PassiveAccept(struct selector_key* key){
         return;
     }
     if (newClientSocket >= FD_SETSIZE) {
-        LOG_ERROR("New client socket exceeds maximum file descriptor limit");
+        LOG_ERROR("%s" ,"New client socket exceeds maximum file descriptor limit");
         close(newClientSocket);
         return;
     }
@@ -116,17 +116,15 @@ static void socksv5Read(struct selector_key *key) {
     }
 }
 static void socksv5Write(struct selector_key *key) {
-    LOG_DEBUG("socksv5Write: Entering socksv5Write");
     if (key == NULL) {
-        LOG_ERROR("socksv5Write: key is NULL");
+        LOG_ERROR("%s" ,"socksv5Write: key is NULL");
         return;
     }
     if (key->data == NULL) {
-        LOG_ERROR("socksv5Write: key->data is NULL");
+        LOG_ERROR("%s" ,"socksv5Write: key->data is NULL");
         return;
     }
     ClientData *clientData = (ClientData *)key->data;
-    LOG_DEBUG("socksv5Write: Calling stm_handler_write");
     const enum socks5State state = stm_handler_write(&clientData->stm, key);
     LOG_DEBUG("socksv5Write: stm_handler_write returned: %d", state);
     if (state == ERROR || state == CLOSED) {
@@ -145,17 +143,15 @@ static void socksv5Close(struct selector_key *key) {
     closeConnection(key);
 }
 static void socksv5Block(struct selector_key *key) {
-    LOG_DEBUG("socksv5Block: Entering socksv5Block");
     if (key == NULL) {
-        LOG_ERROR("socksv5Block: key is NULL");
+        LOG_ERROR("%s" ,"socksv5Block: key is NULL");
         return;
     }
     if (key->data == NULL) {
-        LOG_ERROR("socksv5Block: key->data is NULL");
+        LOG_ERROR("%s" ,"socksv5Block: key->data is NULL");
         return;
     }
     ClientData *clientData = (ClientData *)key->data;
-    LOG_DEBUG("socksv5Block: Calling stm_handler_block");
     const enum socks5State state = stm_handler_block(&clientData->stm, key);
     LOG_DEBUG("socksv5Block: stm_handler_block returned: %d", state);
     if (state == ERROR || state == CLOSED) {
@@ -253,11 +249,11 @@ fd_handler * getSocksv5Handler(void) {
 }
 
 
-
+//@TODO tiene sentido esto?
 static void closeArrival(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("Arriving at CLOSED state (state = %d, key = %p)", state, key);
+    LOG_DEBUG("Arriving at CLOSED state (state = %d, key = %p)", state, (void *)key);
 }
 
 static void errorArrival(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("Arriving at ERROR state (state = %d, key = %p)", state, key);
+    LOG_DEBUG("Arriving at ERROR state (state = %d, key = %p)", state, (void *)key);
 }

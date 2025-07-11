@@ -19,7 +19,6 @@ void initAuthParser(auth_parser *parser) {
 
 
 unsigned authParse(auth_parser *p, struct buffer *b) {
-    LOG_DEBUG("AUTH_PARSE: Parsing authentication data");
     while (buffer_can_read(b)){
         uint8_t byte = buffer_read(b);
         if(p->version == 0){
@@ -32,7 +31,7 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
         }else if(p->nameLength == 0){
                 if(byte == 0){
                     p->error = true;
-                    LOG_ERROR("AUTH_PARSE: Invalid name length");
+                    LOG_ERROR("%s", "AUTH_PARSE: Invalid name length. Must be grater than 0.");
                     return AUTH_PARSE_ERROR;
                 }
                 p->nameLength = byte;
@@ -45,7 +44,7 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
         }else if (p->passwordLength == 0) {
             if (byte == 0) {
                 p->error = true;
-                LOG_ERROR("AUTH_PARSE: Invalid password length");
+                LOG_ERROR("%s" ,"AUTH_PARSE: Invalid password length. Must be grater than 0");
                 return AUTH_PARSE_ERROR;
             }
             p->passwordLength = byte;

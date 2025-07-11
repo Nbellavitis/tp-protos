@@ -23,7 +23,7 @@ static bool flush_buffer(int fd, buffer *b) {
     }
 
     if (bytes_sent == 0 && write_len > 0) {
-        LOG_ERROR("flush_buffer: send() returned 0, peer closed connection.");
+        LOG_ERROR("%s" ,"flush_buffer: send() returned 0, peer closed connection.");
         return false;
     }
 
@@ -127,6 +127,6 @@ unsigned socksv5HandleWrite(struct selector_key *key) {
 
 // TODO: creo que no tiene sentido esto:
 void socksv5HandleClose(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("COPYING_CLOSE: Closing data handling (state = %d, key = %p)", state, key);
+    LOG_DEBUG("%s" , "COPYING_CLOSE: Closing data handling");
 }
 

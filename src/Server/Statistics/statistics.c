@@ -55,8 +55,7 @@ unsigned stats_get_origin_bytes(void) {
 
 void stats_print()
 {
-
-    LOG_INFO("=== SOCKS5 STATISTICS ===");
+    LOG_INFO("%s" , "=== SOCKS5 STATISTICS ===");
     LOG_INFO("Conexiones históricas : %u", g_stats.hist_conn);
     LOG_INFO("Conexiones actuales   : %u", g_stats.curr_conn);
     LOG_INFO("Pico de conexiones    : %u", g_stats.max_conn);

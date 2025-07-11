@@ -49,7 +49,7 @@ unsigned negotiationRead(struct selector_key *key) {
 }
 
 unsigned negotiationWrite(struct selector_key *key) {
-    LOG_DEBUG("NEGOTIATION_WRITE: Writing negotiation response");
+    LOG_DEBUG("%s" ,"NEGOTIATION_WRITE: Writing negotiation response");
     ClientData *data = key->data;
 
     ssize_t bytes_written;
@@ -69,11 +69,15 @@ unsigned negotiationWrite(struct selector_key *key) {
     }
 
     if (p->method_chosen == 0x00) {
-        LOG_DEBUG("NEGOTIATION_WRITE: Advancing to REQ_READ (no authentication)");
         return REQ_READ;
     }
+    // todo, revisar lo de abajo:
+    if (p->method_chosen == 0xFF) {
+        // Ya notificamos al cliente que ninguno de sus métodos es aceptado.
+        // Ahora cerramos la conexión.
+        return ERROR;
+    }
 
-    LOG_DEBUG("NEGOTIATION_WRITE: Advancing to AUTHENTICATION_READ (with authentication)");
     return AUTHENTICATION_READ;
 
 }

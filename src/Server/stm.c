@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include "stm.h"
 #include <stdio.h>
-#include "../logger.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -56,7 +55,6 @@ unsigned
 stm_handler_read(struct state_machine *stm, struct selector_key *key) {
     handle_first(stm, key);
     if(stm->current->on_read_ready == 0) {
-       LOG_DEBUG("Estado %d sin on_read_ready", stm->current->state);
         abort();
     }
     const unsigned int ret = stm->current->on_read_ready(key);
@@ -67,17 +65,11 @@ stm_handler_read(struct state_machine *stm, struct selector_key *key) {
 
 unsigned
 stm_handler_write(struct state_machine *stm, struct selector_key *key) {
-    LOG_DEBUG("stm_handler_write: Entrando");
     handle_first(stm, key);
-    LOG_DEBUG("stm_handler_write: Estado actual: %d", stm->current->state);
-    LOG_DEBUG("stm_handler_write: on_write_ready: %p", (void*)stm->current->on_write_ready);
     if(stm->current->on_write_ready == 0) {
-        LOG_DEBUG("stm_handler_write: on_write_ready es NULL");
         abort();
     }
-    LOG_DEBUG("stm_handler_write: Llamando a on_write_ready");
     const unsigned int ret = stm->current->on_write_ready(key);
-    LOG_DEBUG("stm_handler_write: on_write_ready retornó: %d", ret);
     jump(stm, ret, key);
 
     return ret;
@@ -85,17 +77,11 @@ stm_handler_write(struct state_machine *stm, struct selector_key *key) {
 
 unsigned
 stm_handler_block(struct state_machine *stm, struct selector_key *key) {
-    LOG_DEBUG("stm_handler_block: Entrando");
     handle_first(stm, key);
-    LOG_DEBUG("stm_handler_block: Estado actual: %d", stm->current->state);
-    LOG_DEBUG("stm_handler_block: on_block_ready: %p", (void*)stm->current->on_block_ready);
     if(stm->current->on_block_ready == 0) {
-        LOG_DEBUG("stm_handler_block: on_block_ready es NULL");
         abort();
     }
-    LOG_DEBUG("stm_handler_block: Llamando a on_block_ready");
     const unsigned int ret = stm->current->on_block_ready(key);
-    LOG_DEBUG("stm_handler_block: on_block_ready retornó: %d", ret);
     jump(stm, ret, key);
 
     return ret;

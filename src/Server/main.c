@@ -159,7 +159,7 @@ static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t
 
 
 int main (int argc,char * argv[]){
-    LOG_INFO("Starting SOCKS5 Proxy Server");
+    LOG_INFO("%s", "Starting SOCKS5 Proxy Server");
     signal(SIGTERM, sig_handler);
     signal(SIGINT, sig_handler);
     selector_status ss= SELECTOR_SUCCESS;
@@ -274,13 +274,10 @@ int main (int argc,char * argv[]){
     LOG_INFO("Management Server listening on %s:%d", args.mng_addr, args.mng_port);
     
     while(!killed){
-        LOG_DEBUG("Main event loop: Before selector_select");
         ss = selector_select(selector);
-        LOG_DEBUG("Main event loop: After selector_select");
         if (ss != SELECTOR_SUCCESS) {
             return endProgram(authorized_users, selector, ss, server, mgmt_server,error);
         }
-        // stats_print();
     }
     return endProgram(authorized_users, selector, ss, server, mgmt_server,NULL);
 }
