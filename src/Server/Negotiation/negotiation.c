@@ -41,7 +41,7 @@ unsigned negotiationRead(struct selector_key *key) {
 }
 
 unsigned negotiationWrite(struct selector_key *key) {
-    LOG_DEBUG("NEGOTIATION_WRITE: Writing negotiation response");
+    LOG_DEBUG("%s" ,"NEGOTIATION_WRITE: Writing negotiation response");
     ClientData *data = key->data;
     negotiation_parser *p = &data->client.negParser;
     size_t writeLimit;
@@ -75,7 +75,6 @@ unsigned negotiationWrite(struct selector_key *key) {
     LOG_DEBUG("NEGOTIATION_WRITE: Successful negotiation, chosen method: %d", p->method_chosen);
 
     if (p->method_chosen == 0x00) {
-        LOG_DEBUG("NEGOTIATION_WRITE: Advancing to REQ_READ (no authentication)");
         return REQ_READ;
     }
     // todo, revisar lo de abajo:
@@ -84,7 +83,6 @@ unsigned negotiationWrite(struct selector_key *key) {
         // Ahora cerramos la conexión.
         return ERROR;
     }
-    LOG_DEBUG("NEGOTIATION_WRITE: Advancing to AUTHENTICATION_READ (with authentication)");
     return AUTHENTICATION_READ;
 
 }

@@ -37,7 +37,6 @@ void authenticationReadInit(unsigned state,struct selector_key * key){
 
 unsigned authenticationRead(struct selector_key * key){
     ClientData *data = key->data;
-    LOG_DEBUG("Reading authentication data");
     auth_parser *p = &data->client.authParser;
     size_t readLimit;
     size_t readCount;
@@ -105,8 +104,6 @@ unsigned authenticationWrite(struct selector_key * key){
     if (p->error || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         return ERROR;
     }
-    LOG_DEBUG("Authentication process completed successfully");
     LOG_DEBUG("Authenticated username: %s", p->name);
-    LOG_DEBUG("Authentication password validated");
     return REQ_READ; // Continuar con la lectura de la solicitud
 }
