@@ -73,6 +73,7 @@ static bool create_direct_addrinfo(ClientData *clientData, const resolver_parser
         };
 
         clientData->resolution_from_getaddrinfo = false;
+        clientData->currentResolution = clientData->originResolution;
         return true;
 
     } else if (parser->address_type == ATYP_IPV6) {
@@ -104,6 +105,7 @@ static bool create_direct_addrinfo(ClientData *clientData, const resolver_parser
         };
 
         clientData->resolution_from_getaddrinfo = false;
+        clientData->currentResolution = clientData->originResolution;
         return true;
     }
 
@@ -201,26 +203,16 @@ unsigned requestRead(struct selector_key *key) {
     return startConnection(key);
 }
 
-unsigned requestWrite(struct selector_key *key) {
+
+unsigned requestWrite(const struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
 
+    if (!buffer_flush(&clientData->originBuffer, clientData->clientFd,  NULL)) {
+        return ERROR;
+    }
+
     if (buffer_can_read(&clientData->originBuffer)) {
-        size_t bytes_to_write;
-        uint8_t *write_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
-        // ssize_t bytes_written = write(clientData->clientFd, write_ptr, bytes_to_write);
-        ssize_t bytes_written = send(clientData->clientFd, write_ptr, bytes_to_write, MSG_NOSIGNAL);
-        // todo: cambie las lineas de arriba, revisen porfa. mati
-
-        if (bytes_written < 0) {
-            LOG_ERROR("%s","REQ_WRITE: Error writing to client");
-            return ERROR;
-        }
-
-        buffer_read_adv(&clientData->originBuffer, bytes_written);
-
-        if (buffer_can_read(&clientData->originBuffer)) {
-            return REQ_WRITE;
-        }
+        return REQ_WRITE;
     }
 
     return CLOSED;
@@ -292,6 +284,7 @@ unsigned addressResolveDone(struct selector_key *key) {
     if (clientData->dns_resolution_state == 2) {
         // DNS completada exitosamente
         clientData->dns_resolution_state = 0; // Reseteamos el flag
+        clientData->currentResolution = clientData->originResolution;
         return startConnection(key);
 
     }
@@ -344,8 +337,9 @@ unsigned requestConnecting(struct selector_key *key) {
             clientData->unregistering_origin = false;
             close(clientData->originFd);
 
-            if (clientData->resolution_from_getaddrinfo && clientData->originResolution->ai_next != NULL) {
-                clientData->originResolution = clientData->originResolution->ai_next;
+
+            if (clientData->resolution_from_getaddrinfo && clientData->currentResolution->ai_next != NULL) {
+                clientData->currentResolution = clientData->currentResolution->ai_next;
                 return startConnection(key);
             }
 
@@ -451,7 +445,8 @@ unsigned startConnection(struct selector_key * key) {
     ClientData *clientData = (ClientData *)key->data;
 
 
-    struct addrinfo *ai = clientData->originResolution;
+    struct addrinfo *ai = clientData->currentResolution;
+
     clientData->originFd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
     if (clientData->originFd < 0) {
         LOG_ERROR("CONNECTING_INIT: ai->ai_family: %d, ai->ai_socktype: %d, ai->ai_protocol: %d",
@@ -500,11 +495,11 @@ unsigned startConnection(struct selector_key * key) {
     clientData->unregistering_origin = false;
     close(clientData->originFd);
 
-        if (clientData->originResolution->ai_next != NULL) {
-            struct addrinfo* next = clientData->originResolution->ai_next;
-            clientData->originResolution = next;
-            return startConnection(key);
-        }
+    if (clientData->currentResolution->ai_next != NULL) {
+        struct addrinfo* next = clientData->currentResolution->ai_next;
+        clientData->currentResolution = next;
+        return startConnection(key);
+    }
 
     return handle_request_error(errno, key);
 

@@ -48,6 +48,7 @@ typedef struct ClientData {
         resolver_parser reqParser;
     } client;
     struct addrinfo* originResolution;
+    struct addrinfo* currentResolution;
     bool resolution_from_getaddrinfo;  // Track memory origin: true=getaddrinfo_a, false=manual malloc
     int clientFd;
     int originFd;
