@@ -8,7 +8,9 @@
 #include <netdb.h>
 #include <stdint.h>
 #include <signal.h>
-#include "../Server/args.h"
+
+#define DEFAULT_SOCKS5_HOST "127.0.0.1"
+#define DEFAULT_SOCKS5_PORT 1080
 
 // Variable global para detectar Ctrl+C
 volatile sig_atomic_t interrupted = 0;

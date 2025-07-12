@@ -38,6 +38,10 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 #define ADMIN_PASSWORD_ENV_VAR "ADMIN_PASSWORD"
 
 
+#define MAX_USERNAME_LEN     9
+#define MAX_PASSWORD_LEN     9
+
+
 #define MANAGEMENT_VERSION 0x01
 #define MANAGEMENT_BUFFER_SIZE 4096
 
@@ -48,6 +52,8 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 #define CMD_ADD_USER 0x04
 #define CMD_DELETE_USER 0x05
 #define CMD_CHANGE_PASSWORD 0x06
+#define CMD_SET_BUFFER_SIZE 0x07
+#define CMD_GET_BUFFER_INFO 0x08
 
 // Status codes
 #define STATUS_OK 0x00
@@ -118,6 +124,11 @@ bool parse_management_command(management_parser *parser, struct buffer *buffer);
 bool send_management_response(struct buffer *buffer, uint8_t status, const char *payload);
 
 bool change_user_password(const char* username, const char* new_password);
+
+// Buffer size management
+extern size_t get_current_buffer_size(void);
+extern bool set_buffer_size(size_t new_size);
+extern size_t get_available_buffer_sizes(void);
 
 void mgtm_init_admin();
 

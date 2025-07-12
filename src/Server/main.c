@@ -30,6 +30,11 @@ static int endProgram(struct users * users,fd_selector selector, selector_status
 static struct users* authorized_users = NULL;
 static int num_authorized_users = 0;
 
+// Variables globales para gestión de buffer
+static size_t current_buffer_size = BUFFER_SIZE;
+static const size_t available_buffer_sizes[] = {4096, 8192, 16384, 32768, 65536, 131072};
+static const size_t num_available_sizes = sizeof(available_buffer_sizes) / sizeof(available_buffer_sizes[0]);
+
 // Funciones para acceder a los usuarios autorizados
 struct users* get_authorized_users(void) {
     return authorized_users;
@@ -127,6 +132,32 @@ bool change_user_password(const char* username, const char* new_password) {
         }
     }
     return false; // Usuario no encontrado
+}
+
+// Funciones para gestión de buffer
+size_t get_current_buffer_size(void) {
+    return current_buffer_size;
+}
+
+bool set_buffer_size(size_t new_size) {
+    // Verificar que el tamaño esté en la lista de tamaños disponibles
+    for (size_t i = 0; i < num_available_sizes; i++) {
+        if (available_buffer_sizes[i] == new_size) {
+            current_buffer_size = new_size;
+            LOG_INFO("Buffer size changed to: %zu bytes", new_size);
+            return true;
+        }
+    }
+    return false; // Tamaño no válido
+}
+
+size_t get_available_buffer_sizes(void) {
+    return num_available_sizes;
+}
+
+// Función para obtener los tamaños disponibles como array
+const size_t* get_available_buffer_sizes_array(void) {
+    return available_buffer_sizes;
 }
 static int setupSockAddr(char *addr, unsigned short port,void * result,socklen_t * lenResult) {
     int ipv6 = strchr(addr, ':') != NULL;

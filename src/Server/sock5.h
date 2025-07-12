@@ -56,8 +56,9 @@ typedef struct ClientData {
     int connection_ready;
     struct buffer clientBuffer;
     struct buffer originBuffer;
-    uint8_t inClientBuffer[BUFFER_SIZE];
-    uint8_t inOriginBuffer[BUFFER_SIZE];
+    uint8_t *inClientBuffer;    // Buffer dinámico
+    uint8_t *inOriginBuffer;    // Buffer dinámico
+    size_t bufferSize;          // Tamaño actual del buffer
     bool unregistering_origin;
     
     // Para logging de acceso  
