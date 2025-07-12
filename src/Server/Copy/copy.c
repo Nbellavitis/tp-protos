@@ -1,38 +1,7 @@
 #include "copy.h"
 #include "../../logger.h"
 
-// flushea el buffer b en el fd, si hay error retorna false
-static bool flush_buffer(int fd, buffer *b) {
-    if (!buffer_can_read(b)) {
-        // No hay nada para escribir, no es un error.
-        return true;
-    }
-
-    size_t write_len;
-    uint8_t *ptr = buffer_read_ptr(b, &write_len);
-    ssize_t bytes_sent = send(fd, ptr, write_len, MSG_NOSIGNAL);
-
-    if (bytes_sent < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            // El buffer asociado al fd está lleno, no es un error
-            return true;
-        }
-
-        LOG_ERROR("flush_buffer: Error writing to socket: %s", strerror(errno));
-        return false;
-    }
-
-    if (bytes_sent == 0 && write_len > 0) {
-        LOG_ERROR("%s" ,"flush_buffer: send() returned 0, peer closed connection.");
-        return false;
-    }
-
-    buffer_read_adv(b, bytes_sent);
-    return true;
-}
-
-
-static bool copy_update_interests(struct selector_key *key) {
+static bool update_interests(const struct selector_key *key) {
     ClientData *d = (ClientData *)key->data;
     fd_interest client_interest = OP_NOOP;
     fd_interest origin_interest = OP_NOOP;
@@ -63,7 +32,7 @@ static bool copy_update_interests(struct selector_key *key) {
 
 void socksv5HandleInit(const unsigned state, struct selector_key *key) {
     LOG_DEBUG("COPYING_INIT: Starting data copy between client and origin (state = %d)", state);
-    if (!copy_update_interests(key)) {
+    if (!update_interests(key)) {
         closeConnection(key);
     }
 }
@@ -99,33 +68,32 @@ unsigned socksv5HandleRead(struct selector_key *key) {
     }
 
 
-
     // Intentamos escribir en el otro socket
-    if (!flush_buffer(dest_fd, target_buffer)) {
+    if (!buffer_flush(target_buffer, dest_fd, NULL)) {
         return ERROR;
     }
 
     // Actualizamos los intereses y retornamos
-    return copy_update_interests(key) ? COPYING : ERROR;
+    return update_interests(key) ? COPYING : ERROR;
 }
 
-unsigned socksv5HandleWrite(struct selector_key *key) {
+unsigned socksv5HandleWrite(const struct selector_key *key) {
     ClientData *d = (ClientData *)key->data;
 
     if (key->fd == d->clientFd) {
-        if (!flush_buffer(d->clientFd, &d->clientBuffer)) {
+        if (!buffer_flush( &d->clientBuffer, d->clientFd, NULL)) {
             return ERROR;
         }
     } else {
-        if (!flush_buffer(d->originFd, &d->originBuffer)) {
+        if (!buffer_flush(&d->originBuffer, d->originFd, NULL)) {
             return ERROR;
         }
     }
 
-    return copy_update_interests(key) ? COPYING : ERROR;
+    return update_interests(key) ? COPYING : ERROR;
 }
 
-// TODO: creo que no tiene sentido esto:
+
 void socksv5HandleClose(const unsigned state, struct selector_key *key) {
     LOG_DEBUG("%s" , "COPYING_CLOSE: Closing data handling");
 }

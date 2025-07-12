@@ -13,6 +13,6 @@
 // Funciones para el estado COPYING
 void socksv5HandleInit(const unsigned state, struct selector_key *key);
 unsigned socksv5HandleRead(struct selector_key *key);
-unsigned socksv5HandleWrite(struct selector_key *key);
+unsigned socksv5HandleWrite(const struct selector_key *key);
 void socksv5HandleClose(const unsigned state, struct selector_key *key);
 #endif //PROTOS_COPY_H

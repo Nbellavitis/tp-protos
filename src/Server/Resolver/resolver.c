@@ -15,11 +15,6 @@
 #include "../../logger.h"
 
 // Declaraciones externas
-extern void closeConnection(struct selector_key *key);
-extern unsigned stm_handler_read(struct state_machine *stm, struct selector_key *key);
-extern unsigned stm_handler_write(struct state_machine *stm, struct selector_key *key);
-extern unsigned stm_handler_block(struct state_machine *stm, struct selector_key *key);
-extern void stm_handler_close(struct state_machine *stm, struct selector_key *key);
 unsigned startConnection(struct selector_key * key);
 unsigned preSetRequestResponse(struct selector_key * key,int errorStatus);
 // Funciones para registrar sockets en el selector
@@ -129,80 +124,82 @@ unsigned requestRead(struct selector_key *key) {
     // Leer del socket al buffer
     size_t writeLimit;
     uint8_t *b = buffer_write_ptr(&clientData->clientBuffer, &writeLimit);
-    ssize_t readCount = recv(key->fd, b, writeLimit, 0);
+    const ssize_t readCount = recv(key->fd, b, writeLimit, 0);
     if (readCount <= 0) {
         return ERROR; // error o desconexión
     }
     buffer_write_adv(&clientData->clientBuffer, readCount);
 
-    request_parse result = resolverParse(parser, &clientData->clientBuffer);
+    const request_parse result = resolverParse(parser, &clientData->clientBuffer);
 
-    switch (result) {
-        case REQUEST_PARSE_INCOMPLETE:
-            return REQ_READ;
-
-        case REQUEST_PARSE_OK:
-            LOG_DEBUG("REQ_READ: Request parsed successfully - Command: %d, AddressType: %d, Port: %d", 
-                     parser->command, parser->address_type, parser->port);
-            
-            // Capturar información del destino para logging de acceso
-            clientData->target_port = parser->port;
-
-            if (parser->address_type == ATYP_DOMAIN) {
-                LOG_DEBUG("REQ_READ: Target domain: %.*s", parser->domain_length, parser->domain);
-                // Copiar dominio para logging
-                int copy_len = parser->domain_length < sizeof(clientData->target_host) - 1 ? 
-                              parser->domain_length : sizeof(clientData->target_host) - 1; // todo: chequear esto
-                memcpy(clientData->target_host, parser->domain, copy_len);
-                clientData->target_host[copy_len] = '\0'; // todo:chequear (LOGS)
-            } else if (parser->address_type == ATYP_IPV4) {
-                LOG_DEBUG("REQ_READ: Target IPv4: %d.%d.%d.%d", 
-                         parser->ipv4_addr[0], parser->ipv4_addr[1], 
-                         parser->ipv4_addr[2], parser->ipv4_addr[3]);
-                // Convertir IPv4 a string para logging
-                snprintf(clientData->target_host, sizeof(clientData->target_host), 
-                        "%d.%d.%d.%d", parser->ipv4_addr[0], parser->ipv4_addr[1], 
-                        parser->ipv4_addr[2], parser->ipv4_addr[3]);
-            } else if (parser->address_type == ATYP_IPV6) {
-                LOG_DEBUG("%s" , "REQ_READ: Target IPv6");
-                // Convertir IPv6 a string para logging
-                inet_ntop(AF_INET6, parser->ipv6_addr, clientData->target_host, 
-                         sizeof(clientData->target_host));
-            }
-
-            // Por ahora solo soportamos CONNECT
-            if (parser->command != CMD_CONNECT) {
-                LOG_WARN("REQ_READ: Unsupported command (%d), sending error", parser->command);
-                clientData->socks_status = 0x07; // Command not supported
-                // Enviar error: Command not supported
-                return preSetRequestResponse(key, COMMAND_NOT_SUPPORTED); // Command not supported
-            }
-
-            // Optimización: Para IPv4/IPv6 directas, saltear ADDR_RESOLVE
-            if (parser->address_type == ATYP_IPV4 || parser->address_type == ATYP_IPV6) {
-                if (create_direct_addrinfo(clientData, parser)) {
-                    if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
-                        return ERROR;
-                    }
-                    return startConnection(key);
-                }
-                LOG_ERROR("%s" ,"REQ_READ: Failed to create addrinfo for direct IP");
-                clientData->socks_status = 0x01; // General SOCKS server failure
-                return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
-
-            }
-
-            // Para dominios, necesitamos resolver con DNS
-            return ADDR_RESOLVE;
-
-        case REQUEST_PARSE_ERROR:
-            LOG_ERROR("%s" , "REQ_READ: Error parsing request");
-            clientData->socks_status = 0x01; // General SOCKS server failure
-            // Enviar error: General SOCKS server failure
-            return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
+    if (result == REQUEST_PARSE_INCOMPLETE) {
+        return REQ_READ;
     }
 
-    return ERROR;
+    if (result == REQUEST_PARSE_ERROR) {
+        LOG_ERROR("%s" , "REQ_READ: Error parsing request");
+        clientData->socks_status = 0x01;
+        // Enviar error: General SOCKS server failure
+        return preSetRequestResponse(key, GENERAL_FAILURE);
+    }
+
+    if (result != REQUEST_PARSE_OK) {
+        return ERROR;
+    }
+
+
+    LOG_DEBUG("REQ_READ: Request parsed successfully - Command: %d, AddressType: %d, Port: %d", parser->command, parser->address_type, parser->port);
+
+    // Capturar información del destino para logging de acceso
+    clientData->target_port = parser->port;
+
+    if (parser->address_type == ATYP_DOMAIN) {
+        LOG_DEBUG("REQ_READ: Target domain: %.*s", parser->domain_length, parser->domain);
+        // Copiar dominio para logging
+        int copy_len = parser->domain_length < sizeof(clientData->target_host) - 1 ? parser->domain_length : sizeof(clientData->target_host) - 1; // todo: chequear esto
+        memcpy(clientData->target_host, parser->domain, copy_len);
+        clientData->target_host[copy_len] = '\0'; // todo:chequear (LOGS)
+    } else if (parser->address_type == ATYP_IPV4) {
+        LOG_DEBUG("REQ_READ: Target IPv4: %d.%d.%d.%d",
+                 parser->ipv4_addr[0], parser->ipv4_addr[1],
+                 parser->ipv4_addr[2], parser->ipv4_addr[3]);
+        // Convertir IPv4 a string para logging
+        snprintf(clientData->target_host, sizeof(clientData->target_host),
+                "%d.%d.%d.%d", parser->ipv4_addr[0], parser->ipv4_addr[1],
+                parser->ipv4_addr[2], parser->ipv4_addr[3]);
+    } else if (parser->address_type == ATYP_IPV6) {
+        LOG_DEBUG("%s" , "REQ_READ: Target IPv6");
+        // Convertir IPv6 a string para logging
+        inet_ntop(AF_INET6, parser->ipv6_addr, clientData->target_host,
+                 sizeof(clientData->target_host));
+    }
+
+
+    // Por ahora solo soportamos CONNECT
+    if (parser->command != CMD_CONNECT) {
+        LOG_WARN("REQ_READ: Unsupported command (%d), sending error", parser->command);
+        clientData->socks_status = 0x07; // Command not supported
+        // Enviar error: Command not supported
+        return preSetRequestResponse(key, COMMAND_NOT_SUPPORTED); // Command not supported
+    }
+
+    // Para IPv4/IPv6 directas, saltear ADDR_RESOLVE
+    if (parser->address_type == ATYP_IPV4 || parser->address_type == ATYP_IPV6) {
+        if (create_direct_addrinfo(clientData, parser)) {
+            if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
+                return ERROR;
+            }
+            return startConnection(key);
+        }
+        LOG_ERROR("%s" ,"REQ_READ: Failed to create addrinfo for direct IP");
+        clientData->socks_status = 0x01; // General SOCKS server failure
+        return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
+
+    }
+
+    // Para dominios, necesitamos resolver con DNS
+    return ADDR_RESOLVE;
+
 }
 
 unsigned requestWrite(struct selector_key *key) {
