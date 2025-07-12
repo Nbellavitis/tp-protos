@@ -7,8 +7,10 @@
 #include <string.h>
 
 bool validateUser(const char* username, const char* password);
-void authenticationReadInit(unsigned state ,struct selector_key * key);
+void authenticationReadInit(unsigned state , const struct selector_key * key);
 
 unsigned authenticationRead(struct selector_key * key);
 unsigned authenticationWrite(struct selector_key * key);
+unsigned authenticationFailureWrite(struct selector_key *key);
+
 #endif

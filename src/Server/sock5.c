@@ -32,6 +32,7 @@ static const struct state_definition clientActions[] = {
     {.state = NEGOTIATION_WRITE,.on_write_ready = negotiationWrite},
     {.state = AUTHENTICATION_READ,.on_arrival = authenticationReadInit, .on_read_ready = authenticationRead},
     {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite},
+    {.state = AUTHENTICATION_FAILURE_WRITE, .on_write_ready = authenticationFailureWrite},
     {.state = REQ_READ,.on_arrival = requestReadInit,.on_read_ready = requestRead},
     {.state = ADDR_RESOLVE, .on_arrival = addressResolveInit, .on_write_ready = addressResolveDone,.on_block_ready = addressResolveDone}, //todo cambiar nombre!?
     {.state = CONNECTING, .on_arrival = NULL, .on_write_ready = requestConnecting},
