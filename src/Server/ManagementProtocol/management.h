@@ -11,7 +11,7 @@
 #include "../args.h"
 #include <stdbool.h>
 #include <stdint.h>
-
+#include "../Negotiation/negotiationParser.h"
 /*
 CLIENTE → SERVIDOR                                             SERVIDOR → CLIENTE
 +-----+-----+------+------+-------------------+      +-----+-------+ ---------------------------------+
@@ -54,6 +54,8 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 #define CMD_CHANGE_PASSWORD 0x06
 #define CMD_SET_BUFFER_SIZE 0x07
 #define CMD_GET_BUFFER_INFO 0x08
+#define CMD_SET_AUTH_METHOD 0x09
+#define CMD_GET_AUTH_METHOD 0x0A
 
 // Status codes
 #define STATUS_OK 0x00

@@ -3,6 +3,7 @@
 
 #define VERSION_5 0x05
 
+static uint8_t authMethod = AUTH;
 
 negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
     while (buffer_can_read(b)) {
@@ -28,16 +29,16 @@ negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
                 p->method_chosen = 0xFF;
                 // Preferir sin autenticación (0x00) si está disponible
                 for (int i = 0; i < p->nmethods; i++) {
-                    if (p->methods[i] == 0x00) { // no auth
-                        p->method_chosen = 0x00;
+                    if (p->methods[i] == 0x02) { //  auth
+                        p->method_chosen = 0x02;
                         break;
                     }
                 }
                 // Si no está 0x00, buscar autenticación (0x02)
                 if (p->method_chosen == 0xFF) {
                     for (int i = 0; i < p->nmethods; i++) {
-                        if (p->methods[i] == 0x02) { // auth
-                            p->method_chosen = 0x02;
+                        if (p->methods[i] == 0x00 && getAuthMethod() != AUTH) { // no auth
+                            p->method_chosen = 0x00;
                             break;
                         }
                     }
@@ -53,7 +54,7 @@ negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
 void initNegotiationParser(negotiation_parser *parser){
     parser->version = 0;
     parser->nmethods = 0;
-    parser->method_chosen = 0x02; //default pass y user
+    parser->method_chosen = authMethod; //default pass y user
     parser->i = 0;
 }
 
@@ -66,4 +67,14 @@ bool sendNegotiationResponse(struct buffer *originBuffer, uint8_t method) {
     stats_add_origin_bytes(2);
 
     return true;
+}
+void setAuthMethod(uint8_t method) {
+     if (method == NOAUTH || method == AUTH) {
+         authMethod = method;
+     } else {
+         LOG_ERROR("Invalid authentication method: %d", method);
+     }
+}
+uint8_t getAuthMethod() {
+    return authMethod;
 }

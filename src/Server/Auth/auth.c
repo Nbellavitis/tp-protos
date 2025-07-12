@@ -18,7 +18,7 @@ bool validateUser(const char* username, const char* password) {
     return false;
 }
 
-void authenticationReadInit(unsigned state, const struct selector_key *key){
+void authenticationReadInit(const unsigned state,  struct selector_key *key){
     LOG_DEBUG("Authentication phase initialized (state: %d)", state);
     struct ClientData *data = (struct ClientData *)key->data;
     initAuthParser(&data->client.authParser);

@@ -9,6 +9,8 @@
 #include "../buffer.h"
 #include <stdio.h>
 #include "../selector.h"
+#define NOAUTH 0x00
+#define AUTH 0x02
 typedef enum {
     NEGOTIATION_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando
     NEGOTIATION_PARSE_OK,          // parseo exitoso, método elegido
@@ -30,4 +32,6 @@ typedef struct negotiation_parser {
 void  initNegotiationParser(negotiation_parser *parser);
 negotiation_parse negotiationParse(negotiation_parser *p, struct buffer* buffer);
 bool sendNegotiationResponse(struct buffer *originBuffer, uint8_t method);
+void setAuthMethod(uint8_t method);
+uint8_t getAuthMethod();
 #endif //NEGOTITATIONPARSER_H

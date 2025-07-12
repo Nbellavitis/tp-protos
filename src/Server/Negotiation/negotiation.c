@@ -67,7 +67,7 @@ unsigned negotiationWrite(struct selector_key *key) {
         return ERROR;
     }
 
-    if (p->method_chosen == 0x00) {
+    if (p->method_chosen == NOAUTH ) {
         return REQ_READ;
     }
     // todo, revisar lo de abajo:
