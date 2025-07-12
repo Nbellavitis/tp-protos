@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include "sock5.h"
 #include "ManagementProtocol/management.h"
+#include "Negotiation/negotiationParser.h"
 #include "../logger.h"
 #define MAXPENDING 10 //todo ME PINTO 10
 
@@ -194,6 +195,7 @@ int main (int argc,char * argv[]){
     signal(SIGTERM, sig_handler);
     signal(SIGINT, sig_handler);
     selector_status ss= SELECTOR_SUCCESS;
+    setAuthMethod(AUTH); // Establecer el método de autenticación por defecto
     char * error = NULL;
     struct selector_init conf = {
         .signal = SIGALRM,

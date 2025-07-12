@@ -478,6 +478,26 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                 break;
             };
+            case CMD_GET_AUTH_METHOD: {
+                char response[512];
+                snprintf(response,sizeof(response), "Current authentication method: %s",
+                         (getAuthMethod() == NOAUTH) ? "No Authentication" : "Authentication Required");
+                send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
+                break;
+            };
+            case CMD_SET_AUTH_METHOD:{
+                // Payload: "NOAUTH" o "AUTH"
+                if (strcmp(mgmt_data->parser.payload, "NOAUTH") == 0) {
+                    setAuthMethod(NOAUTH);
+                    send_management_response(&mgmt_data->response_buffer, STATUS_OK, "Authentication method set to NOAUTH");
+                } else if (strcmp(mgmt_data->parser.payload, "AUTH") == 0) {
+                    setAuthMethod(AUTH);
+                    send_management_response(&mgmt_data->response_buffer, STATUS_OK, "Authentication method set to AUTH");
+                } else {
+                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid authentication method. Use 'NOAUTH' or 'AUTH'");
+                }
+                break;
+            }
             default:
                 send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Unknown command");
                 break;

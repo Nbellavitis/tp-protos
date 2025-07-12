@@ -9,7 +9,9 @@
 
 #define DEFAULT_MGMT_HOST "127.0.0.1"
 #define DEFAULT_MGMT_PORT 8080
-
+#define AUTH 0x02
+#define NOAUTH 0x00
+#define RESPONSE_BUFFER_SIZE 1024
 // Comandos del protocolo de management
 #define MANAGEMENT_VERSION 0x01
 #define CMD_AUTH 0x01
@@ -20,6 +22,8 @@
 #define CMD_CHANGE_PASSWORD 0x06
 #define CMD_SET_BUFFER_SIZE 0x07
 #define CMD_GET_BUFFER_INFO 0x08
+#define CMD_SET_AUTH_METHOD 0x09
+#define CMD_GET_AUTH_METHOD 0x0A
 
 // Status codes
 #define STATUS_OK 0x00
@@ -143,7 +147,7 @@ int mgmt_authenticate(mgmt_client_t *client, const char *username, const char *p
     }
     
     uint8_t status;
-    char response[1024];
+    char response[RESPONSE_BUFFER_SIZE];
     if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
         return -1;
     }
@@ -170,7 +174,7 @@ int mgmt_get_stats(mgmt_client_t *client) {
     }
     
     uint8_t status;
-    char response[1024];
+    char response[RESPONSE_BUFFER_SIZE];
     if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
         return -1;
     }
@@ -191,7 +195,7 @@ int mgmt_list_users(mgmt_client_t *client) {
     }
     
     uint8_t status;
-    char response[1024];
+    char response[RESPONSE_BUFFER_SIZE];
     if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
         return -1;
     }
@@ -220,7 +224,7 @@ int mgmt_add_user(mgmt_client_t *client, const char *username, const char *passw
     }
     
     uint8_t status;
-    char response[1024];
+    char response[RESPONSE_BUFFER_SIZE];
     if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
         return -1;
     }
@@ -249,7 +253,7 @@ int mgmt_delete_user(mgmt_client_t *client, const char *username) {
     }
     
     uint8_t status;
-    char response[1024];
+    char response[RESPONSE_BUFFER_SIZE];
     if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
         return -1;
     }
@@ -278,7 +282,7 @@ int mgmt_change_password(mgmt_client_t *client, const char *username, const char
         return -1;
     }
     uint8_t status;
-    char response[1024];
+    char response[RESPONSE_BUFFER_SIZE];
     if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
         return -1;
     }
@@ -302,7 +306,7 @@ int mgmt_get_buffer_info(mgmt_client_t *client) {
     }
     
     uint8_t status;
-    char response[1024];
+    char response[RESPONSE_BUFFER_SIZE];
     if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
         return -1;
     }
@@ -323,7 +327,7 @@ int mgmt_set_buffer_size(mgmt_client_t *client, const char *buffer_size_str) {
     }
     
     uint8_t status;
-    char response[1024];
+    char response[RESPONSE_BUFFER_SIZE];
     if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
         return -1;
     }
@@ -335,6 +339,50 @@ int mgmt_set_buffer_size(mgmt_client_t *client, const char *buffer_size_str) {
     }
     return status == STATUS_OK ? 0 : -1;
 }
+
+void mgmt_set_auth_method(mgmt_client_t *client, char * method) {
+    if(!client->authenticated) {
+        printf("Not authenticated\n");
+        return;
+    }
+    if (send_mgmt_command(client, CMD_SET_AUTH_METHOD, method) < 0) {
+        return;
+    }
+    uint8_t status;
+    char response[RESPONSE_BUFFER_SIZE];
+    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
+        return;
+    }
+    if (status == STATUS_OK) {
+        printf("Success: %s\n", response);
+    } else {
+        printf("Error: %s\n", response);
+    }
+}
+
+int mgmt_get_auth_method(mgmt_client_t *client) {
+    if (!client->authenticated) {
+        printf("Not authenticated\n");
+        return -1;
+    }
+
+    if (send_mgmt_command(client, CMD_GET_AUTH_METHOD, NULL) < 0) {
+        return -1;
+    }
+
+    uint8_t status;
+    char response[RESPONSE_BUFFER_SIZE];
+    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
+        return -1;
+    }
+
+    if (status == STATUS_OK) {
+        printf("Current Authentication Method: %s\n", response);
+    } else {
+        printf("Error: %s\n", response);
+    }
+    return status == STATUS_OK ? 0 : -1;
+    }
 
 // Desconectar
 void mgmt_disconnect(mgmt_client_t *client) {
@@ -379,7 +427,10 @@ void interactive_menu(mgmt_client_t *client) {
         printf("5. Change User Password\n");
         printf("6. Get Buffer Info\n");
         printf("7. Set Buffer Size\n");
-        printf("8. Disconnect and Exit\n");
+        printf("8. Change Authentication Method\n");
+        printf("9. Show Current Authentication Method\n");
+        printf("10. Disconnect and Exit\n");
+
         printf("Choice: ");
 
         if (!fgets(input, sizeof(input), stdin)) {
@@ -435,6 +486,30 @@ void interactive_menu(mgmt_client_t *client) {
                 mgmt_set_buffer_size(client, username);
                 break;
             case 8:
+                printf("Select an authentication method:\n");
+                printf("1. No Authentication\n");
+                printf("2. Password Authentication\n");
+                printf("3. Exit\n");
+                if (fgets(input, sizeof(input), stdin)) {
+                    input[strcspn(input, "\n")] = 0; // Eliminar salto de línea
+                }
+                int auth_choice = atoi(input);
+                if (auth_choice == 1) {
+                    mgmt_set_auth_method(client,"NOAUTH");
+                    printf("Authentication method set to No Authentication.\n");
+                } else if (auth_choice == 2) {
+                    mgmt_set_auth_method(client,"AUTH");
+                    printf("Authentication method set to Password Authentication.\n");
+                } else if (auth_choice == 3) {
+                    printf("Exiting...\n");
+                } else {
+                    printf("Invalid choice, please try again.\n");
+                }
+                break;
+                case 9:
+                   mgmt_get_auth_method(client);
+                    break;
+            case 10:
                 printf("Disconnecting...\n");
                 return;
             default:
