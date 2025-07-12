@@ -17,6 +17,7 @@
 
 // Declaración de función externa
 extern size_t get_current_buffer_size(void);
+extern bool killed;
 static void socksv5Read(struct selector_key *key);
 static void socksv5Write(struct selector_key *key);
 static void socksv5Close(struct selector_key *key);
@@ -194,18 +195,28 @@ void closeConnection(struct selector_key *key) {
     }
     stats_connection_closed();
     clientData->closed = true;
+    if (killed) {
 
-    if (clientData->originFd >= 0) {
-        selector_unregister_fd(key->s, clientData->originFd);
-        close(clientData->originFd);
-    }
-    if (clientData->clientFd >= 0) {
-        selector_unregister_fd(key->s, clientData->clientFd);
-        close(clientData->clientFd);
+        if (clientData->originFd >= 0 && clientData->originFd != key->fd) {
+            selector_unregister_fd(key->s, clientData->originFd);
+            close(clientData->originFd);
+        }
+        if (clientData->clientFd >= 0 && clientData->clientFd != key->fd) {
+            selector_unregister_fd(key->s, clientData->clientFd);
+            close(clientData->clientFd);
+        }
+    } else {
+
+        if (clientData->originFd >= 0) {
+            selector_unregister_fd(key->s, clientData->originFd);
+            close(clientData->originFd);
+        }
+        if (clientData->clientFd >= 0) {
+            selector_unregister_fd(key->s, clientData->clientFd);
+            close(clientData->clientFd);
+        }
     }
 
-    // Cancelar resolución DNS pendiente para evitar use-after-free
-    //SEM_DOWN  // Proteger acceso a dns_resolution_state
     if (clientData->dns_resolution_state == 1) {
         // Cancelar resolución pendiente
         struct gaicb *reqs[] = { &clientData->dns_req.req };
@@ -229,7 +240,7 @@ void closeConnection(struct selector_key *key) {
 
     // Registro de acceso antes de liberar clientData
     log_access_record(clientData);
-    
+
     // Liberar buffers dinámicos
     if (clientData->inClientBuffer != NULL) {
         free(clientData->inClientBuffer);
@@ -237,7 +248,7 @@ void closeConnection(struct selector_key *key) {
     if (clientData->inOriginBuffer != NULL) {
         free(clientData->inOriginBuffer);
     }
-    
+
     free(clientData);
 }
 

@@ -34,20 +34,16 @@ static fd_handler management_handler = {
         .handle_close = management_close,
 };
 
-// Handler dummy para estados que no procesan lectura
-static unsigned mgmt_dummy_read_handler(struct selector_key *key) {
-    LOG_DEBUG("%s" ,"mgmt_dummy_read_handler: Unexpected read event in current state");
-    return MGMT_ERROR; // Transición a estado de error
-}
+
 
 // Definición de la máquina de estados
 static const struct state_definition management_states[] = {
         {.state = MGMT_AUTH_READ, .on_arrival = mgmt_auth_read_init, .on_read_ready = mgmt_auth_read},
-        {.state = MGMT_AUTH_WRITE, .on_write_ready = mgmt_auth_write, .on_read_ready = mgmt_dummy_read_handler},
+        {.state = MGMT_AUTH_WRITE, .on_write_ready = mgmt_auth_write},
         {.state = MGMT_COMMAND_READ, .on_arrival = mgmt_command_read_init, .on_read_ready = mgmt_command_read},
-        {.state = MGMT_COMMAND_WRITE, .on_write_ready = mgmt_command_write, .on_read_ready = mgmt_dummy_read_handler},
-        {.state = MGMT_CLOSED, .on_arrival = mgmt_closed_arrival, .on_read_ready = mgmt_dummy_read_handler},
-        {.state = MGMT_ERROR, .on_arrival = mgmt_error_arrival, .on_read_ready = mgmt_dummy_read_handler}
+        {.state = MGMT_COMMAND_WRITE, .on_write_ready = mgmt_command_write},
+        {.state = MGMT_CLOSED, .on_arrival = mgmt_closed_arrival},
+        {.state = MGMT_ERROR, .on_arrival = mgmt_error_arrival}
 };
 
 void mgtm_init_admin() {

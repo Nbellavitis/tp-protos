@@ -17,7 +17,7 @@
 #include "../logger.h"
 #define MAXPENDING 10 //todo ME PINTO 10
 
-static bool killed = false;
+ bool killed = false;
 
 static int endProgram(struct users * users,fd_selector selector, selector_status ss, int server, int mgmt_server,char * error);
 
@@ -195,7 +195,7 @@ int main (int argc,char * argv[]){
     signal(SIGTERM, sig_handler);
     signal(SIGINT, sig_handler);
     selector_status ss= SELECTOR_SUCCESS;
-    setAuthMethod(AUTH); // Establecer el método de autenticación por defecto
+    setAuthMethod(NOAUTH); // Establecer el método de autenticación por defecto
     char * error = NULL;
     struct selector_init conf = {
         .signal = SIGALRM,
