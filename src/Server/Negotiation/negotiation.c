@@ -15,9 +15,8 @@ unsigned negotiationRead(struct selector_key *key) {
     ClientData *data = key->data;
     negotiation_parser *p = &data->client.negParser;
     size_t readLimit;
-    size_t readCount;
     uint8_t *b = buffer_write_ptr(&data->clientBuffer,&readLimit);
-    readCount=recv(key->fd,b,readLimit,0);
+    const ssize_t readCount = recv(key->fd, b, readLimit, 0);
     if (readCount <= 0) {
         return ERROR; // error o desconexión
     }
