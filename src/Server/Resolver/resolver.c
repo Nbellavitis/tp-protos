@@ -40,7 +40,7 @@ static void cleanup_previous_resolution(ClientData *clientData) {
 
 
 // Función auxiliar para crear addrinfo para IPs directas
-static bool create_direct_addrinfo(ClientData *clientData, resolver_parser *parser) {
+static bool create_direct_addrinfo(ClientData *clientData, const resolver_parser *parser) {
     // Limpiar resolución previa si existe
     cleanup_previous_resolution(clientData);
 
@@ -178,28 +178,27 @@ unsigned requestRead(struct selector_key *key) {
     // Por ahora solo soportamos CONNECT
     if (parser->command != CMD_CONNECT) {
         LOG_WARN("REQ_READ: Unsupported command (%d), sending error", parser->command);
-        clientData->socks_status = 0x07; // Command not supported
+        clientData->socks_status = COMMAND_NOT_SUPPORTED; // Command not supported
         // Enviar error: Command not supported
         return preSetRequestResponse(key, COMMAND_NOT_SUPPORTED); // Command not supported
     }
 
-    // Para IPv4/IPv6 directas, saltear ADDR_RESOLVE
-    if (parser->address_type == ATYP_IPV4 || parser->address_type == ATYP_IPV6) {
-        if (create_direct_addrinfo(clientData, parser)) {
-            if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
-                return ERROR;
-            }
-            return startConnection(key);
-        }
-        LOG_ERROR("%s" ,"REQ_READ: Failed to create addrinfo for direct IP");
-        clientData->socks_status = 0x01; // General SOCKS server failure
-        return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
-
+    if (parser->address_type != ATYP_IPV4 && parser->address_type != ATYP_IPV6) {
+        // Para dominios, necesitamos resolver con DNS
+        return ADDR_RESOLVE;
     }
 
-    // Para dominios, necesitamos resolver con DNS
-    return ADDR_RESOLVE;
+    // Para IPv4/IPv6 directas, saltear ADDR_RESOLVE
+    if (!create_direct_addrinfo(clientData, parser)) {
+        LOG_ERROR("%s" ,"REQ_READ: Failed to create addrinfo for direct IP");
+        clientData->socks_status = GENERAL_FAILURE;
+        return preSetRequestResponse(key, GENERAL_FAILURE);
+    }
 
+    if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) { // todo: el selector lo tengo que hacer después del startConnection
+        return ERROR;
+    }
+    return startConnection(key);
 }
 
 unsigned requestWrite(struct selector_key *key) {
@@ -460,6 +459,7 @@ unsigned startConnection(struct selector_key * key) {
     int connect_result = connect(clientData->originFd, ai->ai_addr, ai->ai_addrlen);
 
     if (connect_result == 0) {
+        // Conexión inmediata (muuy extraño)
         if (selector_register(key->s, clientData->originFd, getSocksv5Handler(), OP_WRITE, clientData)) {
             LOG_ERROR("%s" , "CONNECTING_INIT: Error registering origin socket (immediate)");
             close(clientData->originFd);
@@ -467,8 +467,10 @@ unsigned startConnection(struct selector_key * key) {
         }
         selector_set_interest(key->s, key->fd, OP_WRITE);
         clientData->connection_ready = 1;
+        return CONNECTING;
+    }
 
-    } else if (errno == EINPROGRESS) {
+    if (errno == EINPROGRESS) {
         LOG_DEBUG("%s ", "CONNECTING_INIT: Connection in progress (EINPROGRESS)");
 
         if (selector_register(key->s, clientData->originFd, getSocksv5Handler(), OP_WRITE, clientData)) {
@@ -477,13 +479,14 @@ unsigned startConnection(struct selector_key * key) {
             return ERROR;
         }
         clientData->connection_ready = 0;
+        return CONNECTING;
+    }
 
-    } else {
-        LOG_ERROR("CONNECTING_INIT: Error connecting: %s", strerror(errno));
-        clientData->unregistering_origin = true;
-        selector_unregister_fd(key->s, clientData->originFd);
-        clientData->unregistering_origin = false;
-        close(clientData->originFd);
+    LOG_ERROR("CONNECTING_INIT: Error connecting: %s", strerror(errno));
+    clientData->unregistering_origin = true;
+    selector_unregister_fd(key->s, clientData->originFd);
+    clientData->unregistering_origin = false;
+    close(clientData->originFd);
 
         if (clientData->originResolution->ai_next != NULL) {
             struct addrinfo* next = clientData->originResolution->ai_next;
@@ -491,10 +494,9 @@ unsigned startConnection(struct selector_key * key) {
             return startConnection(key);
         }
 
-        return handle_request_error(errno, key);
-    }
+    return handle_request_error(errno, key);
 
-    return CONNECTING;
+
 }
 
 
@@ -522,7 +524,7 @@ static unsigned handle_request_error(int error, struct selector_key *key) {
     }
 }
 
-
+// TODO: ipv4 harcodeado!!
 unsigned preSetRequestResponse(struct selector_key * key,int errorStatus){
     ClientData *clientData = (ClientData *)key->data;
     if(!prepareRequestResponse(&clientData->originBuffer, 0x05, errorStatus, ATYP_IPV4, clientData->client.reqParser.ipv4_addr, 0) || selector_set_interest(key->s,clientData->clientFd,OP_WRITE) != SELECTOR_SUCCESS) {
