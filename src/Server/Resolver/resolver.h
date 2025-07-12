@@ -27,7 +27,7 @@ void requestReadInit(const unsigned state, struct selector_key *key);
 unsigned requestRead(struct selector_key *key);
 
 // Funciones para el estado REQ_WRITE
-unsigned requestWrite(const struct selector_key *key);
+unsigned requestWrite(struct selector_key *key);
 
 // Funciones para el estado ADDR_RESOLVE
 void addressResolveInit(const unsigned state, struct selector_key *key);

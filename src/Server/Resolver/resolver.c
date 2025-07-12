@@ -204,10 +204,10 @@ unsigned requestRead(struct selector_key *key) {
 }
 
 
-unsigned requestWrite(const struct selector_key *key) {
+unsigned requestWrite(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
 
-    if (!buffer_flush(&clientData->originBuffer, clientData->clientFd,  NULL)) {
+    if (!buffer_flush(&clientData->originBuffer, clientData->clientFd, NULL)) {
         return ERROR;
     }
 
@@ -215,7 +215,12 @@ unsigned requestWrite(const struct selector_key *key) {
         return REQ_WRITE;
     }
 
+    if (clientData->socks_status == SUCCESS) {
+        return COPYING;
+    }
+
     return CLOSED;
+
 }
 
 void addressResolveInit(const unsigned state, struct selector_key *key) {
@@ -302,117 +307,38 @@ unsigned addressResolveDone(struct selector_key *key) {
 }
 
 
-
 unsigned requestConnecting(struct selector_key *key) {
-
-    if (key == NULL || key->data == NULL) {
-        LOG_ERROR("%s" ,"requestConnecting: key or key->data is NULL");
-        return ERROR;
-    }
-
     ClientData *clientData = (ClientData *)key->data;
-    resolver_parser *parser = &clientData->client.reqParser;
 
-    // Si la conexión ya estaba marcada como lista, proceder
     if (clientData->connection_ready) {
-        LOG_DEBUG("%s" , "requestConnecting: Connection was already ready");
-    } else {
-        // Verificar si la conexión se completó exitosamente
-        int so_error = 0;
-        socklen_t len = sizeof(so_error);
-
-        if (getsockopt(clientData->originFd, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
-            LOG_ERROR("requestConnecting: Error in getsockopt: %s", strerror(errno));
-            return preSetRequestResponse(key, GENERAL_FAILURE);
-        }
-        LOG_DEBUG("requestConnecting: getsockopt SO_ERROR = %d (%s)", so_error, strerror(so_error));
-
-
-        if (so_error != 0) {
-            printf("[DEBUG] requestConnecting: Error en conexión: %s\n", strerror(so_error));
-
-            //selector_unregister_fd(key->s, clientData->originFd);
-            clientData->unregistering_origin = true;
-            selector_unregister_fd(key->s, clientData->originFd);
-            clientData->unregistering_origin = false;
-            close(clientData->originFd);
-
-
-            if (clientData->resolution_from_getaddrinfo && clientData->currentResolution->ai_next != NULL) {
-                clientData->currentResolution = clientData->currentResolution->ai_next;
-                return startConnection(key);
-            }
-
-            // Si no hay más direcciones o la resolución es manual, liberar memoria y responder error
-
-//            selector_unregister_fd(key->s, clientData->originFd);
-//            close(clientData->originFd);
-
-            return handle_request_error(so_error, key);
-
-        }
-
-        clientData->connection_ready = 1;
+        clientData->socks_status = SUCCESS;
+        return preSetRequestResponse(key, SUCCESS);
     }
 
-    struct sockaddr_storage local_addr;
-    socklen_t local_addr_len = sizeof(local_addr);
-    uint8_t atyp = ATYP_IPV4;
-    const void *addr_ptr = NULL;
-    uint16_t port = 0;
-    if (getsockname(clientData->originFd, (struct sockaddr*)&local_addr, &local_addr_len) < 0) {
-        LOG_DEBUG("%s", "requestConnecting: Error getting local address");
-        memset(parser->ipv4_addr, 0, 4);
-        atyp = ATYP_IPV4;
-        addr_ptr = parser->ipv4_addr;
-    } else {
-        if (local_addr.ss_family == AF_INET) {
-            struct sockaddr_in *addr_in = (struct sockaddr_in*)&local_addr;
-            memcpy(parser->ipv4_addr, &addr_in->sin_addr, 4);
-            atyp = ATYP_IPV4;
-            addr_ptr = parser->ipv4_addr;
-            port = ntohs(addr_in->sin_port);
-        } else if (local_addr.ss_family == AF_INET6) {
-            struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6*)&local_addr;
-            memcpy(parser->ipv6_addr, &addr_in6->sin6_addr, 16);
-            atyp = ATYP_IPV6;
-            addr_ptr = parser->ipv6_addr;
-            port = ntohs(addr_in6->sin6_port);
-        } else {
-            LOG_ERROR("%s", "requestConnecting: Unsupported address family");
-            return ERROR;
-        }
+    int so_error = 0;
+    socklen_t len = sizeof(so_error);
+    if (getsockopt(clientData->originFd, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
+        return handle_request_error(errno, key);
     }
 
-    if (selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS ||
-        !prepareRequestResponse(&clientData->originBuffer, 0x05, SUCCESS, atyp, addr_ptr, port)) {
-        LOG_ERROR("%s", "requestConnecting: Error configuring client for writing");
-        return ERROR;
-    }
+    if (so_error != 0) {
+        // Falló la conexión, intentamos con la siguiente dirección.
+        clientData->unregistering_origin = true;
+        selector_unregister_fd(key->s, clientData->originFd);
+        clientData->unregistering_origin = false;
+        close(clientData->originFd);
 
-    // Escribir respuesta inmediatamente si es posible
-    if (buffer_can_read(&clientData->originBuffer)) {
-        size_t bytes_to_write;
-        uint8_t *write_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
-        ssize_t bytes_written = send(clientData->clientFd, write_ptr, bytes_to_write, MSG_NOSIGNAL);
-
-        if (bytes_written < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // El socket no está listo, el selector nos llamará cuando lo esté
-                return CONNECTING;
-            }
-            LOG_ERROR("requestConnecting: Error writing response: %s", strerror(errno));
-            return ERROR;
+        if (clientData->resolution_from_getaddrinfo && clientData->currentResolution->ai_next != NULL) {
+            clientData->currentResolution = clientData->currentResolution->ai_next;
+            return startConnection(key);
         }
 
-        buffer_read_adv(&clientData->originBuffer, bytes_written);
-
-        if (buffer_can_read(&clientData->originBuffer)) {
-            return CONNECTING;
-        }
+        return handle_request_error(so_error, key);
     }
 
-    return COPYING;
+    clientData->connection_ready = 1;
+    clientData->socks_status = SUCCESS;
+    return preSetRequestResponse(key, SUCCESS);
 }
 
 
