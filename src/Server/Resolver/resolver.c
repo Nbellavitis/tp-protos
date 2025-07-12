@@ -73,6 +73,7 @@ static bool create_direct_addrinfo(ClientData *clientData, const resolver_parser
         };
 
         clientData->resolution_from_getaddrinfo = false;
+        clientData->currentResolution = clientData->originResolution;
         return true;
 
     } else if (parser->address_type == ATYP_IPV6) {
@@ -104,6 +105,7 @@ static bool create_direct_addrinfo(ClientData *clientData, const resolver_parser
         };
 
         clientData->resolution_from_getaddrinfo = false;
+        clientData->currentResolution = clientData->originResolution;
         return true;
     }
 
@@ -292,6 +294,7 @@ unsigned addressResolveDone(struct selector_key *key) {
     if (clientData->dns_resolution_state == 2) {
         // DNS completada exitosamente
         clientData->dns_resolution_state = 0; // Reseteamos el flag
+        clientData->currentResolution = clientData->originResolution;
         return startConnection(key);
 
     }
@@ -344,8 +347,9 @@ unsigned requestConnecting(struct selector_key *key) {
             clientData->unregistering_origin = false;
             close(clientData->originFd);
 
-            if (clientData->resolution_from_getaddrinfo && clientData->originResolution->ai_next != NULL) {
-                clientData->originResolution = clientData->originResolution->ai_next;
+
+            if (clientData->resolution_from_getaddrinfo && clientData->currentResolution->ai_next != NULL) {
+                clientData->currentResolution = clientData->currentResolution->ai_next;
                 return startConnection(key);
             }
 
@@ -439,7 +443,8 @@ unsigned startConnection(struct selector_key * key) {
     ClientData *clientData = (ClientData *)key->data;
 
 
-    struct addrinfo *ai = clientData->originResolution;
+    struct addrinfo *ai = clientData->currentResolution;
+
     clientData->originFd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
     if (clientData->originFd < 0) {
         LOG_ERROR("CONNECTING_INIT: ai->ai_family: %d, ai->ai_socktype: %d, ai->ai_protocol: %d",
@@ -488,11 +493,11 @@ unsigned startConnection(struct selector_key * key) {
     clientData->unregistering_origin = false;
     close(clientData->originFd);
 
-        if (clientData->originResolution->ai_next != NULL) {
-            struct addrinfo* next = clientData->originResolution->ai_next;
-            clientData->originResolution = next;
-            return startConnection(key);
-        }
+    if (clientData->currentResolution->ai_next != NULL) {
+        struct addrinfo* next = clientData->currentResolution->ai_next;
+        clientData->currentResolution = next;
+        return startConnection(key);
+    }
 
     return handle_request_error(errno, key);
 
