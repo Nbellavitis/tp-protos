@@ -77,7 +77,7 @@ unsigned socksv5HandleRead(struct selector_key *key) {
     return update_interests(key) ? COPYING : ERROR;
 }
 
-unsigned socksv5HandleWrite(const struct selector_key *key) {
+unsigned socksv5HandleWrite( struct selector_key *key) {
     ClientData *d = (ClientData *)key->data;
 
     if (key->fd == d->clientFd) {
