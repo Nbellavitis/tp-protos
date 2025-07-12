@@ -203,26 +203,16 @@ unsigned requestRead(struct selector_key *key) {
     return startConnection(key);
 }
 
-unsigned requestWrite(struct selector_key *key) {
+
+unsigned requestWrite(const struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
 
+    if (!buffer_flush(&clientData->originBuffer, clientData->clientFd,  NULL)) {
+        return ERROR;
+    }
+
     if (buffer_can_read(&clientData->originBuffer)) {
-        size_t bytes_to_write;
-        uint8_t *write_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
-        // ssize_t bytes_written = write(clientData->clientFd, write_ptr, bytes_to_write);
-        ssize_t bytes_written = send(clientData->clientFd, write_ptr, bytes_to_write, MSG_NOSIGNAL);
-        // todo: cambie las lineas de arriba, revisen porfa. mati
-
-        if (bytes_written < 0) {
-            LOG_ERROR("%s","REQ_WRITE: Error writing to client");
-            return ERROR;
-        }
-
-        buffer_read_adv(&clientData->originBuffer, bytes_written);
-
-        if (buffer_can_read(&clientData->originBuffer)) {
-            return REQ_WRITE;
-        }
+        return REQ_WRITE;
     }
 
     return CLOSED;
