@@ -365,26 +365,38 @@ unsigned requestConnecting(struct selector_key *key) {
         clientData->connection_ready = 1;
     }
 
-    // Obtener la dirección local del socket para la respuesta
     struct sockaddr_storage local_addr;
     socklen_t local_addr_len = sizeof(local_addr);
+    uint8_t atyp = ATYP_IPV4;
+    const void *addr_ptr = NULL;
+    uint16_t port = 0;
     if (getsockname(clientData->originFd, (struct sockaddr*)&local_addr, &local_addr_len) < 0) {
-        LOG_DEBUG("%s" ,"requestConnecting: Error getting local address");
+        LOG_DEBUG("%s", "requestConnecting: Error getting local address");
         memset(parser->ipv4_addr, 0, 4);
+        atyp = ATYP_IPV4;
+        addr_ptr = parser->ipv4_addr;
     } else {
         if (local_addr.ss_family == AF_INET) {
             struct sockaddr_in *addr_in = (struct sockaddr_in*)&local_addr;
             memcpy(parser->ipv4_addr, &addr_in->sin_addr, 4);
+            atyp = ATYP_IPV4;
+            addr_ptr = parser->ipv4_addr;
+            port = ntohs(addr_in->sin_port);
         } else if (local_addr.ss_family == AF_INET6) {
             struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6*)&local_addr;
             memcpy(parser->ipv6_addr, &addr_in6->sin6_addr, 16);
+            atyp = ATYP_IPV6;
+            addr_ptr = parser->ipv6_addr;
+            port = ntohs(addr_in6->sin6_port);
+        } else {
+            LOG_ERROR("%s", "requestConnecting: Unsupported address family");
+            return ERROR;
         }
     }
 
-    // Preparar respuesta de éxito
-    // Configurar cliente para escribir la respuesta
-    if(selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS || !prepareRequestResponse(&clientData->originBuffer, 0x05, SUCCESS, ATYP_IPV4, parser->ipv4_addr, 0)) {
-        LOG_ERROR("%s" ,"requestConnecting: Error configuring client for writing");
+    if (selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS ||
+        !prepareRequestResponse(&clientData->originBuffer, 0x05, SUCCESS, atyp, addr_ptr, port)) {
+        LOG_ERROR("%s", "requestConnecting: Error configuring client for writing");
         return ERROR;
     }
 
@@ -529,12 +541,55 @@ static unsigned handle_request_error(int error, struct selector_key *key) {
     }
 }
 
-// TODO: ipv4 harcodeado!!
-unsigned preSetRequestResponse(struct selector_key * key,int errorStatus){
+unsigned preSetRequestResponse(struct selector_key *key, int errorStatus) {
     ClientData *clientData = (ClientData *)key->data;
-    if(!prepareRequestResponse(&clientData->originBuffer, 0x05, errorStatus, ATYP_IPV4, clientData->client.reqParser.ipv4_addr, 0) || selector_set_interest(key->s,clientData->clientFd,OP_WRITE) != SELECTOR_SUCCESS) {
-        LOG_ERROR("%s" , "preSetRequestResponse: Error preparing request response");
+
+    uint8_t atyp = ATYP_IPV4;
+    uint8_t addr[16]; // máximo tamaño: IPv6
+    uint16_t port = 0;
+
+    if (clientData->originFd >= 0) {
+        struct sockaddr_storage local_addr;
+        socklen_t local_addr_len = sizeof(local_addr);
+
+        if (getsockname(clientData->originFd, (struct sockaddr *)&local_addr, &local_addr_len) == 0) {
+            if (local_addr.ss_family == AF_INET) {
+                struct sockaddr_in *addr4 = (struct sockaddr_in *)&local_addr;
+                memcpy(addr, &addr4->sin_addr, 4);
+                port = ntohs(addr4->sin_port);
+                atyp = ATYP_IPV4;
+            } else if (local_addr.ss_family == AF_INET6) {
+                struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&local_addr;
+                memcpy(addr, &addr6->sin6_addr, 16);
+                port = ntohs(addr6->sin6_port);
+                atyp = ATYP_IPV6;
+            } else {
+                // Fallback si no es una familia válida
+                uint32_t ip = htonl(0);
+                memcpy(addr, &ip, 4);
+                port = 0;
+                atyp = ATYP_IPV4;
+            }
+        } else {
+            // getsockname falló → fallback
+            uint32_t ip = htonl(0);
+            memcpy(addr, &ip, 4);
+            port = 0;
+            atyp = ATYP_IPV4;
+        }
+    } else {
+        // originFd inválido → no se pudo conectar
+        uint32_t ip = htonl(0);
+        memcpy(addr, &ip, 4);
+        port = 0;
+        atyp = ATYP_IPV4;
+    }
+
+    if (!prepareRequestResponse(&clientData->originBuffer, 0x05, errorStatus, atyp, addr, port) ||
+        selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
+        LOG_ERROR("%s", "preSetRequestResponse: Error preparing request response");
         return ERROR;
     }
+
     return REQ_WRITE;
 }
