@@ -54,3 +54,5 @@ dkms.conf
 /.gdb_history
 ./src/bin/
 ./src/obj/
+./bin/
+./obj/

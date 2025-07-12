@@ -116,6 +116,16 @@ void socksv5PassiveAccept(struct selector_key* key){
     stm_init(&clientData->stm);
     selector_status ss = selector_register(key->s, newClientSocket, &handler, OP_READ, clientData);
     if (ss != SELECTOR_SUCCESS) {
+        free(clientData->inClientBuffer);
+        free(clientData->inOriginBuffer);
+        free(clientData);
+        close(newClientSocket);
+        return;
+    }
+    if(selector_fd_set_nio(newClientSocket) == -1) { //todo check si esta bien
+        LOG_ERROR("Failed to set non-blocking mode for new client socket %d", newClientSocket);
+        free(clientData->inClientBuffer);
+        free(clientData->inOriginBuffer);
         free(clientData);
         close(newClientSocket);
         return;
