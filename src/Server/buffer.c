@@ -119,13 +119,12 @@ buffer_flush(buffer *b, const int fd, ssize_t *bytes_sent) {
     const uint8_t *ptr = buffer_read_ptr(b, &write_len); // write_len > 0, pues buffer_can_read(b)
     const ssize_t sent = send(fd, ptr, write_len, MSG_NOSIGNAL);
 
-    // Guardamos el resultado de send() en el parámetro de salida si no es nulo.
+    // Guardamos el resultado de send() en el parámetro de salida
     if (bytes_sent != NULL) {
         *bytes_sent = sent;
     }
 
     if (sent > 0) {
-        // Éxito: se enviaron algunos bytes.
         buffer_read_adv(b, sent);
         return true;
     }
@@ -136,7 +135,7 @@ buffer_flush(buffer *b, const int fd, ssize_t *bytes_sent) {
 
     // sent < 0
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        // El buffer asociado al socket está lleno. No es un error fatal, se puede reintentar.
+        // No es un error
         return true;
     }
 
