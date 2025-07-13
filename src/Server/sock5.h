@@ -63,10 +63,10 @@ typedef struct ClientData {
     bool unregistering_origin;
     
     // Para logging de acceso  
-    char username[256];          // Usuario autenticado
+    char username[256];          // Usuario autenticado         
     char client_ip[INET6_ADDRSTRLEN];   // IP del cliente
     int client_port;             // Puerto del cliente
-    char target_host[256];       // Host de destino
+    char target_host[256];       // Host de destino         //@todo hacer MALLOQUABLE
     int target_port;             // Puerto de destino
     uint8_t socks_status;        // Status code SOCKS5
 
