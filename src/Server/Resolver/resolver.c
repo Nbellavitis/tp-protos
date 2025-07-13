@@ -300,7 +300,7 @@ unsigned addressResolveDone(struct selector_key *key) {
     }
     // Cubre el fallo del DNS (estado -1) y el fallo en init (estado 0)
     // DNS falló o hubo un error inmediato al iniciar la resolución.
-    LOG_ERROR("%s" , "ADDR_RESOLVE_DONE: DNS failed or init error");
+//    LOG_ERROR("%s" , "ADDR_RESOLVE_DONE: DNS failed or init error");
     clientData->dns_resolution_state = 0; // Reseteamos el flag
     return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
 

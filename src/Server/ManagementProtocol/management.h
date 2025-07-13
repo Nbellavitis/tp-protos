@@ -38,8 +38,8 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 #define ADMIN_PASSWORD_ENV_VAR "ADMIN_PASSWORD"
 
 
-#define MAX_USERNAME_LEN     9
-#define MAX_PASSWORD_LEN     9
+#define MAX_USERNAME_LEN     63
+#define MAX_PASSWORD_LEN     63
 
 
 #define MANAGEMENT_VERSION 0x01

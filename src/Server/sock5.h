@@ -23,6 +23,8 @@
 #include "Resolver/resolverParser.h"
 #include "args.h"
 #include "Copy/copy.h"
+#include "ManagementProtocol/management.h"
+
 #define BUFFER_SIZE 32768
 
 // Funciones para acceder a usuarios autorizados
@@ -63,7 +65,7 @@ typedef struct ClientData {
     bool unregistering_origin;
     
     // Para logging de acceso  
-    char username[256];          // Usuario autenticado         
+    char username[MAX_USERNAME_LEN];          // Usuario autenticado
     char client_ip[INET6_ADDRSTRLEN];   // IP del cliente
     int client_port;             // Puerto del cliente
     char target_host[256];       // Host de destino         //@todo hacer MALLOQUABLE
