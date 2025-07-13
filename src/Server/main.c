@@ -106,7 +106,10 @@ bool delete_user(const char* username) {
             // Liberar memoria de los strings
             free(authorized_users[i].name);
             free(authorized_users[i].pass);
-            
+            if(authorized_users[i].history != NULL){
+                free(authorized_users[i].history);
+            }
+
             // Mover todos los elementos posteriores una posición hacia atrás
             for (int j = i; j < num_authorized_users - 1; j++) {
                 authorized_users[j] = authorized_users[j + 1];
@@ -330,6 +333,9 @@ int main (int argc,char * argv[]){
 
 
 static void free_users_info(struct users * users){
+    if(anonymous_user.history != NULL){
+        free(anonymous_user.history);
+    }
     if (users != NULL) {
         for (int i = 0; i < num_authorized_users; i++) {
             if (users[i].name != NULL) {
@@ -337,6 +343,9 @@ static void free_users_info(struct users * users){
             }
             if (users[i].pass != NULL) {
                 free(users[i].pass);  // Liberar password
+            }
+            if (users[i].history != NULL) {
+                free(users[i].history);
             }
         }
         free(users);

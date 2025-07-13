@@ -61,6 +61,7 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 #define CMD_GET_BUFFER_INFO 0x08
 #define CMD_SET_AUTH_METHOD 0x09
 #define CMD_GET_AUTH_METHOD 0x0A
+#define CMD_GET_LOG_BY_USER 0x0B
 
 // Status codes
 #define STATUS_OK 0x00

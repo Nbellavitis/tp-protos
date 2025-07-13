@@ -11,6 +11,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <bits/types/struct_tm.h>
+#include <time.h>
 
 // Declaraciones de funciones externas
 
@@ -22,6 +24,8 @@ static const char* ADMIN_PASSWORD = ADMIN_DEFAULT_PASSWORD;
 static void management_read(struct selector_key *key);
 static void management_write(struct selector_key *key);
 static void management_close(struct selector_key *key);
+static void process_cmd_get_log_by_user(ManagementData *md);
+
 
 static fd_handler management_handler = {
         .handle_read = management_read,
@@ -489,6 +493,10 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 }
                 break;
             }
+            case CMD_GET_LOG_BY_USER:{
+                process_cmd_get_log_by_user(mgmt_data);
+                break;
+            }
             default:
                 send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Unknown command");
                 break;
@@ -534,4 +542,81 @@ void mgmt_closed_arrival(unsigned state __attribute__((unused)), struct selector
 
 void mgmt_error_arrival(unsigned state __attribute__((unused)), struct selector_key *key __attribute__((unused))) {
     LOG_ERROR("%s" ,"Management connection error");
+}
+
+
+
+//@TODO: por como esta definido el protocolo hay veces que se trunca la respuesta!!!!. El maximo del payload es 256 y el maximo de host lenght es eso tambien! hay que agrandar el payload y cambiar un poco esta funcion.
+static void process_cmd_get_log_by_user(ManagementData *md)
+{
+    /* 0)  Autenticación obligatoria */
+    if (!md->authenticated) {
+        send_management_response(&md->response_buffer,
+                                 STATUS_AUTH_REQUIRED,
+                                 "Authentication required");
+        return;
+    }
+
+    /* 1)  Usuario en payload */
+    char uname[MAX_USERNAME_LEN + 1];
+    size_t ulen = md->parser.payload_len > MAX_USERNAME_LEN
+                  ? MAX_USERNAME_LEN
+                  : md->parser.payload_len;
+    memcpy(uname, md->parser.payload, ulen);
+    uname[ulen] = '\0';
+
+    /* 2)  Buscar el bucket */
+    user_t *u = NULL;
+    if (strcmp(uname, "anonymous") == 0) {
+        u = get_anon_user();
+    } else {
+        user_t *tbl = get_authorized_users();
+        int n = get_num_authorized_users();
+        for (int i = 0; i < n; i++) {
+            if (tbl[i].name && strcmp(tbl[i].name, uname) == 0) {
+                u = &tbl[i];
+                break;
+            }
+        }
+    }
+    if (!u) {     /* usuario inexistente */
+        send_management_response(&md->response_buffer,
+                                 STATUS_NOT_FOUND,
+                                 "User not found");
+        return;
+    }
+
+    /* 3)  Armar payload truncado (≤255 B) */
+    char  payload[256];       /* 255 bytes + '\0' */
+    size_t plen = 0;
+
+    char   ts[32], line[256];
+    struct tm tm_;
+
+    for (size_t i = 0; i < u->used && plen < 255; i++) {
+        gmtime_r(&u->history[i].ts, &tm_);
+        strftime(ts, sizeof ts, "%Y-%m-%dT%H:%M:%SZ", &tm_);
+
+        /* espacio disponible, dejando 1 para '\0' */
+        size_t room = 255 - plen;
+        int n = snprintf(payload + plen, room + 1,
+                         "%s\t%s\t%u\t%s\t%u\t0x%02X\n",
+                         ts,
+                         u->history[i].client_ip,
+                         u->history[i].client_port,
+                         u->history[i].dst_host,
+                         u->history[i].dst_port,
+                         u->history[i].status);
+
+        if (n < 0) continue;          /* error improbable */
+        if ((size_t)n >= room) {      /* se truncó la línea */
+            plen = 255;               /* llenamos el cupo y salimos */
+            break;
+        }
+        plen += (size_t)n;            /* línea completa añadida */
+    }
+    payload[plen] = '\0';             /* asegurar terminación */
+
+    /* 4)  Responder STATUS_OK con el payload (truncado o no) */
+    send_management_response(&md->response_buffer, STATUS_OK, payload);
 }

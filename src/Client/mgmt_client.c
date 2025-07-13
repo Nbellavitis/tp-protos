@@ -24,6 +24,8 @@
 #define CMD_GET_BUFFER_INFO 0x08
 #define CMD_SET_AUTH_METHOD 0x09
 #define CMD_GET_AUTH_METHOD 0x0A
+#define CMD_GET_LOG_BY_USER 0x0B
+
 
 // Status codes
 #define STATUS_OK 0x00
@@ -384,6 +386,34 @@ int mgmt_get_auth_method(mgmt_client_t *client) {
     return status == STATUS_OK ? 0 : -1;
     }
 
+int mgmt_get_log_by_user(mgmt_client_t *client, const char *username) {
+    if (!client->authenticated) {
+        printf("Not authenticated\n");
+        return -1;
+    }
+    if (strlen(username) > MAX_USERNAME_LEN) {
+        printf("Username must be ≤ %d characters\n", MAX_USERNAME_LEN);
+        return -1;
+    }
+
+    if (send_mgmt_command(client, CMD_GET_LOG_BY_USER, username) < 0)
+        return -1;
+
+    uint8_t status;
+    char    response[RESPONSE_BUFFER_SIZE];
+    if (recv_mgmt_response(client, &status, response, sizeof response) < 0)
+        return -1;
+
+    if (status == STATUS_OK) {
+        /* La respuesta puede contener saltos de línea ya formateados */
+        printf("Access log for %s:\n%s\n", username, response);
+        return 0;
+    }
+    printf("Error: %s\n", response);
+    return -1;
+}
+
+
 // Desconectar
 void mgmt_disconnect(mgmt_client_t *client) {
     if (client->socket_fd >= 0) {
@@ -429,7 +459,8 @@ void interactive_menu(mgmt_client_t *client) {
         printf("7. Set Buffer Size\n");
         printf("8. Change Authentication Method\n");
         printf("9. Show Current Authentication Method\n");
-        printf("10. Disconnect and Exit\n");
+        printf("10. Show user logs\n");
+        printf("11. Disconnect and Exit\n");
 
         printf("Choice: ");
 
@@ -509,9 +540,19 @@ void interactive_menu(mgmt_client_t *client) {
                 case 9:
                    mgmt_get_auth_method(client);
                     break;
-            case 10:
+
+            case 10: {
+                printf("Username (use \"anonymous\" for NOAUTH): ");
+                if (fgets(username, sizeof username, stdin)) {
+                    username[strcspn(username, "\n")] = 0;
+                }
+                mgmt_get_log_by_user(client, username);
+                break;
+            }
+            case 11:
                 printf("Disconnecting...\n");
                 return;
+
             default:
                 printf("Invalid choice\n");
                 break;
