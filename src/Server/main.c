@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "args.h"
 #include "selector.h"
 #include <arpa/inet.h>
@@ -14,13 +13,13 @@
 #include "sock5.h"
 #include "ManagementProtocol/management.h"
 #include "Negotiation/negotiationParser.h"
+#include "main.h"
 #include "../logger.h"
 #define MAXPENDING 10 //todo ME PINTO 10
 
  bool killed = false;
 
 static int endProgram(struct users * users,fd_selector selector, selector_status ss, int server, int mgmt_server,char * error);
-
         void sig_handler(int signum) {
     if (signum == SIGTERM || signum == SIGINT) {
         LOG_INFO("Received signal %d, shutting down...", signum);
@@ -30,6 +29,14 @@ static int endProgram(struct users * users,fd_selector selector, selector_status
 // Variables globales para usuarios autorizados
 static struct users* authorized_users = NULL;
 static int num_authorized_users = 0;
+
+static user_t anonymous_user = {
+        .name     = "anonymous",
+        .pass     = NULL,
+        .history  = NULL,
+        .used     = 0,
+        .cap      = 0
+};
 
 // Variables globales para gestión de buffer
 static size_t current_buffer_size = BUFFER_SIZE;
@@ -45,9 +52,14 @@ int get_num_authorized_users(void) {
     return num_authorized_users;
 }
 
+user_t * get_anon_user(void){
+    return &anonymous_user;
+}
+
+
 // Agregar un nuevo usuario
 bool add_user(const char* username, const char* password) {
-    if (username == NULL || password == NULL) {
+    if (username == NULL || password == NULL || strcmp(username, ANON_USER_NAME) == 0) {    //@todo hay que ver si le ponemos otro error en el mensaje de mgmnt.
         return false;
     }
     
@@ -152,7 +164,7 @@ bool set_buffer_size(size_t new_size) {
     return false; // Tamaño no válido
 }
 
-size_t get_available_buffer_sizes(void) {
+size_t get_available_buffer_sizes(void) {       //@todo no se usa.
     return num_available_sizes;
 }
 
@@ -314,8 +326,10 @@ int main (int argc,char * argv[]){
     }
     return endProgram(authorized_users, selector, ss, server, mgmt_server,NULL);
 }
-int endProgram(struct users * users,fd_selector selector, selector_status ss, int server, int mgmt_server,char * error) {
-    int ret= 0;
+
+
+
+static void free_users_info(struct users * users){
     if (users != NULL) {
         for (int i = 0; i < num_authorized_users; i++) {
             if (users[i].name != NULL) {
@@ -325,8 +339,15 @@ int endProgram(struct users * users,fd_selector selector, selector_status ss, in
                 free(users[i].pass);  // Liberar password
             }
         }
-       free(users);
+        free(users);
     }
+}
+
+int endProgram(struct users * users,fd_selector selector, selector_status ss, int server, int mgmt_server,char * error) {
+    int ret= 0;
+
+    free_users_info(users);
+
     if (ss != SELECTOR_SUCCESS) {
         LOG_ERROR("Selector error: %s", selector_error(ss));
         ret = -1; // Indicar error en el selector

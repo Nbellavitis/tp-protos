@@ -3,8 +3,9 @@
 //
 #ifndef SOCK5_H
 #define SOCK5_H
-#define _GNU_SOURCE
 #include <netdb.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include "selector.h"
 #include "stm.h"
 #include <netdb.h>
@@ -64,8 +65,10 @@ typedef struct ClientData {
     size_t bufferSize;          // Tamaño actual del buffer
     bool unregistering_origin;
     
-    // Para logging de acceso  
-    char username[MAX_USERNAME_LEN];          // Usuario autenticado
+    // Para logging de acceso
+
+    user_t * user;
+  /*  char username[MAX_USERNAME_LEN];          // Usuario autenticado*/
     char client_ip[INET6_ADDRSTRLEN];   // IP del cliente
     int client_port;             // Puerto del cliente
     char target_host[256];       // Host de destino         //@todo hacer MALLOQUABLE

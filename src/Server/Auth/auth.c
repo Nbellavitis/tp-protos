@@ -1,21 +1,21 @@
 #include "auth.h"
 #include "../../logger.h"
 
-bool validateUser(const char* username, const char* password) {
+user_t *validateUser(const char *username, const char *password) {
     if (username == NULL || password == NULL) {
-        return false;
+        return NULL;
     }
-    struct users* users = get_authorized_users();
+    user_t *users = get_authorized_users();
     int num_users = get_num_authorized_users();
 
     for (int i = 0; i < num_users; i++) {
-        if (users[i].name != NULL && users[i].pass != NULL) {
-            if (strcmp(username, users[i].name) == 0 && strcmp(password, users[i].pass) == 0) {
-                return true;
-            }
+        if (users[i].name && users[i].pass &&
+            strcmp(username, users[i].name) == 0 &&
+            strcmp(password, users[i].pass) == 0) {
+            return &users[i];
         }
     }
-    return false;
+    return NULL;
 }
 
 void authenticationReadInit(const unsigned state,  struct selector_key *key){
@@ -67,13 +67,16 @@ unsigned authenticationRead(struct selector_key *key) {
         return ERROR;
     }
 
-    const bool is_valid = validateUser(p->name, p->password);
+    user_t * user = validateUser(p->name, p->password);
+    bool is_valid = false;
     uint8_t status;
-    if (is_valid) {
+    if (user != NULL ) {
 //        LOG_INFO("Authentication successful for user: %s", p->name);
-        strncpy(data->username, p->name, sizeof(data->username) - 1);
-        data->username[sizeof(data->username) - 1] = '\0';
-        status = 0x00; // Éxito         //@todo tambien en el ClientData?
+       /* strncpy(data->username, p->name, sizeof(data->username) - 1);
+        data->username[sizeof(data->username) - 1] = '\0';*/
+       data->user = user;
+       is_valid = true;
+       status = 0x00; // Éxito         //@todo tambien en el ClientData?
     } else {
         LOG_WARN("Authentication failed for user: %s", p->name);
         status = data->socks_status= 0x01; // Fallo

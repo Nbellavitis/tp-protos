@@ -12,6 +12,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "../Negotiation/negotiationParser.h"
+#include "../main.h"
+#include "../users.h"
+
+
+
 /*
 CLIENTE → SERVIDOR                                             SERVIDOR → CLIENTE
 +-----+-----+------+------+-------------------+      +-----+-------+ ---------------------------------+

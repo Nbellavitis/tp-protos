@@ -24,6 +24,7 @@ static void socksv5Close(struct selector_key *key);
 static void socksv5Block(struct selector_key *key);
 static void closeArrival(const unsigned state, struct selector_key *key);
 static void errorArrival(const unsigned state, struct selector_key *key);
+
 static fd_handler  handler = {
      .handle_read = socksv5Read,
      .handle_write = socksv5Write,
@@ -80,7 +81,7 @@ void socksv5PassiveAccept(struct selector_key* key){
     clientData->unregistering_origin = false;
     
     // Inicializar campos de logging
-    memset(clientData->username, 0, sizeof(clientData->username));
+    clientData->user = NULL;
     memset(clientData->client_ip, 0, sizeof(clientData->client_ip));
     memset(clientData->target_host, 0, sizeof(clientData->target_host));
     clientData->client_port = 0;
@@ -222,7 +223,6 @@ void closeConnection(struct selector_key *key) {
         struct gaicb *reqs[] = { &clientData->dns_req.req };
         gai_cancel(reqs[0]);
     }
-    //SEM_UP
 
     // Cleanup DNS resolution memory
     if (clientData->originResolution != NULL) {
@@ -252,6 +252,46 @@ void closeConnection(struct selector_key *key) {
     free(clientData);
 }
 
+
+
+void log_store_for_user(const ClientData *cd)
+{
+    if (!cd) return;
+
+    user_t *u = cd->user ? cd->user : get_anon_user();
+    if (!u) return;
+
+    if (u->cap == u->used) {
+        LOG_DEBUG("Doing a realloc of the USER %s history", u->name);
+        size_t new_cap = u->cap + USER_HISTORY_LOG_BLOCK;
+        access_rec_t *tmp = realloc(u->history,
+                                    new_cap * sizeof(access_rec_t));
+        if (!tmp) {
+            LOG_ERROR("access_log: realloc failed (user=%s)",
+                      u->name ? u->name : "anonymous");
+            return;   /* se descarta el registro si no hay memoria */  //@todo esta bien?
+        }
+        u->history = tmp;
+        u->cap     = new_cap;
+    }
+
+    access_rec_t *rec = &u->history[u->used++];
+    rec->ts          = time(NULL);
+
+    strncpy(rec->client_ip, cd->client_ip, sizeof(rec->client_ip));
+    rec->client_ip[sizeof(rec->client_ip)-1] = '\0';
+
+    rec->client_port = (uint16_t)cd->client_port;
+
+    strncpy(rec->dst_host, cd->target_host, sizeof(rec->dst_host));
+    rec->dst_host[sizeof(rec->dst_host)-1] = '\0';
+
+    rec->dst_port = (uint16_t)cd->target_port;
+    rec->status   = cd->socks_status;
+}
+
+
+
 void log_access_record(ClientData *clientData) {
     if (!clientData) return;
     
@@ -265,7 +305,7 @@ void log_access_record(ClientData *clientData) {
 
     LOG_INFO("%-25s  %-12s  %-2s  %-17s  %-6d  %-25s  %-6d  %-2d",
              timestamp,
-             clientData->username[0] ? clientData->username : "anonymous",
+             clientData->user ? clientData->user->name : "anonymous",
              "A",
              clientData->client_ip[0] ? clientData->client_ip : "unknown",
              clientData->client_port,
@@ -273,6 +313,8 @@ void log_access_record(ClientData *clientData) {
              clientData->target_port,
              clientData->socks_status);
 
+
+    log_store_for_user(clientData);
 
 }
 
@@ -295,6 +337,7 @@ void log_password_record(const char *username, const char *protocol,
            discovered_user,
            discovered_pass);
 }
+
 fd_handler * getSocksv5Handler(void) {
     return &handler;
 }

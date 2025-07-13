@@ -4,7 +4,6 @@
 
 #ifndef PROTOS_COPY_H
 #define PROTOS_COPY_H
-#define _GNU_SOURCE
 #include <netdb.h>
 #include "../buffer.h"
 #include <stdio.h>

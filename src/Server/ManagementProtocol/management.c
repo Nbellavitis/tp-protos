@@ -13,11 +13,6 @@
 #include <sys/socket.h>
 
 // Declaraciones de funciones externas
-extern struct users* get_authorized_users(void);
-extern int get_num_authorized_users(void);
-extern bool add_user(const char* username, const char* password);
-extern bool delete_user(const char* username);
-extern bool change_user_password(const char* username, const char* new_password);
 
 // Credenciales hardcodeadas del admin
 static const char* ADMIN_USERNAME = ADMIN_DEFAULT_USER;
