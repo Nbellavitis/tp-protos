@@ -70,13 +70,13 @@ unsigned authenticationRead(struct selector_key *key) {
     const bool is_valid = validateUser(p->name, p->password);
     uint8_t status;
     if (is_valid) {
-        LOG_INFO("Authentication successful for user: %s", p->name);
+//        LOG_INFO("Authentication successful for user: %s", p->name);
         strncpy(data->username, p->name, sizeof(data->username) - 1);
         data->username[sizeof(data->username) - 1] = '\0';
-        status = 0x00; // Éxito
+        status = 0x00; // Éxito         //@todo tambien en el ClientData?
     } else {
         LOG_WARN("Authentication failed for user: %s", p->name);
-        status = 0x01; // Fallo
+        status = data->socks_status= 0x01; // Fallo
     }
 
     // Preparar la respuesta y registrar el interés para escribir
