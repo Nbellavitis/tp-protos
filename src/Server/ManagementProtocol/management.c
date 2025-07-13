@@ -78,7 +78,7 @@ void management_passive_accept(struct selector_key* key) {
         return;
     }
 
-    LOG_INFO("New management client connected: %d", new_client_socket);
+    LOG_DEBUG("New management client connected in socket %d", new_client_socket);
 
     // Inicializar estructura
     mgmt_data->stm.initial = MGMT_AUTH_READ;

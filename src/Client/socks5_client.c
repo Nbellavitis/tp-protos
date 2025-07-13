@@ -50,8 +50,7 @@ int socks5_authenticate(socks5_client_t *client);
 
 // Conectar al proxy SOCKS5
 int socks5_connect_proxy(socks5_client_t *client) {
- 
-    
+
     client->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (client->socket_fd < 0) {
         perror("Error creating socket");
@@ -169,9 +168,7 @@ int socks5_authenticate(socks5_client_t *client) {
         printf("[SOCKS5] Error receiving authentication response, got %ld bytes\n", received);
         return -1;
     }
-    
-    
-    
+
     if (response[0] != SOCKS5_AUTH_VERSION) {
         printf("[SOCKS5] Invalid auth version in response: 0x%02x\n", response[0]);
         return -1;
@@ -181,8 +178,7 @@ int socks5_authenticate(socks5_client_t *client) {
         printf("[SOCKS5] Authentication failed. Status: 0x%02x\n", response[1]);
         return -1;
     }
-    
-    
+
     return 0;
 }
 
@@ -296,8 +292,6 @@ void socks5_disconnect(socks5_client_t *client) {
         close(client->socket_fd);
         
         client->socket_fd = -1;
-    } else {
-        
     }
     
 }

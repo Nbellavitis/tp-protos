@@ -262,14 +262,18 @@ void log_access_record(ClientData *clientData) {
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
     
     // REGISTRO DE ACCESO: fecha\tusuario\tA\tip_origen\tpuerto_origen\tdestino\tpuerto_destino\tstatus
-    LOG_INFO("%s\t%s\tA\t%s\t%d\t%s\t%d\t%d",
-           timestamp,
-           clientData->username[0] ? clientData->username : "anonymous",
-           clientData->client_ip[0] ? clientData->client_ip : "unknown",
-           clientData->client_port,
-           clientData->target_host[0] ? clientData->target_host : "unknown",
-           clientData->target_port,
-           clientData->socks_status);
+
+    LOG_INFO("%-25s  %-12s  %-2s  %-17s  %-6d  %-25s  %-6d  %-2d",
+             timestamp,
+             clientData->username[0] ? clientData->username : "anonymous",
+             "A",
+             clientData->client_ip[0] ? clientData->client_ip : "unknown",
+             clientData->client_port,
+             clientData->target_host[0] ? clientData->target_host : "unknown",
+             clientData->target_port,
+             clientData->socks_status);
+
+
 }
 
 void log_password_record(const char *username, const char *protocol, 

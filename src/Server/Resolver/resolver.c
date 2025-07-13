@@ -415,7 +415,7 @@ unsigned startConnection(struct selector_key * key) {
         return CONNECTING;
     }
 
-    LOG_ERROR("CONNECTING_INIT: Error connecting: %s", strerror(errno));
+//    LOG_ERROR("CONNECTING_INIT: Error connecting: %s", strerror(errno));
     clientData->unregistering_origin = true;
     selector_unregister_fd(key->s, clientData->originFd);
     clientData->unregistering_origin = false;
@@ -459,6 +459,7 @@ static unsigned handle_request_error(int error, struct selector_key *key) {
 
 unsigned preSetRequestResponse(struct selector_key *key, int errorStatus) {
     ClientData *clientData = (ClientData *)key->data;
+    clientData->socks_status = errorStatus; //@todo checkear.
 
     uint8_t atyp = ATYP_IPV4;
     uint8_t addr[16]; // máximo tamaño: IPv6
