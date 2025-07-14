@@ -16,24 +16,6 @@
 #include "../protocol_constants.h"
 
 
-/*
-CLIENTE → SERVIDOR                                             SERVIDOR → CLIENTE
-+-----+-----+------+------+-------------------+      +-----+-------+ ---------------------------------+
-| VER | CMD | payload len | Payload (opcional)|      |VER | STATUS | Payload len |Payload (opcional)  |
-+-----+-----+------+------+-------------------+      +-----+-------+----------------------------------+
-[1]     [1]       [1]        [0..255]                  [1]     [1]             [1]        [0..255]
- */
-
-/*
- *    VER --> solo es valido 0x01
- *    CMD --> Valido de 0x01 hasta 0x06
- *    PAYLOAD LEN: Valido de 0x00 hasta 0xFF
- *    Payload: Son como mucho 255 caracteres. Depende del CMD.
- *
- *
- *    Va a por TCP y puede elegir entre usar o no usar Auth. (Negociacion)
- *
- */
 
 
 #define ADMIN_DEFAULT_USER "admin"
@@ -81,6 +63,18 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 #define STATUS_AUTH_FAILED 0x03
 #define STATUS_NOT_FOUND 0x04
 #define STATUS_FULL 0x05
+
+
+
+#define STATS_FIELDS          5
+#define STATS_PAYLOAD_BYTES  (STATS_FIELDS * sizeof(uint32_t))
+
+static const uint32_t buffer_sizes[] = {4096, 8192, 16384, 32768, 65536, 131072};
+#define BUFFER_SIZE_CNT   ((uint8_t)(sizeof(buffer_sizes) / sizeof(buffer_sizes[0])))
+#define BUFFER_SIZE_MIN   (buffer_sizes[0])
+#define BUFFER_SIZE_MAX   (buffer_sizes[BUFFER_SIZE_CNT-1])
+
+
 
 // Estados de la máquina de estados
 enum management_state {

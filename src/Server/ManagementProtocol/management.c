@@ -414,8 +414,8 @@ unsigned mgmt_command_read(struct selector_key *key) {
                                   stats_get_current_connections(),
                                   stats_get_client_bytes(),
                                   stats_get_origin_bytes() };
-                uint8_t payload[20];
-                for (int i = 0; i < 5; i++)
+                uint8_t payload[STATS_PAYLOAD_BYTES];
+                for (int i = 0; i < STATS_FIELDS ; i++)
                     ((uint32_t *)payload)[i] = htonl(v[i]);
 
                 send_management_response_raw(&mgmt_data->response_buffer, STATUS_OK, payload, sizeof payload);
@@ -548,20 +548,23 @@ unsigned mgmt_command_read(struct selector_key *key) {
 
 
             case CMD_GET_BUFFER_INFO: {
-       
-                static const uint32_t allowed[] = {4096,8192,16384,32768,65536,131072};
-                const uint8_t N = sizeof allowed / sizeof allowed[0];
 
-                uint8_t pl[1 + 4 + 4 * 6];                     // cur(4) + N(1) + lista
+                uint8_t pl[1 + 4 + 4 * BUFFER_SIZE_CNT];   /* N + current + lista */
                 uint32_t cur = htonl((uint32_t)get_current_buffer_size());
-                memcpy(pl, &cur, 4);
-                pl[4] = N;
-                for (uint8_t i = 0; i < N; i++)
-                    *(uint32_t *)(pl + 5 + i * 4) = htonl(allowed[i]);
 
-                send_management_response_raw(&mgmt_data->response_buffer, STATUS_OK, pl, 5 + 4 * N);
+                memcpy(pl, &cur, 4);           /* bytes 0‑3  → tamaño actual */
+                pl[4] = BUFFER_SIZE_CNT;       /* byte 4     → cantidad N    */
+
+                for (uint8_t i = 0; i < BUFFER_SIZE_CNT; i++) {
+                    *(uint32_t *)(pl + 5 + i * 4) = htonl(buffer_sizes[i]);
+                }
+
+                send_management_response_raw(&mgmt_data->response_buffer,
+                                             STATUS_OK,
+                                             pl,
+                                             5 + 4 * BUFFER_SIZE_CNT);
                 break;
-            };
+            }
             case CMD_GET_AUTH_METHOD: {
                 char response[512];
                 snprintf(response,sizeof(response), "Current authentication method: %s",
