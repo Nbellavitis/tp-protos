@@ -42,6 +42,18 @@ typedef struct {
     int authenticated;
 } mgmt_client_t;
 
+
+void mgmt_handle_disconnection(mgmt_client_t *client) {
+    if (client->socket_fd >= 0) {
+        close(client->socket_fd);
+        client->socket_fd = -1; // Marcar el socket como inválido
+    }
+    if (client->authenticated) {
+        printf("\n[ERROR] Connection to the management server was lost.\n");
+    }
+    client->authenticated = 0; // Requerir re-autenticación
+}
+
 // Enviar comando al servidor
 int send_mgmt_command(mgmt_client_t *client, uint8_t cmd, const char *payload) {
     uint8_t payload_len = payload ? strlen(payload) : 0;
@@ -57,10 +69,12 @@ int send_mgmt_command(mgmt_client_t *client, uint8_t cmd, const char *payload) {
         memcpy(message + 3, payload, payload_len);
         total_len += payload_len;
     }
-    
-    ssize_t sent = send(client->socket_fd, message, total_len, 0);
+
+    ssize_t sent = send(client->socket_fd, message, total_len, MSG_NOSIGNAL);
+
     if (sent != total_len) {
         perror("Error sending command");
+        mgmt_handle_disconnection(client); // Manejar la desconexión
         return -1;
     }
     
@@ -73,6 +87,15 @@ int recv_mgmt_response(mgmt_client_t *client, uint8_t *status, char *response_da
     
     // Recibir header: [VER][STATUS][LEN]
     ssize_t received = recv(client->socket_fd, header, 3, 0);
+    if (received <= 0) {
+        if (received == 0) {
+            printf("Server closed the connection unexpectedly.\n");
+        } else {
+            perror("Error receiving response header");
+        }
+        mgmt_handle_disconnection(client);
+        return -1;
+    }
     if (received != 3) {
         perror("Error receiving response header");
         return -1;
@@ -427,139 +450,132 @@ void interactive_menu(mgmt_client_t *client) {
     char input[512];
     char username[256], password[256];
 
-    /* ---------- AUTENTICACIÓN OBLIGATORIA ---------- */
-    while (!client->authenticated) {
-        printf("\nPLEASE AUTHENTICATE:\n");
-        printf("Username: ");
-        if (!fgets(username, sizeof(username), stdin)) {
-            return;
-        }
-        username[strcspn(username, "\n")] = 0;
-
-        printf("Password: ");
-        if (!fgets(password, sizeof(password), stdin)) {
-            return;
-        }
-        password[strcspn(password, "\n")] = 0;
-
-        if (mgmt_authenticate(client, username, password) != 0) {
-            printf("Invalid credentials, try again.\n");
-        }
-    }
-
-    /* ---------- MENÚ DE COMANDOS ---------- */
     while (1) {
         printf("\n=== Management Client ===\n");
-        printf("1. Get Statistics\n");
-        printf("2. List Users\n");
-        printf("3. Add User\n");
-        printf("4. Delete User\n");
-        printf("5. Change User Password\n");
-        printf("6. Get Buffer Info\n");
-        printf("7. Set Buffer Size\n");
-        printf("8. Change Authentication Method\n");
-        printf("9. Show Current Authentication Method\n");
-        printf("10. Show user logs\n");
-        printf("11. Disconnect and Exit\n");
 
-        printf("Choice: ");
+        if (!client->authenticated) {
+            // --- MENÚ DESCONECTADO ---
+            printf("Status: Not Connected\n");
+            printf("1. Connect and Authenticate\n");
+            printf("2. Exit\n");
+            printf("Choice: ");
 
-        if (!fgets(input, sizeof(input), stdin)) {
-            break;
-        }
+            if (!fgets(input, sizeof(input), stdin)) { break; }
+            int choice = atoi(input);
 
-        int choice = atoi(input);
+            if (choice == 1) {
+                if (mgmt_connect(client) < 0) {
+                    printf("Could not connect to the server. Please try again later.\n");
+                    continue;
+                }
 
-        switch (choice) {
-            case 1:
-                mgmt_get_stats(client);
-                break;
-            case 2:
-                mgmt_list_users(client);
-                break;
-            case 3:
-                printf("New username: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                printf("New password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0;
-                }
-                mgmt_add_user(client, username, password);
-                break;
-            case 4:
-                printf("Username to delete: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                mgmt_delete_user(client, username);
-                break;
-            case 5:
-                printf("Username to change password: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                printf("New password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0;
-                }
-                mgmt_change_password(client, username, password);
-                break;
-            case 6:
-                mgmt_get_buffer_info(client);
-                break;
-            case 7:
-                printf("New buffer size (4096, 8192, 16384, 32768, 65536, 131072): ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                mgmt_set_buffer_size(client, username);
-                break;
-            case 8:
-                printf("Select an authentication method:\n");
-                printf("1. No Authentication\n");
-                printf("2. Password Authentication\n");
-                printf("3. Exit\n");
-                if (fgets(input, sizeof(input), stdin)) {
-                    input[strcspn(input, "\n")] = 0; // Eliminar salto de línea
-                }
-                int auth_choice = atoi(input);
-                if (auth_choice == 1) {
-                    mgmt_set_auth_method(client,"NOAUTH");
-                    printf("Authentication method set to No Authentication.\n");
-                } else if (auth_choice == 2) {
-                    mgmt_set_auth_method(client,"AUTH");
-                    printf("Authentication method set to Password Authentication.\n");
-                } else if (auth_choice == 3) {
-                    printf("Exiting...\n");
+                printf("Username: ");
+                if (!fgets(username, sizeof(username), stdin)) { break; }
+                username[strcspn(username, "\n")] = 0;
+
+                printf("Password: ");
+                if (!fgets(password, sizeof(password), stdin)) { break; }
+                password[strcspn(password, "\n")] = 0;
+
+                if (mgmt_authenticate(client, username, password) != 0) {
+                    printf("Authentication failed. Please check credentials or server status.\n");
                 } else {
-                    printf("Invalid choice, please try again.\n");
+                    printf("Authentication successful!\n");
                 }
+            } else if (choice == 2) {
+                printf("Exiting...\n");
                 break;
-                case 9:
-                   mgmt_get_auth_method(client);
-                    break;
-
-            case 10: {
-                printf("Username (use \"anonymous\" for NOAUTH): ");
-                if (fgets(username, sizeof username, stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                mgmt_get_log_by_user(client, username);
-                break;
+            } else {
+                printf("Invalid choice.\n");
             }
-            case 11:
-                printf("Disconnecting...\n");
-                return;
+        } else {
+            // --- MENÚ AUTENTICADO ---
+            printf("Status: Authenticated\n");
+            printf("1. Get Statistics\n");
+            printf("2. List Users\n");
+            printf("3. Add User\n");
+            printf("4. Delete User\n");
+            printf("5. Change User Password\n");
+            printf("6. Get Buffer Info\n");
+            printf("7. Set Buffer Size\n");
+            printf("8. Change Authentication Method\n");
+            printf("9. Show Current Authentication Method\n");
+            printf("10. Show user logs\n");
+            printf("11. Disconnect\n");
+            printf("Choice: ");
 
-            default:
-                printf("Invalid choice\n");
-                break;
+            if (!fgets(input, sizeof(input), stdin)) { break; }
+            int choice = atoi(input);
+
+            switch (choice) {
+                case 1: mgmt_get_stats(client); break;
+                case 2: mgmt_list_users(client); break;
+                case 3:
+                    printf("New username: ");
+                    if (fgets(username, sizeof(username), stdin)) {
+                        username[strcspn(username, "\n")] = 0;
+                    }
+                    printf("New password: ");
+                    if (fgets(password, sizeof(password), stdin)) {
+                        password[strcspn(password, "\n")] = 0;
+                    }
+                    mgmt_add_user(client, username, password);
+                    break;
+                case 4:
+                    printf("Username to delete: ");
+                    if (fgets(username, sizeof(username), stdin)) {
+                        username[strcspn(username, "\n")] = 0;
+                    }
+                    mgmt_delete_user(client, username);
+                    break;
+                case 5:
+                    printf("Username to change password: ");
+                    if (fgets(username, sizeof(username), stdin)) {
+                        username[strcspn(username, "\n")] = 0;
+                    }
+                    printf("New password: ");
+                    if (fgets(password, sizeof(password), stdin)) {
+                        password[strcspn(password, "\n")] = 0;
+                    }
+                    mgmt_change_password(client, username, password);
+                    break;
+                case 6: mgmt_get_buffer_info(client); break;
+                case 7:
+                    printf("New buffer size (4096, 8192, 16384, 32768, 65536, 131072): ");
+                    if (fgets(username, sizeof(username), stdin)) {
+                        username[strcspn(username, "\n")] = 0;
+                    }
+                    mgmt_set_buffer_size(client, username);
+                    break;
+                case 8:
+                    printf("Select an authentication method:\n");
+                    printf("1. No Authentication\n2. Password Authentication\nChoice: ");
+                    if (fgets(input, sizeof(input), stdin)) {
+                        int auth_choice = atoi(input);
+                        if (auth_choice == 1) mgmt_set_auth_method(client, "NOAUTH");
+                        else if (auth_choice == 2) mgmt_set_auth_method(client, "AUTH");
+                        else printf("Invalid choice.\n");
+                    }
+                    break;
+                case 9: mgmt_get_auth_method(client); break;
+                case 10:
+                    printf("Username (use \"anonymous\" for NOAUTH): ");
+                    if (fgets(username, sizeof(username), stdin)) {
+                        username[strcspn(username, "\n")] = 0;
+                    }
+                    mgmt_get_log_by_user(client, username);
+                    break;
+                case 11:
+                    printf("Disconnecting...\n");
+                    mgmt_disconnect(client);
+                    break;
+                default:
+                    printf("Invalid choice\n");
+                    break;
+            }
         }
     }
 }
-
 
 
 int main(int argc, char *argv[]) {

@@ -80,7 +80,7 @@ void socksv5PassiveAccept(struct selector_key* key){
     clientData->connection_ready = 0;
     clientData->dns_resolution_state = 0;
     clientData->unregistering_origin = false;
-    
+    clientData->authFailed = false;
     // Inicializar campos de logging
     clientData->user = NULL;
     memset(clientData->client_ip, 0, sizeof(clientData->client_ip));
@@ -303,17 +303,27 @@ void log_access_record(ClientData *clientData) {
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
     
     // REGISTRO DE ACCESO: fecha\tusuario\tA\tip_origen\tpuerto_origen\tdestino\tpuerto_destino\tstatus
-
-    LOG_INFO("%-25s  %-12s  %-2s  %-17s  %-6d  %-25s  %-6d  %-2d",
-             timestamp,
-             clientData->user ? clientData->user->name : "anonymous",
-             "A",
-             clientData->client_ip[0] ? clientData->client_ip : "unknown",
-             clientData->client_port,
-             clientData->target_host[0] ? clientData->target_host : "unknown",
-             clientData->target_port,
-             clientData->socks_status);
-
+    if (clientData->authFailed) {
+        LOG_INFO("%-25s  %-12s  %-2s  %-17s  %-6d  %-25s  %-6d  %-12s",
+                 timestamp,
+                 clientData->user ? clientData->user->name : "anonymous",
+                 "A",
+                 clientData->client_ip[0] ? clientData->client_ip : "unknown",
+                 clientData->client_port,
+                 clientData->target_host[0] ? clientData->target_host : "unknown",
+                 clientData->target_port,
+                 "AUTH_FAILED");
+    } else {
+        LOG_INFO("%-25s  %-12s  %-2s  %-17s  %-6d  %-25s  %-6d  %-2d",
+                 timestamp,
+                 clientData->user ? clientData->user->name : "anonymous",
+                 "A",
+                 clientData->client_ip[0] ? clientData->client_ip : "unknown",
+                 clientData->client_port,
+                 clientData->target_host[0] ? clientData->target_host : "unknown",
+                 clientData->target_port,
+                 clientData->socks_status);
+    }
 
     log_store_for_user(clientData);
 
