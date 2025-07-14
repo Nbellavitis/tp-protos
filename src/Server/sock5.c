@@ -240,8 +240,10 @@ void close_connection(struct selector_key *key) {
         }
     }
 
-    // Registro de acceso antes de liberar data
-    log_access_record(data);
+
+    if (!killed) {
+        log_access_record(data);
+    }
 
     // Liberar buffers dinámicos
     if (data->in_client_buffer != NULL) {
@@ -259,6 +261,9 @@ void close_connection(struct selector_key *key) {
 void log_store_for_user(const client_data *cd)
 {
     if (!cd) return;
+
+    // Evitamos use-after-free
+    if (killed) return;
 
     user_t *u = cd->user ? cd->user : get_anon_user();
     if (!u) return;
@@ -296,6 +301,9 @@ void log_store_for_user(const client_data *cd)
 
 void log_access_record(client_data *client_data) {
     if (!client_data) return;
+    
+    // Evitamos use-after-free
+    if (killed) return;
     
     // Fecha en formato ISO-8601
     time_t now = time(NULL);

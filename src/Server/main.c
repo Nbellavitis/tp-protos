@@ -354,7 +354,7 @@ static void free_users_info(struct users * users){
 int endProgram(struct users * users,fd_selector selector, selector_status ss, int server, int mgmt_server,char * error) {
     int ret= 0;
 
-    free_users_info(users);
+    killed = true;
 
     if (ss != SELECTOR_SUCCESS) {
         LOG_ERROR("Selector error: %s", selector_error(ss));
@@ -370,6 +370,8 @@ int endProgram(struct users * users,fd_selector selector, selector_status ss, in
         selector_destroy(selector);
     }
     selector_close();
+
+    free_users_info(users);
 
     if (server >= 0) {
         close(server);
