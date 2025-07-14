@@ -38,81 +38,73 @@ static void cleanup_previous_resolution(client_data *data) {
 
 
 
-// Función auxiliar para crear addrinfo para IPs directas
-static bool create_direct_addrinfo(client_data *data, const resolver_parser *parser) {
-    // Limpiar resolución previa si existe
-    cleanup_previous_resolution(data);
-
-    if (parser->address_type == ATYP_IPV4) {
-        struct sockaddr_in* ipv4_addr = malloc(sizeof(struct sockaddr_in));
-        if (ipv4_addr == NULL) {
-            LOG_ERROR("%s" ,"create_direct_addrinfo: Error allocating memory for IPv4");
-            return false;
-        }
-
-        data->origin_resolution = calloc(1, sizeof(struct addrinfo)); // todo: magic number
-        if(data->origin_resolution == NULL) {
-            LOG_ERROR("%s" ,"create_direct_addrinfo: Error allocating memory for addrinfo IPv4");
-            free(ipv4_addr);
-            return false;
-        }
-
-        *ipv4_addr = (struct sockaddr_in){
-            .sin_family = AF_INET,
-            .sin_port = htons(parser->port),
-            .sin_addr = *(struct in_addr *)parser->ipv4_addr
-        };
-
-        *data->origin_resolution = (struct addrinfo){
-            .ai_family = AF_INET,
-            .ai_addrlen = sizeof(*ipv4_addr),
-            .ai_addr = (struct sockaddr *)ipv4_addr,
-            .ai_socktype = SOCK_STREAM,
-            .ai_protocol = IPPROTO_TCP
-        };
-
-        data->resolution_from_getaddrinfo = false;
-        data->current_resolution = data->origin_resolution;
-        return true;
-
-    } else if (parser->address_type == ATYP_IPV6) {
-        struct sockaddr_in6* ipv6_addr = malloc(sizeof(struct sockaddr_in6));
-        if (ipv6_addr == NULL) {
-            LOG_ERROR("%s" ,"create_direct_addrinfo: Error allocating memory for IPv6");
-            return false;
-        }
-
-        data->origin_resolution = calloc(1, sizeof(struct addrinfo)); // todo magic number
-        if(data->origin_resolution == NULL) {
-            LOG_ERROR("%s" ,"create_direct_addrinfo: Error allocating memory for addrinfo IPv6");
-            free(ipv6_addr);
-            return false;
-        }
-
-        *ipv6_addr = (struct sockaddr_in6){
-            .sin6_family = AF_INET6,
-            .sin6_port = htons(parser->port),
-        };
-        memcpy(&ipv6_addr->sin6_addr, parser->ipv6_addr, IPV6_ADDR_SIZE);
-
-        *data->origin_resolution = (struct addrinfo){
-            .ai_family = AF_INET6,
-            .ai_addrlen = sizeof(*ipv6_addr),
-            .ai_addr = (struct sockaddr *)ipv6_addr,
-            .ai_socktype = SOCK_STREAM,
-            .ai_protocol = IPPROTO_TCP
-        };
-
-        data->resolution_from_getaddrinfo = false;
-        data->current_resolution = data->origin_resolution;
-        return true;
+static struct sockaddr_in *create_sockaddr_ipv4(const resolver_parser *parser) {
+    struct sockaddr_in *addr = malloc(sizeof(struct sockaddr_in));
+    if (addr == NULL) {
+        LOG_ERROR("%s", "create_sockaddr_ipv4: Error allocating memory");
+        return NULL;
     }
 
-    return false;
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons(parser->port);
+    memcpy(&addr->sin_addr, parser->ipv4_addr, IPV4_ADDR_SIZE);
+
+    return addr;
 }
 
-// Funciones para la máquina de estados
+static struct sockaddr_in6 *create_sockaddr_ipv6(const resolver_parser *parser) {
+    struct sockaddr_in6 *addr = malloc(sizeof(struct sockaddr_in6));
+    if (addr == NULL) {
+        LOG_ERROR("%s", "create_sockaddr_ipv6: Error allocating memory");
+        return NULL;
+    }
 
+    addr->sin6_family = AF_INET6;
+    addr->sin6_port = htons(parser->port);
+    memcpy(&addr->sin6_addr, parser->ipv6_addr, IPV6_ADDR_SIZE);
+
+    return addr;
+}
+
+// Función auxiliar para crear addrinfo para IPs directas
+static bool create_direct_addrinfo(client_data *data, const resolver_parser *parser) {
+    cleanup_previous_resolution(data);
+
+    data->origin_resolution = calloc(1, sizeof(struct addrinfo));
+    if (data->origin_resolution == NULL) {
+        LOG_ERROR("%s", "create_direct_addrinfo: Error allocating memory for addrinfo");
+        return false;
+    }
+
+    struct sockaddr *sock_addr = NULL;
+    if (parser->address_type == ATYP_IPV4) {
+        sock_addr = (struct sockaddr *)create_sockaddr_ipv4(parser);
+        data->origin_resolution->ai_family = AF_INET;
+        data->origin_resolution->ai_addrlen = sizeof(struct sockaddr_in);
+    } else if (parser->address_type == ATYP_IPV6) {
+        sock_addr = (struct sockaddr *)create_sockaddr_ipv6(parser);
+        data->origin_resolution->ai_family = AF_INET6;
+        data->origin_resolution->ai_addrlen = sizeof(struct sockaddr_in6);
+    }
+
+    if (sock_addr == NULL) {
+        free(data->origin_resolution);
+        data->origin_resolution = NULL;
+        return false;
+    }
+
+    data->origin_resolution->ai_addr = sock_addr;
+    data->origin_resolution->ai_socktype = SOCK_STREAM;
+    data->origin_resolution->ai_protocol = IPPROTO_TCP;
+
+    data->resolution_from_getaddrinfo = false;
+    data->current_resolution = data->origin_resolution;
+
+    return true;
+}
+
+
+// Funciones para la máquina de estados
 void request_read_init(const unsigned state, struct selector_key *key) {
     client_data *data = (client_data *)key->data;
     init_resolver_parser(&data->client.req_parser);
