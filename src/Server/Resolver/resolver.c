@@ -38,86 +38,104 @@ static void cleanup_previous_resolution(client_data *data) {
 
 
 
-// Función auxiliar para crear addrinfo para IPs directas
-static bool create_direct_addrinfo(client_data *data, const resolver_parser *parser) {
-    // Limpiar resolución previa si existe
-    cleanup_previous_resolution(data);
-
-    if (parser->address_type == ATYP_IPV4) {
-        struct sockaddr_in* ipv4_addr = malloc(sizeof(struct sockaddr_in));
-        if (ipv4_addr == NULL) {
-            LOG_ERROR("%s" ,"create_direct_addrinfo: Error allocating memory for IPv4");
-            return false;
-        }
-
-        data->origin_resolution = calloc(1, sizeof(struct addrinfo)); // todo: magic number
-        if(data->origin_resolution == NULL) {
-            LOG_ERROR("%s" ,"create_direct_addrinfo: Error allocating memory for addrinfo IPv4");
-            free(ipv4_addr);
-            return false;
-        }
-
-        *ipv4_addr = (struct sockaddr_in){
-            .sin_family = AF_INET,
-            .sin_port = htons(parser->port),
-            .sin_addr = *(struct in_addr *)parser->ipv4_addr
-        };
-
-        *data->origin_resolution = (struct addrinfo){
-            .ai_family = AF_INET,
-            .ai_addrlen = sizeof(*ipv4_addr),
-            .ai_addr = (struct sockaddr *)ipv4_addr,
-            .ai_socktype = SOCK_STREAM,
-            .ai_protocol = IPPROTO_TCP
-        };
-
-        data->resolution_from_getaddrinfo = false;
-        data->current_resolution = data->origin_resolution;
-        return true;
-
-    } else if (parser->address_type == ATYP_IPV6) {
-        struct sockaddr_in6* ipv6_addr = malloc(sizeof(struct sockaddr_in6));
-        if (ipv6_addr == NULL) {
-            LOG_ERROR("%s" ,"create_direct_addrinfo: Error allocating memory for IPv6");
-            return false;
-        }
-
-        data->origin_resolution = calloc(1, sizeof(struct addrinfo)); // todo magic number
-        if(data->origin_resolution == NULL) {
-            LOG_ERROR("%s" ,"create_direct_addrinfo: Error allocating memory for addrinfo IPv6");
-            free(ipv6_addr);
-            return false;
-        }
-
-        *ipv6_addr = (struct sockaddr_in6){
-            .sin6_family = AF_INET6,
-            .sin6_port = htons(parser->port),
-        };
-        memcpy(&ipv6_addr->sin6_addr, parser->ipv6_addr, IPV6_ADDR_SIZE);
-
-        *data->origin_resolution = (struct addrinfo){
-            .ai_family = AF_INET6,
-            .ai_addrlen = sizeof(*ipv6_addr),
-            .ai_addr = (struct sockaddr *)ipv6_addr,
-            .ai_socktype = SOCK_STREAM,
-            .ai_protocol = IPPROTO_TCP
-        };
-
-        data->resolution_from_getaddrinfo = false;
-        data->current_resolution = data->origin_resolution;
-        return true;
+static struct sockaddr_in *create_sockaddr_ipv4(const resolver_parser *parser) {
+    struct sockaddr_in *addr = malloc(sizeof(struct sockaddr_in));
+    if (addr == NULL) {
+        LOG_ERROR("%s", "create_sockaddr_ipv4: Error allocating memory");
+        return NULL;
     }
 
-    return false;
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons(parser->port);
+    memcpy(&addr->sin_addr, parser->ipv4_addr, IPV4_ADDR_SIZE);
+
+    return addr;
 }
 
-// Funciones para la máquina de estados
+static struct sockaddr_in6 *create_sockaddr_ipv6(const resolver_parser *parser) {
+    struct sockaddr_in6 *addr = malloc(sizeof(struct sockaddr_in6));
+    if (addr == NULL) {
+        LOG_ERROR("%s", "create_sockaddr_ipv6: Error allocating memory");
+        return NULL;
+    }
 
+    addr->sin6_family = AF_INET6;
+    addr->sin6_port = htons(parser->port);
+    memcpy(&addr->sin6_addr, parser->ipv6_addr, IPV6_ADDR_SIZE);
+
+    return addr;
+}
+
+// Función auxiliar para crear addrinfo para IPs directas
+static bool create_direct_addrinfo(client_data *data, const resolver_parser *parser) {
+    cleanup_previous_resolution(data);
+
+    data->origin_resolution = calloc(1, sizeof(struct addrinfo));
+    if (data->origin_resolution == NULL) {
+        LOG_ERROR("%s", "create_direct_addrinfo: Error allocating memory for addrinfo");
+        return false;
+    }
+
+    struct sockaddr *sock_addr = NULL;
+    if (parser->address_type == ATYP_IPV4) {
+        sock_addr = (struct sockaddr *)create_sockaddr_ipv4(parser);
+        data->origin_resolution->ai_family = AF_INET;
+        data->origin_resolution->ai_addrlen = sizeof(struct sockaddr_in);
+    } else if (parser->address_type == ATYP_IPV6) {
+        sock_addr = (struct sockaddr *)create_sockaddr_ipv6(parser);
+        data->origin_resolution->ai_family = AF_INET6;
+        data->origin_resolution->ai_addrlen = sizeof(struct sockaddr_in6);
+    }
+
+    if (sock_addr == NULL) {
+        free(data->origin_resolution);
+        data->origin_resolution = NULL;
+        return false;
+    }
+
+    data->origin_resolution->ai_addr = sock_addr;
+    data->origin_resolution->ai_socktype = SOCK_STREAM;
+    data->origin_resolution->ai_protocol = IPPROTO_TCP;
+
+    data->resolution_from_getaddrinfo = false;
+    data->current_resolution = data->origin_resolution;
+
+    return true;
+}
+
+
+// Funciones para la máquina de estados
 void request_read_init(const unsigned state, struct selector_key *key) {
     client_data *data = (client_data *)key->data;
     init_resolver_parser(&data->client.req_parser);
     if (selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         close_connection(key);
+    }
+}
+
+// Función auxiliar para capturar información para el logging
+static void capture_target_info(client_data *data) {
+    resolver_parser *parser = &data->client.req_parser;
+    data->target_port = parser->port;
+
+    if (parser->address_type == ATYP_DOMAIN) {
+        LOG_DEBUG("REQ_READ: Target domain: %.*s", parser->domain_length, parser->domain);
+        int copy_len = parser->domain_length < sizeof(data->target_host) - 1 ? parser->domain_length : sizeof(data->target_host) - 1;
+        memcpy(data->target_host, parser->domain, copy_len);
+        data->target_host[copy_len] = '\0';
+
+    } else if (parser->address_type == ATYP_IPV4) {
+        LOG_DEBUG("REQ_READ: Target IPv4: %d.%d.%d.%d",
+                 parser->ipv4_addr[0], parser->ipv4_addr[1],
+                 parser->ipv4_addr[2], parser->ipv4_addr[3]);
+        snprintf(data->target_host, sizeof(data->target_host),
+                "%d.%d.%d.%d", parser->ipv4_addr[0], parser->ipv4_addr[1],
+                parser->ipv4_addr[2], parser->ipv4_addr[3]);
+
+    } else if (parser->address_type == ATYP_IPV6) {
+        LOG_DEBUG("%s", "REQ_READ: Target IPv6");
+        inet_ntop(AF_INET6, parser->ipv6_addr, data->target_host,
+                 sizeof(data->target_host));
     }
 }
 
@@ -143,7 +161,6 @@ unsigned request_read(struct selector_key *key) {
     if (result == REQUEST_PARSE_ERROR) {
         LOG_ERROR("%s" , "REQ_READ: Error parsing request");
         data->socks_status = GENERAL_FAILURE;
-        // Enviar error: General SOCKS server failure
         return preset_request_response(key, GENERAL_FAILURE);
     }
 
@@ -152,44 +169,17 @@ unsigned request_read(struct selector_key *key) {
         return ERROR;
     }
 
-
-    LOG_DEBUG("REQ_READ: Request parsed successfully - Command: %d, AddressType: %d, Port: %d", parser->command, parser->address_type, parser->port);
-
-    // Capturar información del destino para logging de acceso
-    data->target_port = parser->port;
-
-    if (parser->address_type == ATYP_DOMAIN) {
-        LOG_DEBUG("REQ_READ: Target domain: %.*s", parser->domain_length, parser->domain);
-        // Copiar dominio para logging
-        int copy_len = parser->domain_length < sizeof(data->target_host) - 1 ? parser->domain_length : sizeof(data->target_host) - 1; // todo: chequear esto
-        memcpy(data->target_host, parser->domain, copy_len);
-        data->target_host[copy_len] = '\0'; // todo:chequear (LOGS)
-    } else if (parser->address_type == ATYP_IPV4) {
-        LOG_DEBUG("REQ_READ: Target IPv4: %d.%d.%d.%d",
-                 parser->ipv4_addr[0], parser->ipv4_addr[1],
-                 parser->ipv4_addr[2], parser->ipv4_addr[3]);
-        // Convertir IPv4 a string para logging
-        snprintf(data->target_host, sizeof(data->target_host),
-                "%d.%d.%d.%d", parser->ipv4_addr[0], parser->ipv4_addr[1],
-                parser->ipv4_addr[2], parser->ipv4_addr[3]);
-    } else if (parser->address_type == ATYP_IPV6) {
-        LOG_DEBUG("%s" , "REQ_READ: Target IPv6");
-        // Convertir IPv6 a string para logging
-        inet_ntop(AF_INET6, parser->ipv6_addr, data->target_host,
-                 sizeof(data->target_host));
-    }
+    // Capturar información para logging de acceso
+    capture_target_info(data);
 
 
-    // Por ahora solo soportamos CONNECT
     if (parser->command != CMD_CONNECT) {
         LOG_WARN("REQ_READ: Unsupported command (%d), sending error", parser->command);
-        data->socks_status = COMMAND_NOT_SUPPORTED; // Command not supported
-        // Enviar error: Command not supported
-        return preset_request_response(key, COMMAND_NOT_SUPPORTED); // Command not supported
+        data->socks_status = COMMAND_NOT_SUPPORTED;
+        return preset_request_response(key, COMMAND_NOT_SUPPORTED);
     }
 
     if (parser->address_type != ATYP_IPV4 && parser->address_type != ATYP_IPV6) {
-        // Para dominios, necesitamos resolver con DNS
         return ADDR_RESOLVE;
     }
 
