@@ -26,6 +26,8 @@
 #include "Copy/copy.h"
 #include "ManagementProtocol/management.h"
 #include "constants.h"
+#include <time.h>
+#include "selector.h"
 
 // SOCKS5 server constants
 #define MAX_HOSTNAME_LEN        256
@@ -69,7 +71,7 @@ typedef struct client_data {
     bool unregistering_origin;
     bool auth_failed; // Indica si la autenticación falló
     // Para logging de acceso
-
+    time_t lastActivity;
     user_t * user;
   /*  char username[MAX_USERNAME_LEN];          // Usuario autenticado*/
     char client_ip[INET6_ADDRSTRLEN];   // IP del cliente

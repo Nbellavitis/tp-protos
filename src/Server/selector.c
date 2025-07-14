@@ -22,7 +22,14 @@
 
 #define ERROR_DEFAULT_MSG "something failed"
 
+
+
+
+
+
+
 /** retorna una descripción humana del fallo */
+
 const char *
 selector_error(const selector_status status) {
     const char *msg;
@@ -284,6 +291,20 @@ ensure_capacity(fd_selector s, const size_t n) {
     }
 
     return ret;
+}
+static void checkTimeouts(fd_selector s) {
+    struct selector_key key = { .s = s };
+
+    for (int i = 0; i <= s->max_fd; i++) {
+        struct item *item = s->fds + i;
+
+        if (ITEM_USED(item) && item->handler->handle_timeout != NULL) {
+            key.fd = item->fd;
+            key.data = item->data;
+
+            item->handler->handle_timeout(&key);
+        }
+    }
 }
 
 fd_selector
@@ -579,6 +600,7 @@ selector_select(fd_selector s) {
     if(ret == SELECTOR_SUCCESS) {
         handle_block_notifications(s);
     }
+    checkTimeouts(s);
 finally:
     return ret;
 }

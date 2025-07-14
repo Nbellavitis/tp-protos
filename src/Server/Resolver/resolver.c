@@ -148,6 +148,7 @@ unsigned request_read(struct selector_key *key) {
     }
 
     if (result != REQUEST_PARSE_OK) {
+        LOG_ERROR("REQ_READ: Unexpected parse result: %d", result);
         return ERROR;
     }
 
@@ -317,6 +318,7 @@ unsigned address_resolve_done(struct selector_key *key, void *data) {
 
 unsigned request_connecting(struct selector_key *key) {
     client_data *data = (client_data *)key->data;
+    data->lastActivity = time(NULL);
 
     int so_error = 0;
     socklen_t len = sizeof(so_error);

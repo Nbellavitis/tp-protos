@@ -24,12 +24,13 @@ static void socksv5_close(struct selector_key *key);
 static void socksv5_block(struct selector_key *key, void *data);
 static void close_arrival(const unsigned state, struct selector_key *key);
 static void error_arrival(const unsigned state, struct selector_key *key);
-
+static void socksv5_timeout(struct selector_key *key);
 static fd_handler  handler = {
      .handle_read = socksv5_read,
      .handle_write = socksv5_write,
      .handle_close = socksv5_close,
      .handle_block = socksv5_block,
+     .handle_timeout=socksv5_timeout,
 };
 
 static const struct state_definition client_actions[] = {
@@ -86,7 +87,7 @@ void socksv5_passive_accept(struct selector_key* key){
     client_data->client_port = 0;
     client_data->target_port = 0;
     client_data->socks_status = 0;
-    
+    client_data->last_activity = time(NULL);
     // Extraer IP y puerto del cliente
     if (client_address.ss_family == AF_INET) {
         struct sockaddr_in *addr_in = (struct sockaddr_in *)&client_address;
@@ -137,7 +138,7 @@ static void socksv5_read(struct selector_key *key) {
     client_data *data = (client_data *)key->data;
 
     LOG_DEBUG("SOCKS5_READ: Reading data from socket %d", key->fd);
-
+    data->last_activity = time(NULL);
     const enum socks5State state = stm_handler_read(&data->stm, key);
     if (state == ERROR || state == CLOSED) {
         close_connection(key);
@@ -361,4 +362,20 @@ static void close_arrival(const unsigned state, struct selector_key *key) {
 
 static void error_arrival(const unsigned state, struct selector_key *key) {
     LOG_DEBUG("Arriving at ERROR state (state = %d, key = %p)", state, (void *)key);
+}
+static void socksv5_timeout(struct selector_key *key) {
+    time_t now = time(NULL);
+    client_data *d = (client_data *)key->data;
+    const unsigned currentState = stm_state(&d->stm);
+
+
+    if (currentState == ADDR_RESOLVE || currentState == CONNECTING) {
+        return;
+    }
+
+    if (difftime(now, d->last) > INACTIVITY_TIMEOUT) {
+        LOG_INFO("Closing connection on fd %d due to inactivity timeout.", key->fd);
+        d->socks_status = TTL_EXPIRED;
+        close_connection(key);
+    }
 }
