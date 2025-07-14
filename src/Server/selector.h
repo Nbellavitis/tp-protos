@@ -126,7 +126,7 @@ struct selector_key {
 typedef struct fd_handler {
   void (*handle_read)      (struct selector_key *key);
   void (*handle_write)     (struct selector_key *key);
-  void (*handle_block)     (struct selector_key *key);
+  void (*handle_block)(struct selector_key *key, void *data);
 
   /**
    * llamado cuando se se desregistra el fd
@@ -186,8 +186,6 @@ int
 selector_fd_set_nio(const int fd);
 
 /** notifica que un trabajo bloqueante terminó */
-selector_status
-selector_notify_block(fd_selector s,
-                 const int   fd);
+selector_status selector_notify_block(fd_selector s, const int fd, void *data);
 
 #endif

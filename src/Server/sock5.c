@@ -21,7 +21,7 @@ extern bool killed;
 static void socksv5Read(struct selector_key *key);
 static void socksv5Write(struct selector_key *key);
 static void socksv5Close(struct selector_key *key);
-static void socksv5Block(struct selector_key *key);
+static void socksv5Block(struct selector_key *key, void *data);
 static void closeArrival(const unsigned state, struct selector_key *key);
 static void errorArrival(const unsigned state, struct selector_key *key);
 
@@ -39,7 +39,7 @@ static const struct state_definition clientActions[] = {
     {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite},
     {.state = AUTHENTICATION_FAILURE_WRITE, .on_write_ready = authenticationFailureWrite},
     {.state = REQ_READ,.on_arrival = requestReadInit,.on_read_ready = requestRead},
-    {.state = ADDR_RESOLVE, .on_arrival = addressResolveInit, .on_write_ready = addressResolveDone,.on_block_ready = addressResolveDone}, //todo cambiar nombre!?
+    {.state = ADDR_RESOLVE, .on_arrival = addressResolveInit,.on_block_ready = addressResolveDone}, //todo cambiar nombre!?
     {.state = CONNECTING, .on_arrival = NULL, .on_write_ready = requestConnecting},
     {.state = REQ_WRITE, .on_write_ready = requestWrite},
     {.state = COPYING,   .on_arrival = socksv5HandleInit,.on_read_ready = socksv5HandleRead,.on_write_ready = socksv5HandleWrite,.on_departure = socksv5HandleClose},
@@ -172,7 +172,9 @@ static void socksv5Close(struct selector_key *key) {
     stm_handler_close(&clientData->stm, key);
     closeConnection(key);
 }
-static void socksv5Block(struct selector_key *key) {
+static void socksv5Block(struct selector_key *key, void *data) {
+    (void)data;
+
     if (key == NULL) {
         LOG_ERROR("%s" ,"socksv5Block: key is NULL");
         return;
@@ -182,7 +184,7 @@ static void socksv5Block(struct selector_key *key) {
         return;
     }
     ClientData *clientData = (ClientData *)key->data;
-    const enum socks5State state = stm_handler_block(&clientData->stm, key);
+    const enum socks5State state = stm_handler_block(&clientData->stm, key,data);
     LOG_DEBUG("socksv5Block: stm_handler_block returned: %d", state);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
@@ -311,7 +313,7 @@ void log_access_record(ClientData *clientData) {
                  clientData->client_port,
                  clientData->target_host[0] ? clientData->target_host : "unknown",
                  clientData->target_port,
-                 "AUTH_FAILED");
+                 "0X01 (RFC 1929 - Authentication failed)");
     } else {
         LOG_INFO("%-25s  %-12s  %-2s  %-17s  %-6d  %-25s  %-6d  %-2d",
                  timestamp,

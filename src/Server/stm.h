@@ -54,7 +54,7 @@ struct state_definition {
     /** ejecutado cuando hay datos disponibles para ser escritos */
     unsigned (*on_write_ready)(struct selector_key *key);
     /** ejecutado cuando hay una resolución de nombres lista */
-    unsigned (*on_block_ready)(struct selector_key *key);
+    unsigned (*on_block_ready)(struct selector_key *key,void * data);
 };
 
 
@@ -75,8 +75,7 @@ unsigned
 stm_handler_write(struct state_machine *stm, struct selector_key *key);
 
 /** indica que ocurrió el evento block. retorna nuevo id de nuevo estado. */
-unsigned
-stm_handler_block(struct state_machine *stm, struct selector_key *key);
+unsigned stm_handler_block(struct state_machine *stm, struct selector_key *key, void *data);
 
 /** indica que ocurrió el evento close. retorna nuevo id de nuevo estado. */
 void

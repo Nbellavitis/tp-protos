@@ -277,32 +277,27 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
 
 }
 
-unsigned addressResolveDone(struct selector_key *key) {
+// Nueva firma para addressResolveDone y la actualizamos en el array clientActions
+// .on_block_ready = addressResolveDone
+unsigned addressResolveDone(struct selector_key *key, void *data) {
     ClientData *clientData = (ClientData *)key->data;
+    DnsResult *dnsResult = (DnsResult *)data;
 
 
-    // Como probamos, la única forma de llegar a este estado es con un ATYP_DOMAIN.
-    // Por lo tanto, toda la lógica puede centrarse en el resultado de la resolución DNS,
-    // que se comunica a través del flag `dns_resolution_state`.
+    if (dnsResult->gai_error != 0) {
 
-    if (clientData->dns_resolution_state == DNS_STATE_COMPLETED) {
-        // DNS completada exitosamente
-        clientData->dns_resolution_state = DNS_STATE_IDLE; // Reseteamos el flag
-        clientData->currentResolution = clientData->originResolution;
-        return startConnection(key);
-
+        free(dnsResult);
+        return preSetRequestResponse(key, GENERAL_FAILURE);
     }
-    if (clientData->dns_resolution_state == DNS_STATE_IN_PROGRESS) {
-        // DNS aún en progreso. Nos mantenemos en el estado.
-        return ADDR_RESOLVE;
 
-    }
-    // Cubre el fallo del DNS (estado -1) y el fallo en init (estado 0)
-    // DNS falló o hubo un error inmediato al iniciar la resolución.
-//    LOG_ERROR("%s" , "ADDR_RESOLVE_DONE: DNS failed or init error");
-    clientData->dns_resolution_state = DNS_STATE_IDLE; // Reseteamos el flag
-    return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
+    cleanup_previous_resolution(clientData);
+    clientData->originResolution = dnsResult->result;
+    clientData->resolution_from_getaddrinfo = true;
+    clientData->currentResolution = clientData->originResolution;
 
+    free(dnsResult);
+
+    return startConnection(key);
 }
 
 
@@ -344,28 +339,26 @@ unsigned requestConnecting(struct selector_key *key) {
 
 void dnsResolutionDone(union sigval sv) {
     struct dns_request *dns_req = sv.sival_ptr;
-    ClientData *clientData = (ClientData *)dns_req->clientData;
 
-    int ret = gai_error(&dns_req->req);
-    if (ret != 0) {
-        LOG_ERROR("DNS resolution error: %s", gai_strerror(ret));
+    DnsResult *dnsResult = malloc(sizeof(DnsResult));
+    if (dnsResult == NULL) {
+        LOG_ERROR("%s", "Failed to allocate memory for DNS result message");
+        return;
+    }
+
+    dnsResult->gai_error = gai_error(&dns_req->req);
+    if (dnsResult->gai_error == 0) {
+        dnsResult->result = dns_req->req.ar_result;
+    } else {
+        dnsResult->result = NULL;
         if (dns_req->req.ar_result != NULL) {
             freeaddrinfo(dns_req->req.ar_result);
         }
-        clientData->dns_resolution_state = DNS_STATE_ERROR;
-        //SEM_UP
-        selector_notify_block(dns_req->selector, dns_req->fd);
-        return;
-    }
-    
-    clientData->originResolution = dns_req->req.ar_result;
-    clientData->resolution_from_getaddrinfo = true;  // Memoria de getaddrinfo_a
-    clientData->dns_resolution_state = DNS_STATE_COMPLETED; // Indica que la resolución se completó exitosamente
-    //SEM_UP
-    
-    selector_notify_block(dns_req->selector, dns_req->fd);
+        LOG_ERROR("DNS resolution error: %s", gai_strerror(dnsResult->gai_error));
     }
 
+    selector_notify_block(dns_req->selector, dns_req->fd, dnsResult);
+}
 unsigned startConnection(struct selector_key * key) {
     ClientData *clientData = (ClientData *)key->data;
 
