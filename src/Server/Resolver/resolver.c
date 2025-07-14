@@ -318,7 +318,7 @@ unsigned address_resolve_done(struct selector_key *key, void *data) {
 
 unsigned request_connecting(struct selector_key *key) {
     client_data *data = (client_data *)key->data;
-    data->lastActivity = time(NULL);
+    data->last_activity = time(NULL);
     if (data->connection_ready) {
         data->socks_status = SUCCESS;
         return preset_request_response(key, SUCCESS);

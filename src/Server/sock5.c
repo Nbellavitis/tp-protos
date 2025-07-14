@@ -88,7 +88,7 @@ void socksv5_passive_accept(struct selector_key* key){
     client_data->client_port = 0;
     client_data->target_port = 0;
     client_data->socks_status = 0;
-    clientData->last_activity = time(NULL);
+    client_data->last_activity = time(NULL);
     // Extraer IP y puerto del cliente
     if (client_address.ss_family == AF_INET) {
         struct sockaddr_in *addr_in = (struct sockaddr_in *)&client_address;
@@ -366,17 +366,17 @@ static void error_arrival(const unsigned state, struct selector_key *key) {
 }
 static void socksv5_timeout(struct selector_key *key) {
     time_t now = time(NULL);
-    ClientData *clientData = (ClientData *)key->data;
-    const unsigned currentState = stm_state(&clientData->stm);
+    client_data *data = (client_data *)key->data;
+    const unsigned currentState = stm_state(&data->stm);
 
 
     if (currentState == ADDR_RESOLVE || currentState == CONNECTING) {
         return;
     }
 
-    if (difftime(now, clientData->lastActivity) > INACTIVITY_TIMEOUT) {
+    if (difftime(now, data->last_activity) > INACTIVITY_TIMEOUT) {
         LOG_INFO("Closing connection on fd %d due to inactivity timeout.", key->fd);
-        clientData->socks_status = TTL_EXPIRED;
-        closeConnection(key);
+        data->socks_status = TTL_EXPIRED;
+        close_connection(key);
     }
 }
