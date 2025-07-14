@@ -200,9 +200,6 @@ unsigned request_read(struct selector_key *key) {
         return preset_request_response(key, GENERAL_FAILURE);
     }
 
-    if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) { // todo: el selector no lo tendría que hacer después del start_connection?
-        return ERROR;
-    }
     return start_connection(key);
 }
 
