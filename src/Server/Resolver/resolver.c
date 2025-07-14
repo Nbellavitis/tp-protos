@@ -93,7 +93,7 @@ static bool create_direct_addrinfo(ClientData *clientData, const resolver_parser
             .sin6_family = AF_INET6,
             .sin6_port = htons(parser->port),
         };
-        memcpy(&ipv6_addr->sin6_addr, parser->ipv6_addr, 16);
+        memcpy(&ipv6_addr->sin6_addr, parser->ipv6_addr, 16); // todo: magic number ?
 
         *clientData->originResolution = (struct addrinfo){
             .ai_family = AF_INET6,
@@ -125,7 +125,7 @@ unsigned requestRead(struct selector_key *key) {
     // Leer del socket al buffer
     size_t writeLimit;
     uint8_t *b = buffer_write_ptr(&clientData->clientBuffer, &writeLimit);
-    const ssize_t readCount = recv(key->fd, b, writeLimit, 0);
+    const ssize_t readCount = recv(key->fd, b, writeLimit, 0); // todo: magic number ?
     if (readCount <= 0) {
         return ERROR; // error o desconexión
     }
@@ -139,7 +139,7 @@ unsigned requestRead(struct selector_key *key) {
 
     if (result == REQUEST_PARSE_ERROR) {
         LOG_ERROR("%s" , "REQ_READ: Error parsing request");
-        clientData->socks_status = 0x01;
+        clientData->socks_status = GENERAL_FAILURE;
         // Enviar error: General SOCKS server failure
         return preSetRequestResponse(key, GENERAL_FAILURE);
     }
@@ -196,7 +196,7 @@ unsigned requestRead(struct selector_key *key) {
         return preSetRequestResponse(key, GENERAL_FAILURE);
     }
 
-    if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) { // todo: el selector lo tengo que hacer después del startConnection
+    if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) { // todo: el selector no lo tendría que hacer después del startConnection?
         return ERROR;
     }
     return startConnection(key);
@@ -254,10 +254,11 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
     sev.sigev_notify_function = dnsResolutionDone;
     sev.sigev_value.sival_ptr = dns_req;
 
+    // todo: ¿Que es 1? magic number ?
     if (getaddrinfo_a(GAI_NOWAIT, reqs, 1, &sev) != 0) {
         LOG_ERROR("%s","ADDR_RESOLVE_INIT: Error starting DNS resolution");
         // sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
-        clientData->dns_resolution_state = -1;
+        clientData->dns_resolution_state = -1; // todo: magic number ?
         if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
             closeConnection(key);
         }
@@ -266,7 +267,7 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
     }
 
     // Desactivar eventos hasta que termine la resolución DNS
-    clientData->dns_resolution_state = 1; // En progreso
+    clientData->dns_resolution_state = 1; // todo: magic number ?
     if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
         LOG_ERROR("%s" ,"ADDR_RESOLVE_INIT: Error disabling events");
         closeConnection(key);
@@ -285,7 +286,7 @@ unsigned addressResolveDone(struct selector_key *key) {
     // Por lo tanto, toda la lógica puede centrarse en el resultado de la resolución DNS,
     // que se comunica a través del flag `dns_resolution_state`.
 
-    if (clientData->dns_resolution_state == 2) {
+    if (clientData->dns_resolution_state == 2) { // todo: magic number ?
         // DNS completada exitosamente
         clientData->dns_resolution_state = 0; // Reseteamos el flag
         clientData->currentResolution = clientData->originResolution;
@@ -461,7 +462,7 @@ unsigned preSetRequestResponse(struct selector_key *key, int errorStatus) {
     clientData->socks_status = errorStatus; //@todo checkear.
 
     uint8_t atyp = ATYP_IPV4;
-    uint8_t addr[16]; // máximo tamaño: IPv6
+    uint8_t addr[16]; // máximo tamaño: IPv6 todo: magic number ?
     uint16_t port = 0;
 
     if (clientData->originFd >= 0) {
@@ -471,32 +472,32 @@ unsigned preSetRequestResponse(struct selector_key *key, int errorStatus) {
         if (getsockname(clientData->originFd, (struct sockaddr *)&local_addr, &local_addr_len) == 0) {
             if (local_addr.ss_family == AF_INET) {
                 struct sockaddr_in *addr4 = (struct sockaddr_in *)&local_addr;
-                memcpy(addr, &addr4->sin_addr, 4);
+                memcpy(addr, &addr4->sin_addr, 4); // todo: magic number ?
                 port = ntohs(addr4->sin_port);
                 atyp = ATYP_IPV4;
             } else if (local_addr.ss_family == AF_INET6) {
                 struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&local_addr;
-                memcpy(addr, &addr6->sin6_addr, 16);
+                memcpy(addr, &addr6->sin6_addr, 16);// todo: magic number ?
                 port = ntohs(addr6->sin6_port);
                 atyp = ATYP_IPV6;
             } else {
                 // Fallback si no es una familia válida
                 uint32_t ip = htonl(0);
-                memcpy(addr, &ip, 4);
+                memcpy(addr, &ip, 4); // todo: magic number ?
                 port = 0;
                 atyp = ATYP_IPV4;
             }
         } else {
             // getsockname falló → fallback
             uint32_t ip = htonl(0);
-            memcpy(addr, &ip, 4);
+            memcpy(addr, &ip, 4); // todo: magic number ?
             port = 0;
             atyp = ATYP_IPV4;
         }
     } else {
         // originFd inválido → no se pudo conectar
         uint32_t ip = htonl(0);
-        memcpy(addr, &ip, 4);
+        memcpy(addr, &ip, 4); // todo: magic number ?
         port = 0;
         atyp = ATYP_IPV4;
     }

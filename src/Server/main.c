@@ -15,7 +15,7 @@
 #include "Negotiation/negotiationParser.h"
 #include "main.h"
 #include "../logger.h"
-#define MAXPENDING 10 //todo ME PINTO 10
+#include "constants.h"
 
  bool killed = false;
 
@@ -40,7 +40,7 @@ static user_t anonymous_user = {
 
 // Variables globales para gestión de buffer
 static size_t current_buffer_size = BUFFER_SIZE;
-static const size_t available_buffer_sizes[] = {4096, 8192, 16384, 32768, 65536, 131072};
+static const size_t available_buffer_sizes[] = {BUFFER_SIZE_4K, BUFFER_SIZE_8K, BUFFER_SIZE_16K, BUFFER_SIZE_32K, BUFFER_SIZE_64K, BUFFER_SIZE_128K};
 static const size_t num_available_sizes = sizeof(available_buffer_sizes) / sizeof(available_buffer_sizes[0]);
 
 // Funciones para acceder a los usuarios autorizados
@@ -210,11 +210,11 @@ int main (int argc,char * argv[]){
     signal(SIGTERM, sig_handler);
     signal(SIGINT, sig_handler);
     selector_status ss= SELECTOR_SUCCESS;
-    setAuthMethod(AUTH); // Establecer el método de autenticación por defecto
+    setAuthMethod(NOAUTH); // Establecer el método de autenticación por defecto
     char * error = NULL;
     struct selector_init conf = {
         .signal = SIGALRM,
-        .select_timeout = { .tv_sec = 10, .tv_nsec = 0 }
+        .select_timeout = { .tv_sec = SELECTOR_TIMEOUT_SEC, .tv_nsec = 0 }
 
     };
     if (selector_init(&conf) != SELECTOR_SUCCESS) {

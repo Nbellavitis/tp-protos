@@ -10,6 +10,11 @@
 #include <string.h>
 #include "../buffer.h"
 #include <arpa/inet.h>
+
+// SOCKS5 protocol constants
+#define IPV6_ADDR_SIZE          16
+#define MAX_DOMAIN_LEN          256
+#define MAX_SOCKS5_DOMAIN_LEN   255  // RFC 1928: domain length is limited to 255 bytes
 typedef enum {
     REQUEST_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando
     REQUEST_PARSE_OK,          // parseo exitoso
@@ -38,11 +43,11 @@ typedef struct resolver_parser {
     uint8_t ipv4_addr[4];
     
     // Para IPv6
-    uint8_t ipv6_addr[16];
+    uint8_t ipv6_addr[IPV6_ADDR_SIZE];
     
     // Para dominio
     uint8_t domain_length;
-    char domain[256];
+    char domain[MAX_DOMAIN_LEN];
     
     uint16_t port;
     

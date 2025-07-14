@@ -12,8 +12,8 @@ void initResolverParser(resolver_parser *parser) {
     parser->done = false;
     parser->error = false;
     memset(parser->ipv4_addr, 0, 4);
-    memset(parser->ipv6_addr, 0, 16);
-    memset(parser->domain, 0, 256);
+    memset(parser->ipv6_addr, 0, IPV6_ADDR_SIZE);
+    memset(parser->domain, 0, MAX_DOMAIN_LEN);
     parser->domain_length = 0;
 }
 
@@ -25,49 +25,49 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
         byte = buffer_read(buffer);
 
         switch (p->state) {
-            case 0: // en este estado vamos a leer VER
-                if (byte != 0x05) {
+            case 0: // en este estado vamos a leer VER // todo: magic number ?
+                if (byte != 0x05) { // todo: magic number ?
                     p->error = true;
                     return REQUEST_PARSE_ERROR;
                 }
                 p->version = byte;
-                p->state = 1;
+                p->state = 1; // todo: magic number ?
                 break;
 
-            case 1: // leemos CMD
+            case 1: // leemos CMD // todo: magic number ?
                 if (byte != CMD_CONNECT && byte != CMD_BIND && byte != CMD_UDP_ASSOCIATE) {
                     p->error = true;
                     return REQUEST_PARSE_ERROR;
                 }
                 p->command = byte;
-                p->state = 2;
+                p->state = 2; // todo: magic number ?
                 break;
 
-            case 2: // leemos RSV
+            case 2: // leemos RSV // todo: magic number ?
                 if (byte != 0x00) {
                     p->error = true;
                     return REQUEST_PARSE_ERROR;
                 }
                 p->reserved = byte;
-                p->state = 3;
+                p->state = 3; // todo: magic number ?
                 break;
 
-            case 3: // leemos ATYP
+            case 3: // leemos ATYP // todo: magic number ?
                 if (byte != ATYP_IPV4 && byte != ATYP_DOMAIN && byte != ATYP_IPV6) {
                     p->error = true;
                     return REQUEST_PARSE_ERROR;
                 }
                 p->address_type = byte;
-                p->state = 4;
+                p->state = 4; // todo: magic number ?
                 break;
 
-            case 4: // leemos DST.ADDR
+            case 4: // leemos DST.ADDR // todo: magic number ?
                 switch (p->address_type) {
                     case ATYP_IPV4:
                         p->ipv4_addr[p->bytes_read] = byte;
                         p->bytes_read++;
-                        if (p->bytes_read == 4) {
-                            p->state = 5;
+                        if (p->bytes_read == 4) { // todo: magic number ?
+                            p->state = 5; // todo: magic number ?
                             p->bytes_read = 0;
                         }
                         break;
@@ -80,17 +80,17 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
                                 p->error = true;
                                 return REQUEST_PARSE_ERROR;
                             }
-                            p->bytes_read = 1;  // Lee un byte que va a ser la longitud del dominio
+                            p->bytes_read = 1;  // Lee un byte que va a ser la longitud del dominio // todo: magic number ?
                         } else {
                             // Verificar bounds antes de escribir
-                            if (p->bytes_read - 1 >= 255) {
+                            if (p->bytes_read - 1 >= MAX_SOCKS5_DOMAIN_LEN) {
                                 p->error = true;
                                 return REQUEST_PARSE_ERROR;
                             }
                             p->domain[p->bytes_read - 1] = byte;
                             p->bytes_read++;
                             if (p->bytes_read > p->domain_length) {
-                                p->state = 5;
+                                p->state = 5; // todo: magic number ?
                                 p->bytes_read = 0;
                             }
                         }
@@ -99,15 +99,15 @@ request_parse resolverParse(resolver_parser *p, struct buffer *buffer) {
                     case ATYP_IPV6:
                         p->ipv6_addr[p->bytes_read] = byte;
                         p->bytes_read++;
-                        if (p->bytes_read == 16) {
-                            p->state = 5;
+                        if (p->bytes_read == IPV6_ADDR_SIZE) {
+                            p->state = 5; // todo: magic number ?
                             p->bytes_read = 0;
                         }
                         break;
                 }
                 break;
 
-            case 5: // DST.PORT
+            case 5: // DST.PORT // todo: magic number ?
                 if (p->bytes_read == 0) {
                     LOG_DEBUG("Byte received: 0x%02x in state", byte);
                     p->port = ((uint16_t)byte) << 8; // high byte
@@ -178,7 +178,7 @@ bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_
             if (!buffer_can_write(originBuffer)) {
                 return false;
             }
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < IPV6_ADDR_SIZE; i++) {
                 if (!buffer_can_write(originBuffer)) {
                     return false;
                 }

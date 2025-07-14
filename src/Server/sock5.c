@@ -14,6 +14,7 @@
 #include "Resolver/resolver.h"
 #include "Statistics/statistics.h"
 #include "../logger.h"
+#include "constants.h"
 
 // Declaración de función externa
 extern size_t get_current_buffer_size(void);
@@ -298,7 +299,7 @@ void log_access_record(ClientData *clientData) {
     // Fecha en formato ISO-8601
     time_t now = time(NULL);
     struct tm *utc_tm = gmtime(&now);
-    char timestamp[32];
+    char timestamp[TIMESTAMP_BUFFER_SIZE];
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
     
     // REGISTRO DE ACCESO: fecha\tusuario\tA\tip_origen\tpuerto_origen\tdestino\tpuerto_destino\tstatus
@@ -324,7 +325,7 @@ void log_password_record(const char *username, const char *protocol,
     // Fecha en formato ISO-8601
     time_t now = time(NULL);
     struct tm *utc_tm = gmtime(&now);
-    char timestamp[32];
+    char timestamp[TIMESTAMP_BUFFER_SIZE];
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
     
     // REGISTRO DE PASSWORDS: fecha\tusuario\tP\tprotocolo\tdestino\tpuerto_destino\tusuario_desc\tpass_desc

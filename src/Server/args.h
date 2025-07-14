@@ -6,6 +6,12 @@
 
 #define MAX_USERS 10
 
+// Network configuration constants
+#define DEFAULT_SOCKS_PORT      1080
+#define DEFAULT_MGMT_PORT       8080
+#define MAX_PORT_NUMBER         65536
+#define DEFAULT_MGMT_ADDR       "127.0.0.1"
+
 
 struct socks5args
 {

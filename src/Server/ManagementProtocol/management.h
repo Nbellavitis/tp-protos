@@ -43,8 +43,20 @@ CLIENTE → SERVIDOR                                             SERVIDOR → CL
 #define ADMIN_PASSWORD_ENV_VAR "ADMIN_PASSWORD"
 
 
-#define MAX_USERNAME_LEN     63
-#define MAX_PASSWORD_LEN     63
+// Management protocol constants
+#define MAX_USERNAME_LEN        63
+#define MAX_PASSWORD_LEN        63
+#define MAX_MGMT_PAYLOAD_LEN    255
+
+// Management response buffer sizes  
+#define MGMT_RESPONSE_SIZE              256
+#define MGMT_EXTENDED_RESPONSE_SIZE     512
+#define MGMT_PAYLOAD_SIZE               256
+#define STATS_RESPONSE_SIZE             512
+#define USERS_RESPONSE_SIZE             1024
+
+// Buffer size list for management responses
+#define AVAILABLE_BUFFER_SIZES_STR      "4096, 8192, 16384, 32768, 65536, 131072"
 
 
 #define MANAGEMENT_VERSION 0x01

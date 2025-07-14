@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 
 #include "netutils.h"
+#include "constants.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -78,7 +79,7 @@ sock_blocking_write(const int fd, buffer *b) {
 int
 sock_blocking_copy(const int source, const int dest) {
     int ret = 0;
-    char buf[4096];
+    char buf[COPY_BUFFER_SIZE];
     ssize_t nread;
     while ((nread = recv(source, buf, N(buf), 0)) > 0) {
         char* out_ptr = buf;

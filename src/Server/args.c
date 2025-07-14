@@ -18,7 +18,7 @@ port(const char* s)
         || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno)
         || sl < 0 || sl > USHRT_MAX)
     {
-        fprintf(stderr, "port should in in the range of 1-65536: %s\n", s);
+        fprintf(stderr, "port should in in the range of 1-%d: %s\n", MAX_PORT_NUMBER, s);
         exit(1);
         return 1;
     }
@@ -79,10 +79,10 @@ parse_args(const int argc, char** argv, struct socks5args* args)
 {
     memset(args, 0, sizeof(*args)); // sobre todo para setear en null los punteros de users
 
-    args->socks_addr = "0.0.0.0";
-    args->socks_port = 1080;
-    args->mng_addr = "127.0.0.1";
-    args->mng_port = 8080;
+    args->socks_addr = "0.0.0.0"; // todo: magic number ?
+    args->socks_port = DEFAULT_SOCKS_PORT;
+    args->mng_addr = DEFAULT_MGMT_ADDR;
+    args->mng_port = DEFAULT_MGMT_PORT;
 
     args->disectors_enabled = true;
 

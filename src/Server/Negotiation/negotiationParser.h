@@ -9,8 +9,12 @@
 #include "../buffer.h"
 #include <stdio.h>
 #include "../selector.h"
+
+
+#define MAX_AUTH_METHODS 255  // máximo según RFC
 #define NOAUTH 0x00
 #define AUTH 0x02
+
 typedef enum {
     NEGOTIATION_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando
     NEGOTIATION_PARSE_OK,          // parseo exitoso, método elegido
@@ -23,7 +27,7 @@ typedef struct negotiation_parser {
     struct parser_definition def;
     uint8_t version;
     uint8_t nmethods;
-    uint8_t methods[255];  // máximo según RFC
+    uint8_t methods[MAX_AUTH_METHODS];
     uint8_t method_chosen;
     uint8_t i;             // cuántos métodos ya leyó
     bool done;

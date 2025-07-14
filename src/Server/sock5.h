@@ -25,8 +25,10 @@
 #include "args.h"
 #include "Copy/copy.h"
 #include "ManagementProtocol/management.h"
+// SOCKS5 server constants
+#define MAX_HOSTNAME_LEN        256
 
-#define BUFFER_SIZE 32768
+#define BUFFER_SIZE BUFFER_SIZE_32K
 
 // Funciones para acceder a usuarios autorizados
 struct users* get_authorized_users(void);
@@ -71,7 +73,7 @@ typedef struct ClientData {
   /*  char username[MAX_USERNAME_LEN];          // Usuario autenticado*/
     char client_ip[INET6_ADDRSTRLEN];   // IP del cliente
     int client_port;             // Puerto del cliente
-    char target_host[256];       // Host de destino         //@todo hacer MALLOQUABLE
+    char target_host[MAX_HOSTNAME_LEN];       // Host de destino         //@todo hacer MALLOQUABLE
     int target_port;             // Puerto de destino
     uint8_t socks_status;        // Status code SOCKS5
 

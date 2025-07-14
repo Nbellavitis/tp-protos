@@ -8,6 +8,9 @@
 #include "../buffer.h"
 #include "../Statistics/statistics.h"
 
+#define AUTH_NAME_SIZE          256
+#define AUTH_PASS_SIZE          256
+
 typedef enum {
     AUTH_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando
     AUTH_PARSE_OK,          // parseo exitoso
@@ -16,9 +19,9 @@ typedef enum {
 typedef struct auth_parser {
     uint8_t version;
     uint8_t nameLength;
-    char name[256];
+    char name[AUTH_NAME_SIZE];
     uint8_t passwordLength;
-    char password[256];
+    char password[AUTH_PASS_SIZE];
     uint8_t offsetName;
     uint8_t offsetPassword;
     bool error;

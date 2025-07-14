@@ -6,6 +6,7 @@
 #include "../Statistics/statistics.h"
 #include "../args.h"
 #include "../../logger.h"
+#include "../constants.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -347,7 +348,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
         // Procesar comando
         switch (mgmt_data->parser.command) {
             case CMD_STATS: {
-                char stats_response[512];
+                char stats_response[STATS_RESPONSE_SIZE];
                 snprintf(stats_response, sizeof(stats_response),
                          "Connections opened: %u\nConnections closed: %u\nCurrent connections: %u\nClient bytes: %u\nOrigin bytes: %u",
                          stats_get_connections_opened(),
@@ -359,7 +360,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 break;
             }
             case CMD_LIST_USERS: {
-                char users_response[1024] = "Users:\n";
+                char users_response[USERS_RESPONSE_SIZE] = "Users:\n";
                 struct users* users = get_authorized_users();
                 int num_users = get_num_authorized_users();
 
@@ -397,7 +398,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
                         send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username or password length is longer than allowed");
                     }
                     else if (add_user(username, password)) {
-                        char response[256];
+                        char response[MGMT_RESPONSE_SIZE];
                         snprintf(response, sizeof(response), "User '%.*s' added successfully", MAX_USERNAME_LEN, username);
                         send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                     } else {
@@ -437,7 +438,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
                     if (strlen(username) == 0 || strlen(new_password) == 0) {
                         send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username and new password cannot be empty");
                     } else if (change_user_password(username, new_password)) {
-                        char response[256];
+                        char response[MGMT_RESPONSE_SIZE];
                         snprintf(response, sizeof(response), "Password changed for user '%.*s'",MAX_USERNAME_LEN, username);
                         send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                     } else {
@@ -458,9 +459,9 @@ unsigned mgmt_command_read(struct selector_key *key) {
                     snprintf(response, sizeof(response), "Buffer size changed to %zu bytes", new_size);
                     send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                 } else {
-                    char response[512];
+                    char response[MGMT_EXTENDED_RESPONSE_SIZE];
                     snprintf(response, sizeof(response), 
-                             "Invalid buffer size. Available sizes: 4096, 8192, 16384, 32768, 65536, 131072");
+                             "Invalid buffer size. Available sizes: " AVAILABLE_BUFFER_SIZES_STR);
                     send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, response);
                 }
                 break;
@@ -468,7 +469,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
             case CMD_GET_BUFFER_INFO: {
                 char response[512];
                 snprintf(response, sizeof(response), 
-                         "Current buffer size: %zu bytes\nAvailable sizes: 4096, 8192, 16384, 32768, 65536, 131072",
+                         "Current buffer size: %zu bytes\nAvailable sizes: " AVAILABLE_BUFFER_SIZES_STR,
                          get_current_buffer_size());
                 send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                 break;
@@ -587,18 +588,18 @@ static void process_cmd_get_log_by_user(ManagementData *md)
     }
 
     /* 3)  Armar payload truncado (≤255 B) */
-    char  payload[256];       /* 255 bytes + '\0' */
+    char  payload[MGMT_PAYLOAD_SIZE];       /* MAX_MGMT_PAYLOAD_LEN bytes + '\0' */
     size_t plen = 0;
 
-    char   ts[32], line[256];
+    char   ts[TIMESTAMP_BUFFER_SIZE], line[LOG_LINE_SIZE];
     struct tm tm_;
 
-    for (size_t i = 0; i < u->used && plen < 255; i++) {
+    for (size_t i = 0; i < u->used && plen < MAX_MGMT_PAYLOAD_LEN; i++) {
         gmtime_r(&u->history[i].ts, &tm_);
         strftime(ts, sizeof ts, "%Y-%m-%dT%H:%M:%SZ", &tm_);
 
         /* espacio disponible, dejando 1 para '\0' */
-        size_t room = 255 - plen;
+        size_t room = MAX_MGMT_PAYLOAD_LEN - plen;
         int n = snprintf(payload + plen, room + 1,
                          "%s\t%s\t%u\t%s\t%u\t0x%02X\n",
                          ts,
@@ -610,7 +611,7 @@ static void process_cmd_get_log_by_user(ManagementData *md)
 
         if (n < 0) continue;          /* error improbable */
         if ((size_t)n >= room) {      /* se truncó la línea */
-            plen = 255;               /* llenamos el cupo y salimos */
+            plen = MAX_MGMT_PAYLOAD_LEN;               /* llenamos el cupo y salimos */
             break;
         }
         plen += (size_t)n;            /* línea completa añadida */
