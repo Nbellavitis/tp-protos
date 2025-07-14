@@ -146,7 +146,7 @@ unsigned request_read(struct selector_key *key) {
     // Leer del socket al buffer
     size_t writeLimit;
     uint8_t *b = buffer_write_ptr(&data->client_buffer, &writeLimit);
-    const ssize_t readCount = recv(key->fd, b, writeLimit, 0); // todo: magic number
+    const ssize_t readCount = recv(key->fd, b, writeLimit, 0);
     if (readCount <= 0) {
         return ERROR; // error o desconexión
     }
@@ -259,7 +259,6 @@ void address_resolve_init(const unsigned state, struct selector_key *key) {
 
     if (getaddrinfo_a(GAI_NOWAIT, reqs, GETADDRINFO_A_COUNT, &sev) != 0) {
         LOG_ERROR("%s","ADDR_RESOLVE_INIT: Error starting DNS resolution");
-        // sendRequestResponse(&data->origin_buffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
         data->dns_resolution_state = DNS_STATE_ERROR;
         if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) { // todo: ¿para que se hace este select?
             close_connection(key);
@@ -273,12 +272,14 @@ void address_resolve_init(const unsigned state, struct selector_key *key) {
     if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
         LOG_ERROR("%s" ,"ADDR_RESOLVE_INIT: Error disabling events");
         close_connection(key);
-        return;
     }
 
-
-
 }
+
+unsigned address_resolve_write(struct selector_key *key) {
+    return preset_request_response(key, GENERAL_FAILURE);
+}
+
 
 unsigned address_resolve_done(struct selector_key *key, void *data) {
     // Si estamos acá es con un ATYP_DOMAIN.

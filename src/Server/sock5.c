@@ -40,7 +40,7 @@ static const struct state_definition client_actions[] = {
     {.state = AUTHENTICATION_WRITE, .on_arrival = authentication_write_init, .on_write_ready = authentication_write},
     {.state = AUTHENTICATION_FAILURE_WRITE, .on_arrival = authentication_write_init, .on_write_ready = authentication_failure_write},
     {.state = REQ_READ,.on_arrival = request_read_init,.on_read_ready = request_read},
-    {.state = ADDR_RESOLVE, .on_arrival = address_resolve_init,.on_block_ready = address_resolve_done}, //todo cambiar nombre!?
+    {.state = ADDR_RESOLVE, .on_arrival = address_resolve_init, .on_write_ready = address_resolve_write, .on_block_ready = address_resolve_done}, //todo cambiar nombre!?
     {.state = CONNECTING, .on_arrival = NULL, .on_write_ready = request_connecting},
     {.state = REQ_WRITE, .on_arrival = request_write_init, .on_write_ready = request_write},
     {.state = COPYING,   .on_arrival = socksv5_handle_init,.on_read_ready = socksv5_handle_read,.on_write_ready = socksv5_handle_write,.on_departure = socksv5_handle_close},
@@ -240,8 +240,10 @@ void close_connection(struct selector_key *key) {
         }
     }
 
-    // Registro de acceso antes de liberar data
-    log_access_record(data);
+
+    if (!killed) {
+        log_access_record(data);
+    }
 
     // Liberar buffers dinámicos
     if (data->in_client_buffer != NULL) {
@@ -259,6 +261,9 @@ void close_connection(struct selector_key *key) {
 void log_store_for_user(const client_data *cd)
 {
     if (!cd) return;
+
+    // Evitamos use-after-free
+    if (killed) return;
 
     user_t *u = cd->user ? cd->user : get_anon_user();
     if (!u) return;
@@ -296,6 +301,9 @@ void log_store_for_user(const client_data *cd)
 
 void log_access_record(client_data *client_data) {
     if (!client_data) return;
+    
+    // Evitamos use-after-free
+    if (killed) return;
     
     // Fecha en formato ISO-8601
     time_t now = time(NULL);

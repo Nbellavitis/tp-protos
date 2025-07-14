@@ -41,6 +41,8 @@ unsigned address_resolve_done(struct selector_key *key, void *data);
 void request_connecting_init(const unsigned state, struct selector_key *key);
 unsigned request_connecting(struct selector_key *key);
 
+unsigned address_resolve_write(struct selector_key *key);
+
 
 
 
