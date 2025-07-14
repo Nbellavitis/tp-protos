@@ -77,7 +77,7 @@ static void cmd_list_users(ManagementData *md)
         memcpy(pl + off, u[i].name, l);
         off += l;
     }
-    send_management_response_raw(&md->response_buffer, STATUS_OK, pl, (uint8_t)off);
+    send_management_response_raw(&md->response_buffer, STATUS_OK, pl, off);
 }
 
 

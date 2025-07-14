@@ -155,46 +155,54 @@ void close_management_connection(struct selector_key *key) {
 }
 
 // Parser functions
-void init_management_parser(management_parser *parser) {
-    parser->version = 0;
-    parser->command = 0;
-    parser->payload_len = 0;
-    parser->payload_offset = 0;
-    parser->error = false;
-    parser->complete = false;
-    memset(parser->payload, 0, sizeof(parser->payload));
+void init_management_parser(management_parser *p)
+{
+    p->version          = 0;
+    p->command          = 0;
+    p->payload_len      = 0;
+    p->payload_offset   = 0;
+    p->len_bytes_read   = 0;
+    p->error            = false;
+    p->complete         = false;
+    memset(p->payload, 0, sizeof p->payload);
 }
+bool parse_management_command(management_parser *p, struct buffer *b)
+{
+    while (buffer_can_read(b) && !p->complete && !p->error) {
+        uint8_t byte = buffer_read(b);
 
-bool parse_management_command(management_parser *parser, struct buffer *buffer) {
-    while (buffer_can_read(buffer) && !parser->complete && !parser->error) {
-        uint8_t byte = buffer_read(buffer);
-
-        if (parser->version == 0) {
+        if (p->version == 0) {                    /* VER */
             if (byte != MANAGEMENT_VERSION) {
-                parser->error = true;
-                LOG_ERROR("Invalid management version: 0x%02x", byte);
+                p->error = true;
+                LOG_ERROR("Invalid management version 0x%02X", byte);
                 return false;
             }
-            parser->version = byte;
-        } else if (parser->command == 0) {
-            parser->command = byte;
-        } else if (parser->payload_len == 0 && parser->payload_offset == 0) {
-            parser->payload_len = byte;
-            if (parser->payload_len == 0) {
-                parser->complete = true;
+            p->version = byte;
+        } else if (p->command == 0) {             /* CMD */
+            p->command = byte;
+        } else if (p->len_bytes_read < LEN_BYTES) {       /* LEN‑hi LEN‑lo */
+            if (p->len_bytes_read == 0) p->payload_len  = (uint16_t)byte << 8;
+            else                         p->payload_len |= byte;
+            p->len_bytes_read++;
+            if (p->len_bytes_read == LEN_BYTES && p->payload_len == 0) {
+                p->complete = true;
                 return true;
             }
-        } else if (parser->payload_offset < parser->payload_len) {
-            parser->payload[parser->payload_offset++] = byte;
-            if (parser->payload_offset == parser->payload_len) {
-                parser->payload[parser->payload_offset] = '\0';
-                parser->complete = true;
+        } else {                                  /* PAYLOAD */
+            if (p->payload_offset < MAX_MGMT_PAYLOAD_LEN)
+                p->payload[p->payload_offset] = byte; /* se trunca si >max   */
+            p->payload_offset++;
+            if (p->payload_offset == p->payload_len) {
+
+                uint16_t len = p->payload_len < MAX_MGMT_PAYLOAD_LEN ? p->payload_len:MAX_MGMT_PAYLOAD_LEN;
+
+                p->payload[len] = '\0';
+                p->complete = true;
                 return true;
             }
         }
     }
-
-    return parser->complete;
+    return p->complete;
 }
 
 
@@ -372,51 +380,33 @@ void mgmt_error_arrival(unsigned state __attribute__((unused)), struct selector_
 
 
 
-
-
-bool send_management_response_raw(struct buffer *buffer,
-                                         uint8_t         status,
-                                         const uint8_t  *payload,
-                                         uint8_t         payload_len)
-
+bool send_management_response_raw(struct buffer *buf, uint8_t status,
+                                  const uint8_t *pl, uint16_t len)
 {
     size_t avail;
-    buffer_write_ptr(buffer, &avail);
-    if (payload_len > MAX_MGMT_PAYLOAD_LEN || avail < (size_t)(3 + payload_len)) {
-        LOG_ERROR("raw response overflow");
-        return false;
-    }
-    buffer_write(buffer, MANAGEMENT_VERSION);
-    buffer_write(buffer, status);
-    buffer_write(buffer, payload_len);
-    if (payload_len > 0) {
-        for (int i = 0; i < payload_len; i++) {
-            buffer_write(buffer, payload[i]);
-        }
-    }
+    buffer_write_ptr(buf, &avail);
+    if (len > MAX_MGMT_PAYLOAD_LEN || avail < 4 + len) return false;
+
+    buffer_write(buf, MANAGEMENT_VERSION);
+    buffer_write(buf, status);
+    buffer_write(buf, (len >> 8) & 0xFF);         /* LEN‑hi */
+    buffer_write(buf,  len        & 0xFF);        /* LEN‑lo */
+    for (uint16_t i = 0; i < len; i++) buffer_write(buf, pl[i]);
     return true;
 }
 
-bool send_management_response(struct buffer *buffer,
-                                     uint8_t         status,
-                                     const char     *msg_utf8)
+bool send_management_response(struct buffer *buf, uint8_t status,
+                              const char *utf8)
 {
-    uint8_t len = (uint8_t)strnlen(msg_utf8, MAX_MGMT_PAYLOAD_LEN);
-    size_t avail;
-    buffer_write_ptr(buffer, &avail);
-    if (avail < (size_t)(3 + len)) {
-        LOG_ERROR("response buffer overflow");
-        return false;
-    }
-    buffer_write(buffer, MANAGEMENT_VERSION);
-    buffer_write(buffer, status);
-    buffer_write(buffer, len);
+    uint16_t len = (uint16_t)strnlen(utf8, MAX_MGMT_PAYLOAD_LEN);
+    size_t   avail;
+    buffer_write_ptr(buf, &avail);
+    if (avail < 4 + len) return false;
 
-    if (len > 0) {
-        for (int i = 0; i < len; i++) {
-            buffer_write(buffer, msg_utf8[i]);
-        }
-    }
-
+    buffer_write(buf, MANAGEMENT_VERSION);
+    buffer_write(buf, status);
+    buffer_write(buf, (len >> 8) & 0xFF);
+    buffer_write(buf,  len        & 0xFF);
+    for (uint16_t i = 0; i < len; i++) buffer_write(buf, utf8[i]);
     return true;
 }

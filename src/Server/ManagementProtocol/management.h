@@ -28,11 +28,11 @@
 // Management protocol constants
 #define MAX_USERNAME_LEN        63
 #define MAX_PASSWORD_LEN        63
-#define MAX_MGMT_PAYLOAD_LEN    255
+#define MAX_MGMT_PAYLOAD_LEN    1028
+#define MGMT_PAYLOAD_SIZE       (MAX_MGMT_PAYLOAD_LEN + 1)
 
-// Management response buffer sizes
 
-#define MGMT_PAYLOAD_SIZE               256
+
 
 
 #define AVAILABLE_BUFFER_SIZES_STR      "4096, 8192, 16384, 32768, 65536, 131072"
@@ -90,14 +90,18 @@ enum management_state {
 };
 
 // Parser para comandos
+
+#define LEN_BYTES 2
+
 typedef struct {
-    uint8_t version;
-    uint8_t command;
-    uint8_t payload_len;
-    char payload[256];
-    uint8_t payload_offset;
-    bool error;
-    bool complete;
+    uint8_t  version;
+    uint8_t  command;
+    uint16_t payload_len;
+    char     payload[MAX_MGMT_PAYLOAD_LEN + 1];
+    uint16_t payload_offset;
+    uint8_t  len_bytes_read;
+    bool     error;
+    bool     complete;
 } management_parser;
 
 // Estructura de datos para conexiones de management
@@ -137,11 +141,13 @@ void init_management_parser(management_parser *parser);
 bool parse_management_command(management_parser *parser, struct buffer *buffer);
 
 // Funciones de respuesta
+
+bool send_management_response_raw(struct buffer *, uint8_t status,
+                                  const uint8_t * payload, uint16_t payload_len);
+
 bool send_management_response(struct buffer *buffer, uint8_t status, const char *payload);
-bool send_management_response_raw(struct buffer *buffer,
-                                  uint8_t         status,
-                                  const uint8_t  *payload,
-                                  uint8_t         payload_len);
+
+
 bool change_user_password(const char* username, const char* new_password);
 
 // Buffer size management

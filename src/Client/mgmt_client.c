@@ -10,9 +10,9 @@
 #define DEFAULT_MGMT_HOST          "127.0.0.1"
 #define DEFAULT_MGMT_PORT          8080
 #define INPUT_SMALL_BUF            32
-#define INPUT_LINE_BUF             (MAX_USERNAME_LEN + 1)
-#define CREDENTIALS_BUF            (MAX_USERNAME_LEN + 1 + MAX_PASSWORD_LEN + 1)
-#define HEADER_LEN                 3                              /* VER+CMD+LEN */
+#define INPUT_LINE_BUF (MAX_USERNAME_LEN + 2)
+#define CREDENTIALS_BUF (MAX_USERNAME_LEN + 1 + MAX_PASSWORD_LEN + 2)
+#define HEADER_LEN                 4                             /* VER+CMD+LEN+LEN */
 #define STATS_FIELDS               5
 #define STATS_PAYLOAD_BYTES        (STATS_FIELDS * sizeof(uint32_t))
 #define RESPONSE_BUFFER_SIZE       MGMT_RESPONSE_SIZE
@@ -40,12 +40,26 @@ typedef struct
 static void read_line(const char *prompt, char *buf, size_t n)
 {
     printf("%s", prompt);
+
     if (!fgets(buf, (int)n, stdin))
     {
-        puts("\nEOF");
-        exit(0);
+//        puts("\nEOF");
+//        exit(0);
+        return; //@todo check.
     }
-    buf[strcspn(buf, "\n")] = 0;
+
+    size_t len = strcspn(buf, "\n");
+
+    if (buf[len] == '\n')
+    {
+        buf[len] = '\0';
+    }
+    else
+    {
+        buf[n - 1] = '\0';
+        int ch;
+        while ((ch = getchar()) != '\n' && ch != EOF);
+    }
 }
 
 static int ask_choice(const char *prompt, int min, int max)
@@ -71,6 +85,21 @@ static int check_len(const char *label, const char *s, size_t max)
     return 0;
 }
 
+static int build_credentials(char *dst, size_t dst_sz,
+                             const char *user, const char *pass)
+{
+    int n = snprintf(dst, dst_sz, "%s:%s", user, pass);
+
+    if (n < 0 || (size_t)n >= dst_sz)
+    {
+        fprintf(stderr,
+                "Error: combined username+password exceeds %zu bytes\n",
+                dst_sz - 1);
+        return -1;
+    }
+    return 0;
+}
+
 static const char *status_to_str(uint8_t st)
 {
     static const char *tbl[] =
@@ -90,27 +119,34 @@ static const char *status_to_str(uint8_t st)
     return (st <= STATUS_RESERVED_USER) ? tbl[st] : "Unknown status";
 }
 
-static int send_raw(mgmt_client_t *c, uint8_t cmd, const uint8_t *pl, uint8_t len)
+static int send_raw(mgmt_client_t *c, uint8_t cmd,
+                    const uint8_t *pl, uint16_t len)
 {
+    if (len > MAX_MGMT_PAYLOAD_LEN) return -1;
     uint8_t msg[HEADER_LEN + MAX_MGMT_PAYLOAD_LEN];
     msg[0] = MANAGEMENT_VERSION;
     msg[1] = cmd;
-    msg[2] = len;
+    msg[2] = (len >> 8) & 0xFF;
+    msg[3] =  len        & 0xFF;
     if (len) memcpy(msg + HEADER_LEN, pl, len);
     return send(c->socket_fd, msg, HEADER_LEN + len, MSG_NOSIGNAL) ==
            HEADER_LEN + len ? 0 : -1;
 }
 
-static int recv_raw(mgmt_client_t *c, uint8_t *st, uint8_t *pl, uint8_t *len)
+
+
+static int recv_raw(mgmt_client_t *c, uint8_t *st,
+                    uint8_t *pl, uint16_t *len)
 {
     uint8_t hdr[HEADER_LEN];
     if (read(c->socket_fd, hdr, HEADER_LEN) != HEADER_LEN) return -1;
     if (hdr[0] != MANAGEMENT_VERSION) return -1;
     *st  = hdr[1];
-    *len = hdr[2];
+    *len = ((uint16_t)hdr[2] << 8) | hdr[3];
     if (*len && read(c->socket_fd, pl, *len) != *len) return -1;
     return 0;
 }
+
 /* -------------------------------------------------------------------------- */
 static void disconnect(mgmt_client_t *c)
 {
@@ -124,7 +160,7 @@ static int connect_server(mgmt_client_t *c)
     c->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (c->socket_fd < 0)
     {
-        perror("socket() failed — cannot create TCP socket");
+        perror("socket()failed—cannot create TCP socket");
         return -1;
     }
     struct sockaddr_in sa =
@@ -134,13 +170,13 @@ static int connect_server(mgmt_client_t *c)
             };
     if (inet_pton(AF_INET, c->server_host, &sa.sin_addr) <= 0)
     {
-        perror("inet_pton() failed — invalid management server address");
+        perror("inet_pton() failed—invalid management server address");
         disconnect(c);
         return -1;
     }
     if (connect(c->socket_fd, (struct sockaddr *)&sa, sizeof sa) < 0)
     {
-        perror("connect() failed — unable to reach management server");
+        perror("connect()failed—unable to reach management server");
         disconnect(c);
         return -1;
     }
@@ -158,18 +194,19 @@ static int auth_server(mgmt_client_t *c)
         check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
 
     char cred[CREDENTIALS_BUF];
-    snprintf(cred, sizeof cred, "%s:%s", u, p);
+    if (build_credentials(cred, sizeof cred, u, p) < 0) return -1;
+
     if (send_raw(c, CMD_AUTH, (uint8_t *)cred, (uint8_t)strlen(cred)) < 0)
     {
-        perror("send() failed — could not transmit authentication message");
+        perror("send()failed—could not transmit authentication message");
         return -1;
     }
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t dummy[1];
     if (recv_raw(c, &st, dummy, &len) < 0)
     {
-        perror("recv() failed — no response from management server");
+        perror("recv()failed—no response from management server");
         return -1;
     }
     puts(status_to_str(st));
@@ -181,7 +218,7 @@ static int auth_server(mgmt_client_t *c)
 static int h_stats(mgmt_client_t *c)
 {
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t pl[STATS_PAYLOAD_BYTES];
     if (send_raw(c, CMD_STATS, NULL, 0) < 0) return -1;
     if (recv_raw(c, &st, pl, &len) < 0) return -1;
@@ -202,7 +239,7 @@ static int h_stats(mgmt_client_t *c)
 static int h_list(mgmt_client_t *c)
 {
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t pl[FULL_PAYLOAD_BUF];
     if (send_raw(c, CMD_LIST_USERS, NULL, 0) < 0) return -1;
     if (recv_raw(c, &st, pl, &len) < 0) return -1;
@@ -232,14 +269,14 @@ static int h_add(mgmt_client_t *c)
         check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
 
     char pl[CREDENTIALS_BUF];
-    snprintf(pl, sizeof pl, "%s:%s", u, p);
+    if (build_credentials(pl, sizeof pl, u, p) < 0) return -1;
     if (send_raw(c, CMD_ADD_USER, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0)
     {
-        perror("send() failed — could not transmit Add‑User command");
+        perror("send()failed—could not transmit Add‑User command");
         return -1;
     }
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t dummy[1];
     if (recv_raw(c, &st, dummy, &len) < 0) return -1;
     puts(status_to_str(st));
@@ -253,7 +290,7 @@ static int h_del(mgmt_client_t *c)
     if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
     if (send_raw(c, CMD_DELETE_USER, (uint8_t *)u, (uint8_t)strlen(u)) < 0) return -1;
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t dummy[1];
     if (recv_raw(c, &st, dummy, &len) < 0) return -1;
     puts(status_to_str(st));
@@ -270,10 +307,10 @@ static int h_chpwd(mgmt_client_t *c)
         check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
 
     char pl[CREDENTIALS_BUF];
-    snprintf(pl, sizeof pl, "%s:%s", u, p);
+    if (build_credentials(pl, sizeof pl, u, p) < 0) return -1;
     if (send_raw(c, CMD_CHANGE_PASSWORD, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0) return -1;
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t dummy[1];
     if (recv_raw(c, &st, dummy, &len) < 0) return -1;
     puts(status_to_str(st));
@@ -283,7 +320,7 @@ static int h_chpwd(mgmt_client_t *c)
 static int h_bufinfo(mgmt_client_t *c)
 {
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t pl[sizeof(uint32_t)];
     if (send_raw(c, CMD_GET_BUFFER_INFO, NULL, 0) < 0) return -1;
     if (recv_raw(c, &st, pl, &len) < 0) return -1;
@@ -307,7 +344,7 @@ static int h_setbuf(mgmt_client_t *c)
     uint32_t net = htonl(BUF_SIZE_OPTIONS[idx - 1]);
     if (send_raw(c, CMD_SET_BUFFER_SIZE, (uint8_t *)&net, sizeof net) < 0) return -1;
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t dummy[1];
     if (recv_raw(c, &st, dummy, &len) < 0) return -1;
     puts(status_to_str(st));
@@ -321,7 +358,7 @@ static int h_setauth(mgmt_client_t *c)
     const char *m = opt == 1 ? "NOAUTH" : "AUTH";
     if (send_raw(c, CMD_SET_AUTH_METHOD, (uint8_t *)m, (uint8_t)strlen(m)) < 0) return -1;
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t dummy[1];
     if (recv_raw(c, &st, dummy, &len) < 0) return -1;
     puts(status_to_str(st));
@@ -331,7 +368,7 @@ static int h_setauth(mgmt_client_t *c)
 static int h_getauth(mgmt_client_t *c)
 {
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     uint8_t pl[1];
     if (send_raw(c, CMD_GET_AUTH_METHOD, NULL, 0) < 0) return -1;
     if (recv_raw(c, &st, pl, &len) < 0) return -1;
@@ -351,7 +388,7 @@ static int h_logs(mgmt_client_t *c)
     if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
     if (send_raw(c, CMD_GET_LOG_BY_USER, (uint8_t *)u, (uint8_t)strlen(u)) < 0) return -1;
     uint8_t st;
-    uint8_t len;
+    uint16_t len;
     char resp[FULL_PAYLOAD_BUF];
     if (recv_raw(c, &st, (uint8_t *)resp, &len) < 0) return -1;
     if (st != STATUS_OK)
