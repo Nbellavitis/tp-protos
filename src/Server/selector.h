@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include <stdbool.h>
 #include <stddef.h>
+#define INACTIVITY_TIMEOUT 60
 /**
  * selector.c - un muliplexor de entrada salida
  *
@@ -127,6 +128,7 @@ typedef struct fd_handler {
   void (*handle_read)      (struct selector_key *key);
   void (*handle_write)     (struct selector_key *key);
   void (*handle_block)(struct selector_key *key, void *data);
+    void (*handle_timeout)   (struct selector_key *key);
 
   /**
    * llamado cuando se se desregistra el fd

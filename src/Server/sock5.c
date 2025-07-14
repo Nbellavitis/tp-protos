@@ -24,12 +24,13 @@ static void socksv5Close(struct selector_key *key);
 static void socksv5Block(struct selector_key *key, void *data);
 static void closeArrival(const unsigned state, struct selector_key *key);
 static void errorArrival(const unsigned state, struct selector_key *key);
-
+static void socksv5Timeout(struct selector_key *key);
 static fd_handler  handler = {
      .handle_read = socksv5Read,
      .handle_write = socksv5Write,
      .handle_close = socksv5Close,
      .handle_block = socksv5Block,
+     .handle_timeout=socksv5Timeout,
 };
 
 static const struct state_definition clientActions[] = {
@@ -87,7 +88,7 @@ void socksv5PassiveAccept(struct selector_key* key){
     clientData->client_port = 0;
     clientData->target_port = 0;
     clientData->socks_status = 0;
-    
+    clientData->lastActivity = time(NULL);
     // Extraer IP y puerto del cliente
     if (clientAddress.ss_family == AF_INET) {
         struct sockaddr_in *addr_in = (struct sockaddr_in *)&clientAddress;
@@ -138,7 +139,7 @@ static void socksv5Read(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
 
     LOG_DEBUG("SOCKS5_READ: Reading data from socket %d", key->fd);
-
+    clientData->lastActivity = time(NULL);
     const enum socks5State state = stm_handler_read(&clientData->stm, key);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
@@ -362,4 +363,20 @@ static void closeArrival(const unsigned state, struct selector_key *key) {
 
 static void errorArrival(const unsigned state, struct selector_key *key) {
     LOG_DEBUG("Arriving at ERROR state (state = %d, key = %p)", state, (void *)key);
+}
+static void socksv5Timeout(struct selector_key *key) {
+    time_t now = time(NULL);
+    ClientData *clientData = (ClientData *)key->data;
+    const unsigned currentState = stm_state(&clientData->stm);
+
+
+    if (currentState == ADDR_RESOLVE || currentState == CONNECTING) {
+        return;
+    }
+
+    if (difftime(now, clientData->lastActivity) > INACTIVITY_TIMEOUT) {
+        LOG_INFO("Closing connection on fd %d due to inactivity timeout.", key->fd);
+        clientData->socks_status = TTL_EXPIRED;
+        closeConnection(key);
+    }
 }

@@ -145,6 +145,7 @@ unsigned requestRead(struct selector_key *key) {
     }
 
     if (result != REQUEST_PARSE_OK) {
+        LOG_ERROR("REQ_READ: Unexpected parse result: %d", result);
         return ERROR;
     }
 
@@ -303,7 +304,7 @@ unsigned addressResolveDone(struct selector_key *key, void *data) {
 
 unsigned requestConnecting(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
-
+    clientData->lastActivity = time(NULL);
     if (clientData->connection_ready) {
         clientData->socks_status = SUCCESS;
         return preSetRequestResponse(key, SUCCESS);
