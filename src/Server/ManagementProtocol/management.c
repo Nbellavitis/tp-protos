@@ -24,7 +24,6 @@ static const char* ADMIN_PASSWORD = ADMIN_DEFAULT_PASSWORD;
 static void management_read(struct selector_key *key);
 static void management_write(struct selector_key *key);
 static void management_close(struct selector_key *key);
-static void process_cmd_get_log_by_user(ManagementData *md);
 
 
 static fd_handler management_handler = {
@@ -197,77 +196,6 @@ bool parse_management_command(management_parser *parser, struct buffer *buffer) 
 
     return parser->complete;
 }
-/*
-bool send_management_response(struct buffer *buffer, uint8_t status, const char *payload) {
-
-    uint8_t payload_len = payload ? strlen(payload) : 0;
-    size_t total_bytes_needed = 3 + payload_len; // version + status + len + payload
-
-    size_t available_bytes;
-    buffer_write_ptr(buffer, &available_bytes);
-
-    if (available_bytes < total_bytes_needed) {
-        return false; // Not enough space in buffer
-    }
-
-
-    buffer_write(buffer, MANAGEMENT_VERSION);
-    buffer_write(buffer, status);
-
-    buffer_write(buffer, payload_len);
-
-    if (payload_len > 0) {
-        for (int i = 0; i < payload_len; i++) {
-            buffer_write(buffer, payload[i]);
-        }
-    }
-
-    return true;
-}*/
-bool send_management_response_raw(struct buffer *buffer,
-                                  uint8_t         status,
-                                  const uint8_t  *payload,
-                                  uint8_t         payload_len)
-{
-    size_t avail;
-    buffer_write_ptr(buffer, &avail);
-    if (payload_len > MAX_MGMT_PAYLOAD_LEN || avail < (size_t)(3 + payload_len)) {
-        LOG_ERROR("raw response overflow");
-        return false;
-    }
-    buffer_write(buffer, MANAGEMENT_VERSION);
-    buffer_write(buffer, status);
-    buffer_write(buffer, payload_len);
-    if (payload_len > 0) {
-        for (int i = 0; i < payload_len; i++) {
-            buffer_write(buffer, payload[i]);
-        }
-    }
-    return true;
-}
-bool send_management_response(struct buffer *buffer,
-                              uint8_t         status,
-                              const char     *msg_utf8)
-{
-    uint8_t len = (uint8_t)strnlen(msg_utf8, MAX_MGMT_PAYLOAD_LEN);
-    size_t avail;
-    buffer_write_ptr(buffer, &avail);
-    if (avail < (size_t)(3 + len)) {
-        LOG_ERROR("response buffer overflow");
-        return false;
-    }
-    buffer_write(buffer, MANAGEMENT_VERSION);
-    buffer_write(buffer, status);
-    buffer_write(buffer, len);
-
-    if (len > 0) {
-        for (int i = 0; i < len; i++) {
-            buffer_write(buffer, msg_utf8[i]);
-        }
-    }
-
-    return true;
-}
 
 
 // State handlers
@@ -397,202 +325,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
             return MGMT_ERROR;
         }
 
-        // Procesar comando
-        switch (mgmt_data->parser.command) {
-            case CMD_STATS: {
-                /*char stats_response[STATS_RESPONSE_SIZE];
-                snprintf(stats_response, sizeof(stats_response),
-                         "Connections opened: %u\nConnections closed: %u\nCurrent connections: %u\nClient bytes: %u\nOrigin bytes: %u",
-                         stats_get_connections_opened(),
-                         stats_get_connections_closed(),
-                         stats_get_current_connections(),
-                         stats_get_client_bytes(),
-                         stats_get_origin_bytes());
-                send_management_response(&mgmt_data->response_buffer, STATUS_OK, stats_response);*/
-                uint32_t v[5] = { stats_get_connections_opened(),
-                                  stats_get_connections_closed(),
-                                  stats_get_current_connections(),
-                                  stats_get_client_bytes(),
-                                  stats_get_origin_bytes() };
-                uint8_t payload[STATS_PAYLOAD_BYTES];
-                for (int i = 0; i < STATS_FIELDS ; i++)
-                    ((uint32_t *)payload)[i] = htonl(v[i]);
-
-                send_management_response_raw(&mgmt_data->response_buffer, STATUS_OK, payload, sizeof payload);
-                break;
-            }
-            case CMD_LIST_USERS: {
-                /*char users_response[USERS_RESPONSE_SIZE] = "Users:\n";
-                struct users* users = get_authorized_users();
-                int num_users = get_num_authorized_users();
-
-                for (int i = 0; i < num_users; i++) {
-                    if (users[i].name != NULL) {
-                        char user_line[128];
-                        snprintf(user_line, sizeof(user_line), "- %s\n", users[i].name);
-                        strcat(users_response, user_line);
-                    }
-                }
-
-                if (num_users == 0) {
-                    strcat(users_response, "No users configured");
-                }
-
-                send_management_response(&mgmt_data->response_buffer, STATUS_OK, users_response);*/
-                struct users *u = get_authorized_users();
-                uint8_t n = (uint8_t)get_num_authorized_users();
-
-                uint8_t pl[MAX_MGMT_PAYLOAD_LEN];
-                pl[0] = n;
-                size_t off = 1;
-
-                for (uint8_t i = 0; i < n && off < sizeof pl; i++) {
-                    size_t len = strlen(u[i].name) + 1;          // incluye '\0'
-                    if (off + len > sizeof pl) break;
-                    memcpy(pl + off, u[i].name, len);
-                    off += len;
-                }
-                send_management_response_raw(&mgmt_data->response_buffer, STATUS_OK, pl, (uint8_t)off);
-                break;
-            }
-            case CMD_ADD_USER: {
-                // Parsear payload (formato: "username:password")
-                char *colon = strchr(mgmt_data->parser.payload, ':');
-                if (colon == NULL) {
-                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid format. Use: username:password");
-                } else {
-                    *colon = '\0';
-                    char *username = mgmt_data->parser.payload;
-                    char *password = colon + 1;
-
-                    unsigned int user_len = strlen(username);
-                    unsigned int pass_len = strlen(password);
-
-                    if (user_len == 0 || pass_len == 0) {
-                        send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username and password cannot be empty");
-                    }else if(user_len > MAX_USERNAME_LEN || pass_len > MAX_PASSWORD_LEN){
-                        send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username or password length is longer than allowed");
-                    }
-                    else if (add_user(username, password)) {
-                        char response[MGMT_RESPONSE_SIZE];
-                        snprintf(response, sizeof(response), "User '%.*s' added successfully", MAX_USERNAME_LEN, username);
-                        send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
-                    } else {
-                        if (get_num_authorized_users() >= MAX_USERS) {
-                            send_management_response(&mgmt_data->response_buffer, STATUS_FULL, "Maximum number of users reached");
-                        } else {
-                            send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "User already exists or memory error");
-                        }
-                    }
-                }
-                break;
-            }
-            case CMD_DELETE_USER: {
-                // El payload contiene solo el nombre de usuario a eliminar
-                char *username = mgmt_data->parser.payload;
-
-                if (strlen(username) == 0) {
-                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username cannot be empty");
-                } else if (delete_user(username)) {
-                    char response[256];
-                    snprintf(response, sizeof(response), "User '%.*s' deleted successfully", MAX_USERNAME_LEN,  username);
-                    send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
-                } else {
-                    send_management_response(&mgmt_data->response_buffer, STATUS_NOT_FOUND, "User not found");
-                }
-                break;
-            }
-            case CMD_CHANGE_PASSWORD: {
-                // Payload: "usuario:nueva_contraseña"
-                char *colon = strchr(mgmt_data->parser.payload, ':');
-                if (colon == NULL) {
-                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid format. Use: username:newpassword");
-                } else {
-                    *colon = '\0';
-                    char *username = mgmt_data->parser.payload;
-                    char *new_password = colon + 1;
-                    if (strlen(username) == 0 || strlen(new_password) == 0) {
-                        send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Username and new password cannot be empty");
-                    } else if (change_user_password(username, new_password)) {
-                        char response[MGMT_RESPONSE_SIZE];
-                        snprintf(response, sizeof(response), "Password changed for user '%.*s'",MAX_USERNAME_LEN, username);
-                        send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
-                    } else {
-                        send_management_response(&mgmt_data->response_buffer, STATUS_NOT_FOUND, "User not found");
-                    }
-                }
-                break;
-            }
-            case CMD_AUTH: {
-                send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid operation: already authenticated");
-                break;
-            };
-            case CMD_SET_BUFFER_SIZE: {
-                if (mgmt_data->parser.payload_len != 4) {
-                    send_management_response(&mgmt_data->response_buffer,
-                                             STATUS_ERROR, "");
-                    break;
-                }
-                uint32_t net_val;
-                memcpy(&net_val, mgmt_data->parser.payload, 4);
-                uint32_t new_size = ntohl(net_val);
-
-
-                if (set_buffer_size(new_size))
-                    send_management_response(&mgmt_data->response_buffer,STATUS_OK, "");
-                else
-                    send_management_response(&mgmt_data->response_buffer,STATUS_ERROR, "");
-                break;
-
-                }
-
-
-            case CMD_GET_BUFFER_INFO: {
-
-                uint8_t pl[1 + 4 + 4 * BUFFER_SIZE_CNT];   /* N + current + lista */
-                uint32_t cur = htonl((uint32_t)get_current_buffer_size());
-
-                memcpy(pl, &cur, 4);           /* bytes 0‑3  → tamaño actual */
-                pl[4] = BUFFER_SIZE_CNT;       /* byte 4     → cantidad N    */
-
-                for (uint8_t i = 0; i < BUFFER_SIZE_CNT; i++) {
-                    *(uint32_t *)(pl + 5 + i * 4) = htonl(buffer_sizes[i]);
-                }
-
-                send_management_response_raw(&mgmt_data->response_buffer,
-                                             STATUS_OK,
-                                             pl,
-                                             5 + 4 * BUFFER_SIZE_CNT);
-                break;
-            }
-            case CMD_GET_AUTH_METHOD: {
-                char response[512];
-                snprintf(response,sizeof(response), "Current authentication method: %s",
-                         (get_auth_method() == NOAUTH) ? "No Authentication" : "Authentication Required");
-                send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
-                break;
-            };
-            case CMD_SET_AUTH_METHOD:{
-                // Payload: "NOAUTH" o "AUTH"
-                if (strcmp(mgmt_data->parser.payload, "NOAUTH") == 0) {
-                    set_auth_method(NOAUTH);
-                    send_management_response(&mgmt_data->response_buffer, STATUS_OK, "Authentication method set to NOAUTH");
-                } else if (strcmp(mgmt_data->parser.payload, "AUTH") == 0) {
-                    set_auth_method(AUTH);
-                    send_management_response(&mgmt_data->response_buffer, STATUS_OK, "Authentication method set to AUTH");
-                } else {
-                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid authentication method. Use 'NOAUTH' or 'AUTH'");
-                }
-                break;
-            }
-            case CMD_GET_LOG_BY_USER:{
-                process_cmd_get_log_by_user(mgmt_data);
-                break;
-            }
-            default:
-                send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Unknown command");
-                break;
-        }
+        mgmt_dispatch_command(mgmt_data);  //Procesar comando
 
         if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
             return MGMT_ERROR;
@@ -638,77 +371,52 @@ void mgmt_error_arrival(unsigned state __attribute__((unused)), struct selector_
 
 
 
-//@TODO: por como esta definido el protocolo hay veces que se trunca la respuesta!!!!. El maximo del payload es 256 y el maximo de host lenght es eso tambien! hay que agrandar el payload y cambiar un poco esta funcion.
-static void process_cmd_get_log_by_user(ManagementData *md)
+
+
+
+bool send_management_response_raw(struct buffer *buffer,
+                                         uint8_t         status,
+                                         const uint8_t  *payload,
+                                         uint8_t         payload_len)
+
 {
-    /* 0)  Autenticación obligatoria */
-    if (!md->authenticated) {
-        send_management_response(&md->response_buffer,
-                                 STATUS_AUTH_REQUIRED,
-                                 "Authentication required");
-        return;
+    size_t avail;
+    buffer_write_ptr(buffer, &avail);
+    if (payload_len > MAX_MGMT_PAYLOAD_LEN || avail < (size_t)(3 + payload_len)) {
+        LOG_ERROR("raw response overflow");
+        return false;
     }
-
-    /* 1)  Usuario en payload */
-    char uname[MAX_USERNAME_LEN + 1];
-    size_t ulen = md->parser.payload_len > MAX_USERNAME_LEN
-                  ? MAX_USERNAME_LEN
-                  : md->parser.payload_len;
-    memcpy(uname, md->parser.payload, ulen);
-    uname[ulen] = '\0';
-
-    /* 2)  Buscar el bucket */
-    user_t *u = NULL;
-    if (strcmp(uname, "anonymous") == 0) {
-        u = get_anon_user();
-    } else {
-        user_t *tbl = get_authorized_users();
-        int n = get_num_authorized_users();
-        for (int i = 0; i < n; i++) {
-            if (tbl[i].name && strcmp(tbl[i].name, uname) == 0) {
-                u = &tbl[i];
-                break;
-            }
+    buffer_write(buffer, MANAGEMENT_VERSION);
+    buffer_write(buffer, status);
+    buffer_write(buffer, payload_len);
+    if (payload_len > 0) {
+        for (int i = 0; i < payload_len; i++) {
+            buffer_write(buffer, payload[i]);
         }
     }
-    if (!u) {     /* usuario inexistente */
-        send_management_response(&md->response_buffer,
-                                 STATUS_NOT_FOUND,
-                                 "User not found");
-        return;
+    return true;
+}
+
+bool send_management_response(struct buffer *buffer,
+                                     uint8_t         status,
+                                     const char     *msg_utf8)
+{
+    uint8_t len = (uint8_t)strnlen(msg_utf8, MAX_MGMT_PAYLOAD_LEN);
+    size_t avail;
+    buffer_write_ptr(buffer, &avail);
+    if (avail < (size_t)(3 + len)) {
+        LOG_ERROR("response buffer overflow");
+        return false;
     }
+    buffer_write(buffer, MANAGEMENT_VERSION);
+    buffer_write(buffer, status);
+    buffer_write(buffer, len);
 
-    /* 3)  Armar payload truncado (≤255 B) */
-    char  payload[MGMT_PAYLOAD_SIZE];       /* MAX_MGMT_PAYLOAD_LEN bytes + '\0' */
-    size_t plen = 0;
-
-    char   ts[TIMESTAMP_BUFFER_SIZE], line[LOG_LINE_SIZE];
-    struct tm tm_;
-
-    for (size_t i = 0; i < u->used && plen < MAX_MGMT_PAYLOAD_LEN; i++) {
-        gmtime_r(&u->history[i].ts, &tm_);
-        strftime(ts, sizeof ts, "%Y-%m-%dT%H:%M:%SZ", &tm_);
-
-        /* espacio disponible, dejando 1 para '\0' */
-        size_t room = MAX_MGMT_PAYLOAD_LEN - plen;
-        int n = snprintf(payload + plen, room + 1,
-                         "%s\t%s\t%u\t%s\t%u\t0x%02X\n",
-                         ts,
-                         u->history[i].client_ip,
-                         u->history[i].client_port,
-                         u->history[i].dst_host,
-                         u->history[i].dst_port,
-                         u->history[i].status);
-
-        if (n < 0) continue;          /* error improbable */
-        if ((size_t)n >= room) {      /* se truncó la línea */
-            plen = MAX_MGMT_PAYLOAD_LEN;               /* llenamos el cupo y salimos */
-            break;
+    if (len > 0) {
+        for (int i = 0; i < len; i++) {
+            buffer_write(buffer, msg_utf8[i]);
         }
-        plen += (size_t)n;            /* línea completa añadida */
     }
-    payload[plen] = '\0';             /* asegurar terminación */
 
-    /* 4)  Responder STATUS_OK con el payload (truncado o no) */
-    send_management_response(&md->response_buffer, STATUS_OK, payload);
+    return true;
 }

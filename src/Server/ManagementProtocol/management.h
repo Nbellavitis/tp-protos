@@ -14,6 +14,7 @@
 #include "../main.h"
 #include "../users.h"
 #include "../protocol_constants.h"
+#include "management_cmds.h"
 
 
 
@@ -135,7 +136,10 @@ bool parse_management_command(management_parser *parser, struct buffer *buffer);
 
 // Funciones de respuesta
 bool send_management_response(struct buffer *buffer, uint8_t status, const char *payload);
-
+bool send_management_response_raw(struct buffer *buffer,
+                                  uint8_t         status,
+                                  const uint8_t  *payload,
+                                  uint8_t         payload_len);
 bool change_user_password(const char* username, const char* new_password);
 
 // Buffer size management
