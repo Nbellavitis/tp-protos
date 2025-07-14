@@ -57,41 +57,41 @@ user_t * get_anon_user(void){
 
 
 // Agregar un nuevo usuario
-bool add_user(const char* username, const char* password) {
-    if (username == NULL || password == NULL || strcmp(username, ANON_USER_NAME) == 0) {    //@todo hay que ver si le ponemos otro error en el mensaje de mgmnt.
-        return false;
-    }
-    
-    if (num_authorized_users >= MAX_USERS) {
-        return false; // Array lleno
-    }
-    
-    // Verificar que el usuario no exista ya
+
+add_user_result_t add_user(const char *u, const char *p)
+{
+    if (!u || !p || *u == '\0' || *p == '\0')
+        return ADD_INVALID;
+
+    if (strcmp(u, ANON_USER_NAME) == 0)
+        return ADD_RESERVED;
+
+    if (num_authorized_users >= MAX_USERS)
+        return ADD_FULL;
+
     for (int i = 0; i < num_authorized_users; i++) {
-        if (authorized_users[i].name != NULL && strcmp(authorized_users[i].name, username) == 0) {
-            return false; // Usuario ya existe
-        }
+        if (authorized_users[i].name &&
+            strcmp(authorized_users[i].name, u) == 0)
+            return ADD_EXISTS;
     }
-    
-    // Crear copias de los strings (necesario porque el payload es temporal)
-    char* name_copy = malloc(strlen(username) + 1);
-    char* pass_copy = malloc(strlen(password) + 1);
-    
-    if (name_copy == NULL || pass_copy == NULL) {
-        free(name_copy);
-        free(pass_copy);
-        return false;
+
+    char *uc = malloc(strlen(u)+1), *pc = malloc(strlen(p)+1);
+    if (!uc || !pc) {
+        free(uc);
+        free(pc);
+        return ADD_MEM_ERROR;
     }
-    
-    strcpy(name_copy, username);
-    strcpy(pass_copy, password);
-    
-    authorized_users[num_authorized_users].name = name_copy;
-    authorized_users[num_authorized_users].pass = pass_copy;
+
+    strcpy(uc, u);
+    strcpy(pc, p);
+
+    authorized_users[num_authorized_users].name = uc;
+    authorized_users[num_authorized_users].pass = pc;
     num_authorized_users++;
-    
-    LOG_INFO("User added: %s", username);
-    return true;
+
+
+    LOG_INFO("User added: %s", u);
+    return ADD_OK;
 }
 
 // Eliminar un usuario

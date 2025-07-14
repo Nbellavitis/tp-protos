@@ -37,7 +37,7 @@
 // Funciones para acceder a usuarios autorizados
 struct users* get_authorized_users(void);
 int get_num_authorized_users(void);
-bool add_user(const char* username, const char* password);
+
 bool delete_user(const char* username);
 struct dns_request {
     struct gaicb req;

@@ -80,101 +80,120 @@ static void cmd_list_users(ManagementData *md)
     send_management_response_raw(&md->response_buffer, STATUS_OK, pl, (uint8_t)off);
 }
 
-static void cmd_add_user(ManagementData *md)
+
+void cmd_add_user(ManagementData *md)
 {
-    char *colon = strchr(md->parser.payload, ':');
-    if (!colon) { send_status_only(md, STATUS_ERROR); return; }
+    char *c = strchr(md->parser.payload, ':');
+    if (!c) { send_status_only(md, STATUS_INVALID_FORMAT); return; }
 
-    *colon = '\0';
-    char *user = md->parser.payload;
-    char *pass = colon + 1;
+    *c = '\0';
+    add_user_result_t r = add_user(md->parser.payload, c+1);
 
-    if (*user == '\0' || *pass == '\0' ||
-        strlen(user) > MAX_USERNAME_LEN ||
-        strlen(pass) > MAX_PASSWORD_LEN) {
-        send_status_only(md, STATUS_ERROR);
-        return;
+    switch (r) {
+        case ADD_OK:        send_status_only(md, STATUS_OK);              break;
+        case ADD_EXISTS:    send_status_only(md, STATUS_ALREADY_EXISTS);  break;
+        case ADD_FULL:      send_status_only(md, STATUS_FULL);            break;
+        case ADD_INVALID:   send_status_only(md, STATUS_INVALID_FORMAT);  break;
+        case ADD_RESERVED:  send_status_only(md, STATUS_RESERVED_USER);   break;
+        default:            send_status_only(md, STATUS_ERROR);           break;
     }
-    if (add_user(user, pass))
-        send_status_only(md, STATUS_OK);
-    else if (get_num_authorized_users() >= MAX_USERS)
-        send_status_only(md, STATUS_FULL);
-    else
-        send_status_only(md, STATUS_ERROR);
 }
 
 static void cmd_delete_user(ManagementData *md)
 {
     const char *user = md->parser.payload;
-    if (*user == '\0') { send_status_only(md, STATUS_ERROR); return; }
 
-    if (delete_user(user))
+    if (*user == '\0') {
+        send_status_only(md, STATUS_ERROR);
+        return;
+    }
+
+    if (delete_user(user)){
         send_status_only(md, STATUS_OK);
-    else
-        send_status_only(md, STATUS_NOT_FOUND);
+        return;
+    }
+    send_status_only(md, STATUS_NOT_FOUND);
 }
-
 
 static void cmd_change_password(ManagementData *md)
 {
     char *colon = strchr(md->parser.payload, ':');
-    if (!colon) { send_status_only(md, STATUS_ERROR); return; }
+    if (!colon) { send_status_only(md, STATUS_INVALID_FORMAT); return; }
 
     *colon = '\0';
     char *user = md->parser.payload;
     char *newp = colon + 1;
 
-    if (*user == '\0' || *newp == '\0') {
-        send_status_only(md, STATUS_ERROR);
+    if (*user == '\0' || *newp == '\0'){
+        send_status_only(md, STATUS_INVALID_FORMAT);
         return;
     }
-    if (change_user_password(user, newp))
+    if (change_user_password(user, newp)){
         send_status_only(md, STATUS_OK);
-    else
-        send_status_only(md, STATUS_NOT_FOUND);
+        return;
+    }
+    send_status_only(md, STATUS_NOT_FOUND);
 }
 
 static void cmd_set_buffer_size(ManagementData *md)
 {
-    if (md->parser.payload_len != 4) { send_status_only(md, STATUS_ERROR); return; }
+    if (md->parser.payload_len != 4) { send_status_only(md, STATUS_INVALID_FORMAT); return; }
 
     uint32_t net; memcpy(&net, md->parser.payload, 4);
     uint32_t v = ntohl(net);
 
-    if (!size_allowed(v) || !set_buffer_size(v))
-        send_status_only(md, STATUS_ERROR);
-    else
+    if (!size_allowed(v)){
+        send_status_only(md, STATUS_NOT_ALLOWED);
+        return;
+    }
+    if (set_buffer_size(v)){
         send_status_only(md, STATUS_OK);
+        return;
+    }
+
+    send_status_only(md, STATUS_ERROR);
 }
+
+//static void cmd_get_buffer_info(ManagementData *md)
+//{
+//    uint8_t pl[1 + 4 + 4 * BUFFER_SIZE_CNT];
+//    uint32_t cur = htonl((uint32_t)get_current_buffer_size());
+//
+//    memcpy(pl, &cur, 4);
+//    pl[4] = BUFFER_SIZE_CNT;
+//
+//    for (uint8_t i = 0; i < BUFFER_SIZE_CNT; i++)
+//        *(uint32_t *)(pl + 5 + i * 4) = htonl(buffer_sizes[i]);
+//
+//    send_management_response_raw(&md->response_buffer,
+//                                 STATUS_OK,
+//                                 pl,
+//                                 5 + 4 * BUFFER_SIZE_CNT);
+//}
 
 static void cmd_get_buffer_info(ManagementData *md)
 {
-    uint8_t pl[1 + 4 + 4 * BUFFER_SIZE_CNT];
     uint32_t cur = htonl((uint32_t)get_current_buffer_size());
-
-    memcpy(pl, &cur, 4);
-    pl[4] = BUFFER_SIZE_CNT;
-
-    for (uint8_t i = 0; i < BUFFER_SIZE_CNT; i++)
-        *(uint32_t *)(pl + 5 + i * 4) = htonl(buffer_sizes[i]);
 
     send_management_response_raw(&md->response_buffer,
                                  STATUS_OK,
-                                 pl,
-                                 5 + 4 * BUFFER_SIZE_CNT);
+                                 (uint8_t *)&cur,
+                                 4);
 }
+
 
 static void cmd_set_auth_method(ManagementData *md)
 {
     if (strcmp(md->parser.payload, "NOAUTH") == 0) {
         set_auth_method(NOAUTH);
         send_status_only(md, STATUS_OK);
-    } else if (strcmp(md->parser.payload, "AUTH") == 0) {
+        return;
+    }else if (strcmp(md->parser.payload, "AUTH") == 0) {
         set_auth_method(AUTH);
         send_status_only(md, STATUS_OK);
-    } else {
-        send_status_only(md, STATUS_ERROR);
+        return;
     }
+    send_status_only(md, STATUS_INVALID_FORMAT);
 }
 
 static void cmd_get_auth_method(ManagementData *md)
