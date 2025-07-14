@@ -116,6 +116,9 @@ static bool create_direct_addrinfo(ClientData *clientData, const resolver_parser
 void requestReadInit(const unsigned state, struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
     initResolverParser(&clientData->client.reqParser);
+    if (selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
+        closeConnection(key);
+    }
 }
 
 unsigned requestRead(struct selector_key *key) {
@@ -202,6 +205,18 @@ unsigned requestRead(struct selector_key *key) {
     return startConnection(key);
 }
 
+void requestWriteInit(const unsigned state, struct selector_key *key) {
+    const ClientData *clientData = (ClientData *)key->data;
+
+    if (selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
+        closeConnection(key);
+        return;
+    }
+
+    if (clientData->originFd >= 0 && selector_set_interest(key->s, clientData->originFd, OP_NOOP) != SELECTOR_SUCCESS) {
+        closeConnection(key);
+    }
+}
 
 unsigned requestWrite(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
@@ -258,7 +273,7 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
         LOG_ERROR("%s","ADDR_RESOLVE_INIT: Error starting DNS resolution");
         // sendRequestResponse(&clientData->originBuffer, 0x05, 0x01, ATYP_IPV4, parser->ipv4_addr, 0);
         clientData->dns_resolution_state = DNS_STATE_ERROR;
-        if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
+        if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) { // todo: ¿para que se hace este select?
             closeConnection(key);
         }
 
@@ -278,27 +293,21 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
 }
 
 unsigned addressResolveDone(struct selector_key *key) {
+    // Si estamos acá es con un ATYP_DOMAIN.
+
     ClientData *clientData = (ClientData *)key->data;
 
-
-    // Como probamos, la única forma de llegar a este estado es con un ATYP_DOMAIN.
-    // Por lo tanto, toda la lógica puede centrarse en el resultado de la resolución DNS,
-    // que se comunica a través del flag `dns_resolution_state`.
-
     if (clientData->dns_resolution_state == DNS_STATE_COMPLETED) {
-        // DNS completada exitosamente
         clientData->dns_resolution_state = DNS_STATE_IDLE; // Reseteamos el flag
         clientData->currentResolution = clientData->originResolution;
         return startConnection(key);
 
     }
     if (clientData->dns_resolution_state == DNS_STATE_IN_PROGRESS) {
-        // DNS aún en progreso. Nos mantenemos en el estado.
         return ADDR_RESOLVE;
-
     }
+
     // Cubre el fallo del DNS (estado -1) y el fallo en init (estado 0)
-    // DNS falló o hubo un error inmediato al iniciar la resolución.
 //    LOG_ERROR("%s" , "ADDR_RESOLVE_DONE: DNS failed or init error");
     clientData->dns_resolution_state = DNS_STATE_IDLE; // Reseteamos el flag
     return preSetRequestResponse(key, GENERAL_FAILURE); // General SOCKS server failure
@@ -388,7 +397,7 @@ unsigned startConnection(struct selector_key * key) {
     selector_fd_set_nio(clientData->originFd);
     LOG_DEBUG("CONNECTING_INIT: Socket created (fd=%d), attempting to connect", clientData->originFd);
 
-    int connect_result = connect(clientData->originFd, ai->ai_addr, ai->ai_addrlen);
+    const int connect_result = connect(clientData->originFd, ai->ai_addr, ai->ai_addrlen);
 
     if (connect_result == 0) {
         // Conexión inmediata (muuy extraño)
@@ -399,7 +408,7 @@ unsigned startConnection(struct selector_key * key) {
         }
         selector_set_interest(key->s, key->fd, OP_WRITE);
         clientData->connection_ready = CONNECTION_READY;
-        return CONNECTING;
+        return CONNECTING; // todo: ¿esta bien retornar CONNECTING en este caso? --> que llame directo a la función o algo así en vez de hacer -> select -> write
     }
 
     if (errno == EINPROGRESS) {
@@ -484,13 +493,20 @@ unsigned preSetRequestResponse(struct selector_key *key, int errorStatus) {
         }
     }
 
-    if (!prepareRequestResponse(&clientData->originBuffer, SOCKS5_VERSION, errorStatus, atyp, addr, port) ||
-        selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
-        LOG_ERROR("%s", "preSetRequestResponse: Error preparing request response");
-        return ERROR;
-        }
+    // if (!prepareRequestResponse(&clientData->originBuffer, SOCKS5_VERSION, errorStatus, atyp, addr, port) ||
+    //     selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
+    //     LOG_ERROR("%s", "preSetRequestResponse: Error preparing request response");
+    //     return ERROR;
+    //     }
+    //
+    // return REQ_WRITE;
 
-    return REQ_WRITE;
+    if (!prepareRequestResponse(&clientData->originBuffer, SOCKS5_VERSION, errorStatus, atyp, addr, port)) {
+        LOG_ERROR("%s", "preSetRequestResponse: Error preparing request response buffer");
+        return ERROR;
+    }
+
+    return requestWrite(key);
 }
 
 

@@ -34,14 +34,14 @@ static fd_handler  handler = {
 
 static const struct state_definition clientActions[] = {
     {.state = NEGOTIATION_READ, .on_arrival = negotiationReadInit, .on_read_ready = negotiationRead},
-    {.state = NEGOTIATION_WRITE,.on_write_ready = negotiationWrite},
+    {.state = NEGOTIATION_WRITE, .on_arrival = negotiationWriteInit, .on_write_ready = negotiationWrite},
     {.state = AUTHENTICATION_READ,.on_arrival = authenticationReadInit, .on_read_ready = authenticationRead},
-    {.state = AUTHENTICATION_WRITE, .on_write_ready = authenticationWrite},
-    {.state = AUTHENTICATION_FAILURE_WRITE, .on_write_ready = authenticationFailureWrite},
+    {.state = AUTHENTICATION_WRITE, .on_arrival = authenticationWriteInit, .on_write_ready = authenticationWrite},
+    {.state = AUTHENTICATION_FAILURE_WRITE, .on_arrival = authenticationWriteInit, .on_write_ready = authenticationFailureWrite},
     {.state = REQ_READ,.on_arrival = requestReadInit,.on_read_ready = requestRead},
     {.state = ADDR_RESOLVE, .on_arrival = addressResolveInit, .on_write_ready = addressResolveDone,.on_block_ready = addressResolveDone}, //todo cambiar nombre!?
     {.state = CONNECTING, .on_arrival = NULL, .on_write_ready = requestConnecting},
-    {.state = REQ_WRITE, .on_write_ready = requestWrite},
+    {.state = REQ_WRITE, .on_arrival = requestWriteInit, .on_write_ready = requestWrite},
     {.state = COPYING,   .on_arrival = socksv5HandleInit,.on_read_ready = socksv5HandleRead,.on_write_ready = socksv5HandleWrite,.on_departure = socksv5HandleClose},
     {.state = CLOSED, .on_arrival = closeArrival},
     {.state=ERROR, .on_arrival = errorArrival}

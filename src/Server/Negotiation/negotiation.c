@@ -39,12 +39,14 @@ unsigned negotiationRead(struct selector_key *key) {
         return ERROR;
     }
 
-    const unsigned ret = negotiationWrite(key);
-    if (ret == NEGOTIATION_WRITE && selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
-        return ERROR;
-    }
+    return negotiationWrite(key);
+}
 
-    return ret;
+void negotiationWriteInit(const unsigned state, struct selector_key *key) {
+    LOG_DEBUG("NEGOTIATION_WRITE_INIT: Setting interest to OP_WRITE");
+    if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
+        closeConnection(key); // Es un error crítico, no podemos continuar.
+    }
 }
 
 unsigned negotiationWrite(struct selector_key *key) {
@@ -63,18 +65,13 @@ unsigned negotiationWrite(struct selector_key *key) {
     }
 
     negotiation_parser *p = &data->client.negParser;
-    if (p->method_chosen == 0xFF || selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
+    // todo, podríamos llegar hasta acá y que p->method_chose sea igual a 0xFF??
+    if (p->method_chosen == 0xFF) {
         return ERROR;
     }
 
     if (p->method_chosen == NOAUTH ) {
         return REQ_READ;
-    }
-    // todo, revisar lo de abajo:
-    if (p->method_chosen == 0xFF) {
-        // Ya notificamos al cliente que ninguno de sus métodos es aceptado.
-        // Ahora cerramos la conexión.
-        return ERROR;
     }
 
     return AUTHENTICATION_READ;

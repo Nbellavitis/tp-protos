@@ -10,4 +10,5 @@
 unsigned negotiationRead(struct selector_key *key);
 unsigned negotiationWrite(struct selector_key *key);
 void negotiationReadInit(unsigned state, struct selector_key *key);
+void negotiationWriteInit(unsigned state, struct selector_key *key);
 #endif //NEGOTIATION_H

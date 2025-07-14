@@ -11,9 +11,11 @@ typedef enum{
     AUTH_FAILED = 1,
 }auth_status;
 user_t * validateUser(const char* username, const char* password);
-void authenticationReadInit(const unsigned state ,  struct selector_key * key);
 
+void authenticationReadInit(const unsigned state ,  struct selector_key * key);
 unsigned authenticationRead(struct selector_key * key);
+
+void authenticationWriteInit(const unsigned state, struct selector_key *key);
 unsigned authenticationWrite(struct selector_key * key);
 unsigned authenticationFailureWrite(struct selector_key *key);
 

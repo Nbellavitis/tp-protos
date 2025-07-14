@@ -22,6 +22,9 @@ void authenticationReadInit(const unsigned state,  struct selector_key *key){
     LOG_DEBUG("Authentication phase initialized (state: %d)", state);
     struct ClientData *data = (struct ClientData *)key->data;
     initAuthParser(&data->client.authParser);
+    if (selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
+        closeConnection(key);
+    }
 }
 
 
@@ -88,20 +91,18 @@ unsigned authenticationRead(struct selector_key *key) {
         return ERROR;
     }
 
-    const unsigned ret = is_valid ? authenticationWrite(key) : authenticationFailureWrite(key);
+    return is_valid ? authenticationWrite(key) : authenticationFailureWrite(key);
+}
 
-    if ((ret == AUTHENTICATION_WRITE || ret == AUTHENTICATION_FAILURE_WRITE) && selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
-        return ERROR;
+void authenticationWriteInit(const unsigned state, struct selector_key *key) {
+    LOG_DEBUG("AUTHENTICATION_WRITE_INIT: Setting interest to OP_WRITE");
+    if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
+        closeConnection(key);
     }
-    return ret;
 }
 
 unsigned authenticationWrite(struct selector_key *key) {
-    const unsigned ret = process_auth_flush(key, AUTHENTICATION_WRITE, REQ_READ);
-    if (ret == REQ_READ && selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
-        return ERROR;
-    }
-    return ret;
+    return process_auth_flush(key, AUTHENTICATION_WRITE, REQ_READ);
 }
 
 // Nueva función que SOLO maneja el caso de FALLO.
