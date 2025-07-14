@@ -15,7 +15,6 @@
 #include "Negotiation/negotiationParser.h"
 #include "main.h"
 #include "../logger.h"
-#include "constants.h"
 
  bool killed = false;
 

@@ -11,8 +11,9 @@
 #include "../buffer.h"
 #include <arpa/inet.h>
 
+#include "../constants.h"
+
 // SOCKS5 protocol constants
-#define IPV6_ADDR_SIZE          16
 #define MAX_DOMAIN_LEN          256
 #define MAX_SOCKS5_DOMAIN_LEN   255  // RFC 1928: domain length is limited to 255 bytes
 typedef enum {

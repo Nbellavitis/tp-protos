@@ -7,7 +7,6 @@
 #include <arpa/inet.h>
 
 #include "netutils.h"
-#include "constants.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
