@@ -292,9 +292,8 @@ void addressResolveInit(const unsigned state, struct selector_key *key) {
 
 }
 
-// Nueva firma para addressResolveDone y la actualizamos en el array clientActions
-// .on_block_ready = addressResolveDone
 unsigned addressResolveDone(struct selector_key *key, void *data) {
+    // Si estamos acá es con un ATYP_DOMAIN.
     ClientData *clientData = (ClientData *)key->data;
     DnsResult *dnsResult = (DnsResult *)data;
 
