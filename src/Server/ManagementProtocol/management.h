@@ -7,7 +7,7 @@
 
 #include "../selector.h"
 #include "../stm.h"
-#include "../buffer.h"
+#include "../buffer.h"`
 #include "../args.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -30,14 +30,11 @@
 #define MAX_PASSWORD_LEN        63
 #define MAX_MGMT_PAYLOAD_LEN    255
 
-// Management response buffer sizes  
-#define MGMT_RESPONSE_SIZE              256
-#define MGMT_EXTENDED_RESPONSE_SIZE     512
-#define MGMT_PAYLOAD_SIZE               256
-#define STATS_RESPONSE_SIZE             512
-#define USERS_RESPONSE_SIZE             1024
+// Management response buffer sizes
 
-// Buffer size list for management responses
+#define MGMT_PAYLOAD_SIZE               256
+
+
 #define AVAILABLE_BUFFER_SIZES_STR      "4096, 8192, 16384, 32768, 65536, 131072"
 
 
