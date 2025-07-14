@@ -5,6 +5,7 @@
 #define SELECTOR_TIMEOUT_SEC    10
 
 // Network protocol constants (used across multiple modules)
+#define IPV4_ADDR_SIZE          4
 #define IPV6_ADDR_SIZE          16
 
 #define BUFFER_SIZE_4K          4096

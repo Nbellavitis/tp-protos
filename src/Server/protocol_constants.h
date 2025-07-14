@@ -28,8 +28,6 @@
 
 #define GETADDRINFO_A_COUNT         1
 
-#define IPV4_ADDR_SIZE              4
-
 #define PORT_HIGH_BYTE_SHIFT        8
 #define BYTE_MASK                   0xFF
 #define RECV_FLAGS_DEFAULT          0
