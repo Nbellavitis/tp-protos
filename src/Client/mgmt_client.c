@@ -1,5 +1,5 @@
 /*
- * Management Protocol CLI Client
+ * Management Protocol Client
  * (actualizado para STATUS expresivos y validación local)
  */
 #include <stdio.h>
@@ -163,21 +163,7 @@ static int cmd_list_users(mgmt_client_t *c)
     for(uint8_t i=0;i<n;i++){ printf("  %s\n",p); p+=strlen(p)+1; }
     return 0;
 }
-//
-//static int cmd_buffer_info(mgmt_client_t *c)
-//{
-//    uint8_t st,len,pl[64];
-//    if (send_raw(c,CMD_GET_BUFFER_INFO,NULL,0) < 0) return -1;
-//    if (recv_raw(c,&st,pl,&len)               < 0) return -1;
-//    if (st!=STATUS_OK||len<5){ puts(status_to_str(st)); return -1;}
-//
-//    uint32_t cur=ntohl(*(uint32_t*)pl);
-//    uint8_t n=pl[4]; printf("Current: %u\nAllowed:",cur);
-//    for(uint8_t i=0;i<n;i++)
-//        printf(" %u",ntohl(*(uint32_t*)(pl+5+i*4)));
-//    puts("");
-//    return 0;
-//}
+
 
 static int cmd_buffer_info(mgmt_client_t *c)
 {
@@ -300,37 +286,65 @@ static void menu(mgmt_client_t *c)
         if (!fgets(in,sizeof in,stdin)) break;
         int ch=atoi(in);
         switch(ch){
-            case 1: cmd_stats(c); break;
-            case 2: cmd_list_users(c); break;
+            case 1:
+                cmd_stats(c);
+                break;
+            case 2:
+                cmd_list_users(c);
+                break;
             case 3:
-                printf("New user: "); fgets(user,sizeof user,stdin);
-                printf("New pass: "); fgets(pass,sizeof pass,stdin);
-                user[strcspn(user,"\n")]=0; pass[strcspn(pass,"\n")]=0;
+                printf("New user: ");
+                fgets(user,sizeof user,stdin);
+                printf("New pass: ");
+                fgets(pass,sizeof pass,stdin);
+                user[strcspn(user,"\n")]=0;
+                pass[strcspn(pass,"\n")]=0;
                 cmd_add_user(c,user,pass); break;
             case 4:
-                printf("User delete: "); fgets(user,sizeof user,stdin);
-                user[strcspn(user,"\n")]=0; cmd_delete_user(c,user); break;
+                printf("User delete: ");
+                fgets(user,sizeof user,stdin);
+                user[strcspn(user,"\n")]=0; cmd_delete_user(c,user);
+                break;
             case 5:
-                printf("User: "); fgets(user,sizeof user,stdin);
-                printf("New pass: "); fgets(pass,sizeof pass,stdin);
-                user[strcspn(user,"\n")]=0; pass[strcspn(pass,"\n")]=0;
-                cmd_change_pwd(c,user,pass); break;
-            case 6: cmd_buffer_info(c); break;
+                printf("User: ");
+                fgets(user,sizeof user,stdin);
+                printf("New pass: ");
+                fgets(pass,sizeof pass,stdin);
+                user[strcspn(user,"\n")]=0;
+                pass[strcspn(pass,"\n")]=0;
+                cmd_change_pwd(c,user,pass);
+                break;
+            case 6:
+                cmd_buffer_info(c);
+                break;
             case 7:{
                 const uint32_t sz[]={4096,8192,16384,32768,65536,131072};
                 puts("1)4096\n2)8192\n3)16384\n4)32768\n5)65536\n6)131072");
-                printf("Choice: "); fgets(in,sizeof in,stdin);
-                int idx=atoi(in); if(idx<1||idx>6){puts("Invalid"); break;}
-                cmd_set_buffer(c,sz[idx-1]); break;}
+                printf("Choice: ");
+                fgets(in,sizeof in,stdin);
+                int idx=atoi(in);
+                if(idx<1||idx>6){
+                    puts("Invalid");
+                    break;}
+                cmd_set_buffer(c,sz[idx-1]);
+                break;}
             case 8:
-                puts("1)NOAUTH 2)AUTH"); printf("Choice: "); fgets(in,sizeof in,stdin);
-                cmd_set_auth_method(c,(atoi(in)==1)?"NOAUTH":"AUTH"); break;
+                puts("1)NOAUTH 2)AUTH");
+                printf("Choice: ");
+                fgets(in,sizeof in,stdin);
+                cmd_set_auth_method(c,(atoi(in)==1)?"NOAUTH":"AUTH");
+                break;
             case 9: cmd_get_auth_method(c); break;
             case 10:
-                printf("User (\"anonymous\" for NOAUTH): "); fgets(user,sizeof user,stdin);
-                user[strcspn(user,"\n")]=0; cmd_log_by_user(c,user); break;
-            case 11: disconnect(c); puts("Disconnected."); return;
-            default: puts("Invalid choice");
+                printf("User (\"anonymous\" for NOAUTH): ");
+                fgets(user,sizeof user,stdin);
+                user[strcspn(user,"\n")]=0;
+                cmd_log_by_user(c,user); break;
+            case 11:
+                disconnect(c); puts("Disconnected.");
+                return;
+            default:
+                puts("Invalid choice");
         }
     }
 }
