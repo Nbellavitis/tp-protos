@@ -36,9 +36,6 @@
 
 #define DOMAIN_LENGTH_OFFSET        1
 
-#define CONNECTION_NOT_READY        0
-#define CONNECTION_READY            1
-
 #define PARSER_CHAR_RANGE_MAX       0xFF
 #define STRING_TERMINATOR_SIZE      1
 

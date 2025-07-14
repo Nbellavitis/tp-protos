@@ -61,7 +61,6 @@ typedef struct client_data {
     int origin_fd;
     struct  dns_request dns_req;
     int dns_resolution_state;
-    int connection_ready; // todo: ¿no debería ser bool?
     struct buffer client_buffer;
     struct buffer origin_buffer;
     uint8_t *in_client_buffer;    // Buffer dinámico

@@ -76,7 +76,6 @@ void socksv5_passive_accept(struct selector_key* key){
     client_data->origin_fd = -1;
     client_data->origin_resolution = NULL;
     client_data->resolution_from_getaddrinfo = false;
-    client_data->connection_ready = 0;
     client_data->dns_resolution_state = 0;
     client_data->unregistering_origin = false;
     client_data->auth_failed = false;

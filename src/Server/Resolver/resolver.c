@@ -318,11 +318,6 @@ unsigned address_resolve_done(struct selector_key *key, void *data) {
 unsigned request_connecting(struct selector_key *key) {
     client_data *data = (client_data *)key->data;
 
-    if (data->connection_ready) {
-        data->socks_status = SUCCESS;
-        return preset_request_response(key, SUCCESS);
-    }
-
     int so_error = 0;
     socklen_t len = sizeof(so_error);
     if (getsockopt(data->origin_fd, SOL_SOCKET, SO_ERROR, &so_error, &len) < 0) {
@@ -344,7 +339,6 @@ unsigned request_connecting(struct selector_key *key) {
         return handle_request_error(so_error, key);
     }
 
-    data->connection_ready = CONNECTION_READY;
     data->socks_status = SUCCESS;
     return preset_request_response(key, SUCCESS);
 }
@@ -404,9 +398,8 @@ unsigned start_connection(struct selector_key * key) {
             close(data->origin_fd);
             return ERROR;
         }
-        selector_set_interest(key->s, key->fd, OP_WRITE);
-        data->connection_ready = CONNECTION_READY;
-        return CONNECTING; // todo: ¿esta bien retornar CONNECTING en este caso? --> que llame directo a la función o algo así en vez de hacer -> select -> write
+        data->socks_status = SUCCESS;
+        return preset_request_response(key, SUCCESS);
     }
 
     if (errno == EINPROGRESS) {
@@ -417,7 +410,6 @@ unsigned start_connection(struct selector_key * key) {
             close(data->origin_fd);
             return ERROR;
         }
-        data->connection_ready = CONNECTION_NOT_READY;
         return CONNECTING;
     }
 
@@ -491,14 +483,6 @@ unsigned preset_request_response(struct selector_key *key, int errorStatus) {
         }
     }
 
-    // if (!prepare_request_response(&data->origin_buffer, SOCKS5_VERSION, errorStatus, atyp, addr, port) ||
-    //     selector_set_interest(key->s, data->client_fd, OP_WRITE) != SELECTOR_SUCCESS) {
-    //     LOG_ERROR("%s", "preset_request_response: Error preparing request response");
-    //     return ERROR;
-    //     }
-    //
-    // return REQ_WRITE;
-
     if (!prepare_request_response(&data->origin_buffer, SOCKS5_VERSION, errorStatus, atyp, addr, port)) {
         LOG_ERROR("%s", "preset_request_response: Error preparing request response buffer");
         return ERROR;
@@ -507,59 +491,4 @@ unsigned preset_request_response(struct selector_key *key, int errorStatus) {
     return request_write(key);
 }
 
-
-// todo: eventualmente eliminar lo de abajo. Lo deje comentado por si acaso, es la versión anterior de la funcion
-// unsigned preset_request_response(struct selector_key *key, int errorStatus) {
-//     client_data *data = (client_data *)key->data;
-//     data->socks_status = errorStatus; //@todo checkear.
-//
-//     uint8_t atyp = ATYP_IPV4;
-//     uint8_t addr[IPV6_ADDR_SIZE];
-//     uint16_t port = 0;
-//
-//     if (data->origin_fd >= 0) {
-//         struct sockaddr_storage local_addr;
-//         socklen_t local_addr_len = sizeof(local_addr);
-//
-//         if (getsockname(data->origin_fd, (struct sockaddr *)&local_addr, &local_addr_len) == 0) {
-//             if (local_addr.ss_family == AF_INET) {
-//                 struct sockaddr_in *addr4 = (struct sockaddr_in *)&local_addr;
-//                 memcpy(addr, &addr4->sin_addr, IPV4_ADDR_SIZE); // todo: magic number ?
-//                 port = ntohs(addr4->sin_port);
-//                 atyp = ATYP_IPV4;
-//             } else if (local_addr.ss_family == AF_INET6) {
-//                 struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&local_addr;
-//                 memcpy(addr, &addr6->sin6_addr, IPV6_ADDR_SIZE);
-//                 port = ntohs(addr6->sin6_port);
-//                 atyp = ATYP_IPV6;
-//             } else {
-//                 // Fallback si no es una familia válida
-//                 uint32_t ip = htonl(0);
-//                 memcpy(addr, &ip, IPV4_ADDR_SIZE);
-//                 port = 0;
-//                 atyp = ATYP_IPV4;
-//             }
-//         } else {
-//             // getsockname falló → fallback
-//             uint32_t ip = htonl(0);
-//             memcpy(addr, &ip, IPV4_ADDR_SIZE);
-//             port = 0;
-//             atyp = ATYP_IPV4;
-//         }
-//     } else {
-//         // origin_fd inválido → no se pudo conectar
-//         uint32_t ip = htonl(0);
-//         memcpy(addr, &ip, IPV4_ADDR_SIZE);
-//         port = 0;
-//         atyp = ATYP_IPV4;
-//     }
-//
-//     if (!prepare_request_response(&data->origin_buffer, SOCKS5_VERSION, errorStatus, atyp, addr, port) ||
-//         selector_set_interest(key->s, data->client_fd, OP_WRITE) != SELECTOR_SUCCESS) {
-//         LOG_ERROR("%s", "preset_request_response: Error preparing request response");
-//         return ERROR;
-//     }
-//
-//     return REQ_WRITE;
-// }
 
