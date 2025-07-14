@@ -10,6 +10,11 @@
 #include "../Auth/authParser.h"
 #include "resolverParser.h"
 
+typedef struct {
+    int gai_error;
+    struct addrinfo *result;
+} DnsResult;
+
 typedef enum{
     SUCCESS = 0x00,
     GENERAL_FAILURE = 0x01,
@@ -31,8 +36,7 @@ unsigned requestWrite(struct selector_key *key);
 
 // Funciones para el estado ADDR_RESOLVE
 void addressResolveInit(const unsigned state, struct selector_key *key);
-unsigned addressResolveDone(struct selector_key *key);
-
+unsigned addressResolveDone(struct selector_key *key, void *data);
 // Funciones para el estado CONNECTING
 void requestConnectingInit(const unsigned state, struct selector_key *key);
 unsigned requestConnecting(struct selector_key *key);

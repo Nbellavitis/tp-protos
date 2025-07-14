@@ -494,7 +494,11 @@ handle_block_notifications(fd_selector s) {
         if (ITEM_USED(item)) {
             key.fd = item->fd;
             key.data = item->data;
-            item->handler->handle_block(&key);
+            item->handler->handle_block(&key, j->data);
+        }else{
+            if (j->data != NULL) {
+                free(j->data);
+            }
         }
 
         struct blocking_job* aux = j;
@@ -508,7 +512,8 @@ handle_block_notifications(fd_selector s) {
 
 selector_status
 selector_notify_block(fd_selector  s,
-                 const int    fd) {
+                 const int    fd,
+                      void *data) {
     selector_status ret = SELECTOR_SUCCESS;
 
     // TODO(juan): usar un pool
@@ -519,7 +524,7 @@ selector_notify_block(fd_selector  s,
     }
     job->s  = s;
     job->fd = fd;
-
+    job->data = data;
     // encolamos en el selector los resultados
     pthread_mutex_lock(&s->resolution_mutex);
     job->next = s->resolution_jobs;
