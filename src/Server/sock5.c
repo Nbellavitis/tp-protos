@@ -130,10 +130,10 @@ void socksv5PassiveAccept(struct selector_key* key){
         free(clientData->inOriginBuffer);
         free(clientData);
         close(newClientSocket);
-        return;
     }
 
 }
+
 static void socksv5Read(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
 
@@ -142,9 +142,9 @@ static void socksv5Read(struct selector_key *key) {
     const enum socks5State state = stm_handler_read(&clientData->stm, key);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
-        return;
     }
 }
+
 static void socksv5Write(struct selector_key *key) {
     if (key == NULL) {
         LOG_ERROR("%s" ,"socksv5Write: key is NULL");
@@ -159,9 +159,9 @@ static void socksv5Write(struct selector_key *key) {
     LOG_DEBUG("socksv5Write: stm_handler_write returned: %d", state);
     if (state == ERROR || state == CLOSED) {
         closeConnection(key);
-        return;
     }
 }
+
 static void socksv5Close(struct selector_key *key) {
     ClientData *clientData = (ClientData *)key->data;
 
@@ -172,6 +172,7 @@ static void socksv5Close(struct selector_key *key) {
     stm_handler_close(&clientData->stm, key);
     closeConnection(key);
 }
+
 static void socksv5Block(struct selector_key *key) {
     if (key == NULL) {
         LOG_ERROR("%s" ,"socksv5Block: key is NULL");
