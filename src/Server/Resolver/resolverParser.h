@@ -12,6 +12,14 @@
 #include <arpa/inet.h>
 
 #include "../constants.h"
+#include "../protocol_constants.h"
+
+#define RESOLVER_STATE_VERSION      0
+#define RESOLVER_STATE_COMMAND      1
+#define RESOLVER_STATE_RESERVED     2
+#define RESOLVER_STATE_ATYP         3
+#define RESOLVER_STATE_ADDRESS      4
+#define RESOLVER_STATE_PORT         5
 
 // SOCKS5 protocol constants
 #define MAX_DOMAIN_LEN          256
@@ -41,7 +49,7 @@ typedef struct resolver_parser {
     uint8_t address_type;
     
     // Para IPv4
-    uint8_t ipv4_addr[4];
+    uint8_t ipv4_addr[IPV4_ADDR_SIZE];
     
     // Para IPv6
     uint8_t ipv6_addr[IPV6_ADDR_SIZE];

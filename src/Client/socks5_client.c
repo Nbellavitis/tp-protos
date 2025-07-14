@@ -32,8 +32,8 @@ void signal_handler(int sig) {
 #define SOCKS5_ATYP_IPV4 0x01
 #define SOCKS5_ATYP_DOMAIN 0x03
 
-#define AUTH_METHOD_NONE 0x00
-#define AUTH_METHOD_USERPASS 0x02
+#define NOAUTH 0x00
+#define USERPASS 0x02
 #define AUTH_METHOD_FAIL 0xFF
 
 typedef struct {
@@ -87,10 +87,10 @@ int socks5_negotiate(socks5_client_t *client, int offer_auth) {
     request[0] = SOCKS5_VERSION;    // Version
     if (offer_auth) {
         request[1] = 1;                 // Number of methods
-        request[2] = AUTH_METHOD_USERPASS; // Username/password
+        request[2] = USERPASS; // Username/password
     } else {
         request[1] = 1;                 // Number of methods
-        request[2] = AUTH_METHOD_NONE;  // No authentication
+        request[2] = NOAUTH;  // No authentication
     }
 
     int req_len = 3;
@@ -122,15 +122,15 @@ int socks5_negotiate(socks5_client_t *client, int offer_auth) {
         return -1;
     }
 
-    if (selected_method == AUTH_METHOD_USERPASS) {
+    if (selected_method == USERPASS) {
         int auth_result = socks5_authenticate(client);
         if (auth_result == 0) {
-            return AUTH_METHOD_USERPASS;
+            return USERPASS;
         } else {
             return -1;
         }
-    } else if (selected_method == AUTH_METHOD_NONE) {
-        return AUTH_METHOD_NONE;
+    } else if (selected_method == NOAUTH) {
+        return NOAUTH;
     } else {
         printf("[SOCKS5] Server selected unknown authentication method: 0x%02x\n", selected_method);
         return -1;
@@ -328,10 +328,10 @@ void interactive_menu(socks5_client_t *client) {
                     }
                     if (socks5_connect_proxy(client) == 0) {
                         int method = socks5_negotiate(client, 1); // SOLO autenticación
-                        if (method == AUTH_METHOD_USERPASS) {
+                        if (method == USERPASS) {
                             client->authenticated = 1;
                             printf("Authentication successful!\n");
-                        } else if (method == AUTH_METHOD_NONE) {
+                        } else if (method == NOAUTH) {
                             client->authenticated = 0;
                             printf("No authentication required by server.\n");
                         } else {
@@ -347,7 +347,7 @@ void interactive_menu(socks5_client_t *client) {
                 case 2:
                     if (socks5_connect_proxy(client) == 0) {
                         int method = socks5_negotiate(client, 0); // SOLO sin autenticación
-                        if (method == AUTH_METHOD_NONE) {
+                        if (method == NOAUTH) {
                             socks5_http_test(client, "httpbin.org", 80, "/ip");
                         } else {
                             printf("Failed to connect or negotiate\n");
@@ -376,7 +376,7 @@ void interactive_menu(socks5_client_t *client) {
                     printf("[INFO] Si el destino no responde, la conexión puede demorar varios segundos (timeout de red). La aplicación NO está colgada.\n");
                     if (socks5_connect_proxy(client) == 0) {
                         int method = socks5_negotiate(client, 0); // SOLO sin autenticación
-                        if (method == AUTH_METHOD_NONE) {
+                        if (method == NOAUTH) {
                             socks5_http_test(client, target_host, target_port, path);
                         } else {
                             printf("Failed to connect or negotiate\n");
@@ -414,7 +414,7 @@ void interactive_menu(socks5_client_t *client) {
                 case 2:
                     if (socks5_connect_proxy(client) == 0) {
                         int method = socks5_negotiate(client, 1); // autenticado
-                        if (method == AUTH_METHOD_USERPASS) {
+                        if (method == USERPASS) {
                             socks5_http_test(client, "httpbin.org", 80, "/ip");
                         } else {
                             printf("Failed to connect or negotiate\n");
@@ -443,7 +443,7 @@ void interactive_menu(socks5_client_t *client) {
                     printf("[INFO] Si el destino no responde, la conexión puede demorar varios segundos (timeout de red). La aplicación NO está colgada.\n");
                     if (socks5_connect_proxy(client) == 0) {
                         int method = socks5_negotiate(client, 1); // autenticado
-                        if (method == AUTH_METHOD_USERPASS) {
+                        if (method == USERPASS) {
                             socks5_http_test(client, target_host, target_port, path);
                         } else {
                             printf("Failed to connect or negotiate\n");

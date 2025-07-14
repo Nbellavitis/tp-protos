@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "../buffer.h"
 #include "../Statistics/statistics.h"
+#include "../protocol_constants.h"
 
 #define AUTH_NAME_SIZE          256
 #define AUTH_PASS_SIZE          256

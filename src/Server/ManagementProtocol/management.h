@@ -11,10 +11,9 @@
 #include "../args.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include "../Negotiation/negotiationParser.h"
 #include "../main.h"
 #include "../users.h"
-
+#include "../protocol_constants.h"
 
 
 /*

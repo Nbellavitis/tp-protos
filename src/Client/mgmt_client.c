@@ -9,8 +9,7 @@
 
 #define DEFAULT_MGMT_HOST "127.0.0.1"
 #define DEFAULT_MGMT_PORT 8080
-#define AUTH 0x02
-#define NOAUTH 0x00
+// AUTH and NOAUTH are now defined in server headers
 #define RESPONSE_BUFFER_SIZE 1024
 // Comandos del protocolo de management
 #define MANAGEMENT_VERSION 0x01

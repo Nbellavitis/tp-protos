@@ -1,22 +1,22 @@
 #include "negotiationParser.h"
 #include "../Statistics/statistics.h"
 
-#define VERSION_5 0x05
+#include "../protocol_constants.h"
 
-static uint8_t authMethod = AUTH;
+static uint8_t authMethod = USERPASS;
 
 negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
     while (buffer_can_read(b)) {
-        uint8_t byte = buffer_read(b);
+        const uint8_t byte = buffer_read(b);
         if (p->version == 0) {
             p->version = byte;
-            if (p->version != VERSION_5) {
+            if (p->version != SOCKS5_VERSION) {
                 p->error = true;
                 return NEGOTIATION_PARSE_ERROR;
             }
         } else if (p->nmethods == 0) {
             p->nmethods = byte;
-            if (p->nmethods == 0 /*|| p->nmethods > 255*/ /*nunca pasa por el tipo de dato*/) { // maximo por rfc
+            if (p->nmethods == 0) {
                 p->error = true;
                 return NEGOTIATION_PARSE_ERROR;
             }
@@ -26,19 +26,19 @@ negotiation_parse negotiationParse(negotiation_parser *p, struct buffer *b) {
             }
 
             if (p->i == p->nmethods) {
-                p->method_chosen = 0xFF;
-                // Preferir sin autenticación (0x00) si está disponible
+                p->method_chosen = NO_ACCEPTABLE_METHODS;
+
                 for (int i = 0; i < p->nmethods; i++) {
-                    if (p->methods[i] == 0x02) { //  auth
-                        p->method_chosen = 0x02;
+                    if (p->methods[i] == USERPASS) {
+                        p->method_chosen = USERPASS;
                         break;
                     }
                 }
-                // Si no está 0x00, buscar autenticación (0x02)
-                if (p->method_chosen == 0xFF) {
+
+                if (p->method_chosen == NO_ACCEPTABLE_METHODS) {
                     for (int i = 0; i < p->nmethods; i++) {
-                        if (p->methods[i] == 0x00 && getAuthMethod() != AUTH) { // no auth
-                            p->method_chosen = 0x00;
+                        if (p->methods[i] == NOAUTH && getAuthMethod() != USERPASS) {
+                            p->method_chosen = NOAUTH;
                             break;
                         }
                     }
@@ -62,14 +62,14 @@ bool sendNegotiationResponse(struct buffer *originBuffer, uint8_t method) {
     if (!buffer_can_write(originBuffer)) {
         return false;
     }
-    buffer_write(originBuffer, VERSION_5); // versión
-    buffer_write(originBuffer, method); // método elegido
-    stats_add_origin_bytes(2);
+    buffer_write(originBuffer, SOCKS5_VERSION);
+    buffer_write(originBuffer, method);
+    stats_add_origin_bytes(2); // 1 byte SOCKS5_VERSION + 1 byte method
 
     return true;
 }
 void setAuthMethod(uint8_t method) {
-     if (method == NOAUTH || method == AUTH) {
+     if (method == NOAUTH || method == USERPASS) {
          authMethod = method;
      } else {
          LOG_ERROR("Invalid authentication method: %d", method);

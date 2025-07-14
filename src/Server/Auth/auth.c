@@ -76,10 +76,10 @@ unsigned authenticationRead(struct selector_key *key) {
         data->username[sizeof(data->username) - 1] = '\0';*/
        data->user = user;
        is_valid = true;
-       status = 0x00; // Éxito         //@todo tambien en el ClientData?
+       status = AUTH_STATUS_SUCCESS;        //@todo tambien en el ClientData?
     } else {
         LOG_WARN("Authentication failed for user: %s", p->name);
-        status = data->socks_status= 0x01; // Fallo
+        status = data->socks_status= AUTH_STATUS_FAILURE;
     }
 
     // Preparar la respuesta y registrar el interés para escribir

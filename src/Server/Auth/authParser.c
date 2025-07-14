@@ -22,7 +22,7 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
     while (buffer_can_read(b)){
         uint8_t byte = buffer_read(b);
         if(p->version == 0){
-            if(byte !=0x01){
+            if(byte != AUTH_VERSION){
                 p->error = true;
                 LOG_ERROR("AUTH_PARSE: Invalid version %d", byte);
                 return AUTH_PARSE_ERROR;
@@ -39,7 +39,7 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
 
             p->name[p->offsetName++] = byte;
             if (p->offsetName == p->nameLength) {
-                p->name[p->offsetName] = '\0'; // Null-terminate the name
+                p->name[p->offsetName] = '\0';
             }
         }else if (p->passwordLength == 0) {
             if (byte == 0) {
@@ -51,7 +51,7 @@ unsigned authParse(auth_parser *p, struct buffer *b) {
         } else if (p->offsetPassword < p->passwordLength) {
             p->password[p->offsetPassword++] = byte;
             if (p->offsetPassword == p->passwordLength) {
-                p->password[p->offsetPassword] = '\0'; // Null-terminate the password
+                p->password[p->offsetPassword] = '\0';
                 return AUTH_PARSE_OK;
             }
         }
@@ -63,9 +63,9 @@ bool sendAuthResponse(struct buffer *originBuffer, uint8_t version, uint8_t stat
     if (!buffer_can_write(originBuffer)) {
         return false;
     }
-    buffer_write(originBuffer, version); // Escribir versión
-    buffer_write(originBuffer, status);  // Escribir estado (0x00 para éxito)
+    buffer_write(originBuffer, version);
+    buffer_write(originBuffer, status);
 
-    stats_add_origin_bytes(2);
-    return true; // Respuesta enviada correctamente
+    stats_add_origin_bytes(2); // 1 byte version + 1 byte status
+    return true;
 }

@@ -9,15 +9,14 @@
 #include "../buffer.h"
 #include <stdio.h>
 #include "../selector.h"
+#include "../protocol_constants.h"
 
 
 #define MAX_AUTH_METHODS 255  // máximo según RFC
-#define NOAUTH 0x00
-#define AUTH 0x02
 
 typedef enum {
     NEGOTIATION_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando
-    NEGOTIATION_PARSE_OK,          // parseo exitoso, método elegido
+    NEGOTIATION_PARSE_OK,          // parseo exitoso, métodó elegido
     NEGOTIATION_PARSE_ERROR        // error de protocolo (versión inválida, datos inconsistentes)
 } negotiation_parse;
 
