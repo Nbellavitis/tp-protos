@@ -113,6 +113,32 @@ void request_read_init(const unsigned state, struct selector_key *key) {
     }
 }
 
+// Función auxiliar para capturar información para el logging
+static void capture_target_info(client_data *data) {
+    resolver_parser *parser = &data->client.req_parser;
+    data->target_port = parser->port;
+
+    if (parser->address_type == ATYP_DOMAIN) {
+        LOG_DEBUG("REQ_READ: Target domain: %.*s", parser->domain_length, parser->domain);
+        int copy_len = parser->domain_length < sizeof(data->target_host) - 1 ? parser->domain_length : sizeof(data->target_host) - 1;
+        memcpy(data->target_host, parser->domain, copy_len);
+        data->target_host[copy_len] = '\0';
+
+    } else if (parser->address_type == ATYP_IPV4) {
+        LOG_DEBUG("REQ_READ: Target IPv4: %d.%d.%d.%d",
+                 parser->ipv4_addr[0], parser->ipv4_addr[1],
+                 parser->ipv4_addr[2], parser->ipv4_addr[3]);
+        snprintf(data->target_host, sizeof(data->target_host),
+                "%d.%d.%d.%d", parser->ipv4_addr[0], parser->ipv4_addr[1],
+                parser->ipv4_addr[2], parser->ipv4_addr[3]);
+
+    } else if (parser->address_type == ATYP_IPV6) {
+        LOG_DEBUG("%s", "REQ_READ: Target IPv6");
+        inet_ntop(AF_INET6, parser->ipv6_addr, data->target_host,
+                 sizeof(data->target_host));
+    }
+}
+
 unsigned request_read(struct selector_key *key) {
     client_data *data = (client_data *)key->data;
     resolver_parser *parser = &data->client.req_parser;
@@ -135,7 +161,6 @@ unsigned request_read(struct selector_key *key) {
     if (result == REQUEST_PARSE_ERROR) {
         LOG_ERROR("%s" , "REQ_READ: Error parsing request");
         data->socks_status = GENERAL_FAILURE;
-        // Enviar error: General SOCKS server failure
         return preset_request_response(key, GENERAL_FAILURE);
     }
 
@@ -144,44 +169,17 @@ unsigned request_read(struct selector_key *key) {
         return ERROR;
     }
 
-
-    LOG_DEBUG("REQ_READ: Request parsed successfully - Command: %d, AddressType: %d, Port: %d", parser->command, parser->address_type, parser->port);
-
-    // Capturar información del destino para logging de acceso
-    data->target_port = parser->port;
-
-    if (parser->address_type == ATYP_DOMAIN) {
-        LOG_DEBUG("REQ_READ: Target domain: %.*s", parser->domain_length, parser->domain);
-        // Copiar dominio para logging
-        int copy_len = parser->domain_length < sizeof(data->target_host) - 1 ? parser->domain_length : sizeof(data->target_host) - 1; // todo: chequear esto
-        memcpy(data->target_host, parser->domain, copy_len);
-        data->target_host[copy_len] = '\0'; // todo:chequear (LOGS)
-    } else if (parser->address_type == ATYP_IPV4) {
-        LOG_DEBUG("REQ_READ: Target IPv4: %d.%d.%d.%d",
-                 parser->ipv4_addr[0], parser->ipv4_addr[1],
-                 parser->ipv4_addr[2], parser->ipv4_addr[3]);
-        // Convertir IPv4 a string para logging
-        snprintf(data->target_host, sizeof(data->target_host),
-                "%d.%d.%d.%d", parser->ipv4_addr[0], parser->ipv4_addr[1],
-                parser->ipv4_addr[2], parser->ipv4_addr[3]);
-    } else if (parser->address_type == ATYP_IPV6) {
-        LOG_DEBUG("%s" , "REQ_READ: Target IPv6");
-        // Convertir IPv6 a string para logging
-        inet_ntop(AF_INET6, parser->ipv6_addr, data->target_host,
-                 sizeof(data->target_host));
-    }
+    // Capturar información para logging de acceso
+    capture_target_info(data);
 
 
-    // Por ahora solo soportamos CONNECT
     if (parser->command != CMD_CONNECT) {
         LOG_WARN("REQ_READ: Unsupported command (%d), sending error", parser->command);
-        data->socks_status = COMMAND_NOT_SUPPORTED; // Command not supported
-        // Enviar error: Command not supported
-        return preset_request_response(key, COMMAND_NOT_SUPPORTED); // Command not supported
+        data->socks_status = COMMAND_NOT_SUPPORTED;
+        return preset_request_response(key, COMMAND_NOT_SUPPORTED);
     }
 
     if (parser->address_type != ATYP_IPV4 && parser->address_type != ATYP_IPV6) {
-        // Para dominios, necesitamos resolver con DNS
         return ADDR_RESOLVE;
     }
 
