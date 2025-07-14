@@ -17,11 +17,11 @@
 #include <unistd.h>
 #include "buffer.h"
 #include "Negotiation/negotiation.h"
-#include "Negotiation/negotiationParser.h"
-#include "Auth/authParser.h"
+#include "Negotiation/negotiation_parser.h"
+#include "Auth/auth_parser.h"
 #include "Auth/auth.h"
 #include "Statistics/statistics.h"
-#include "Resolver/resolverParser.h"
+#include "Resolver/resolver_parser.h"
 #include "args.h"
 #include "Copy/copy.h"
 #include "ManagementProtocol/management.h"
@@ -41,36 +41,36 @@ bool add_user(const char* username, const char* password);
 bool delete_user(const char* username);
 struct dns_request {
     struct gaicb req;
-    struct ClientData * clientData;
+    struct client_data * client_data;
     fd_selector selector;
     struct addrinfo hints;
     int fd;
     char port[6]; // Puerto del destino
 };
-typedef struct ClientData {
+typedef struct client_data {
     struct state_machine stm;
-    struct sockaddr_storage clientAddress;
+    struct sockaddr_storage client_address;
     bool closed;
     union {
-        negotiation_parser  negParser;
-        auth_parser authParser;
-        resolver_parser reqParser;
+        negotiation_parser  neg_parser;
+        auth_parser auth_parser;
+        resolver_parser req_parser;
     } client;
-    struct addrinfo* originResolution;
-    struct addrinfo* currentResolution;
+    struct addrinfo* origin_resolution;
+    struct addrinfo* current_resolution;
     bool resolution_from_getaddrinfo;  // Track memory origin: true=getaddrinfo_a, false=manual malloc
-    int clientFd;
-    int originFd;
+    int client_fd;
+    int origin_fd;
     struct  dns_request dns_req;
     int dns_resolution_state;
     int connection_ready; // todo: ¿no debería ser bool?
-    struct buffer clientBuffer;
-    struct buffer originBuffer;
-    uint8_t *inClientBuffer;    // Buffer dinámico
-    uint8_t *inOriginBuffer;    // Buffer dinámico
-    size_t bufferSize;          // Tamaño actual del buffer
+    struct buffer client_buffer;
+    struct buffer origin_buffer;
+    uint8_t *in_client_buffer;    // Buffer dinámico
+    uint8_t *in_origin_buffer;    // Buffer dinámico
+    size_t buffer_size;          // Tamaño actual del buffer
     bool unregistering_origin;
-    bool authFailed; // Indica si la autenticación falló
+    bool auth_failed; // Indica si la autenticación falló
     // Para logging de acceso
     time_t lastActivity;
     user_t * user;
@@ -81,7 +81,7 @@ typedef struct ClientData {
     int target_port;             // Puerto de destino
     uint8_t socks_status;        // Status code SOCKS5
 
-}ClientData;
+}client_data;
 
 enum socks5State {
     NEGOTIATION_READ = 0,
@@ -97,12 +97,12 @@ enum socks5State {
     CLOSED,
     ERROR
 };
-void socksv5PassiveAccept(struct selector_key* key);
-void closeConnection(struct selector_key *key);
-fd_handler * getSocksv5Handler(void);
+void socksv5_passive_accept(struct selector_key* key);
+void close_connection(struct selector_key *key);
+fd_handler * get_socksv5_handler(void);
 
 // Funciones de logging específicas
-void log_access_record(ClientData *clientData);
+void log_access_record(client_data *client_data);
 void log_password_record(const char *username, const char *protocol, 
                         const char *target_host, int target_port, 
                         const char *discovered_user, const char *discovered_pass);

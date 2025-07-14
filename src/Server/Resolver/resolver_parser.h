@@ -67,8 +67,8 @@ typedef struct resolver_parser {
     bool error;
 } resolver_parser;
 
-void initResolverParser(resolver_parser *parser);
-request_parse resolverParse(resolver_parser *p, struct buffer *buffer);
-bool prepareRequestResponse(struct buffer *originBuffer, uint8_t version, uint8_t reply, uint8_t atyp, const void *bnd_addr, uint16_t bnd_port);
+void init_resolver_parser(resolver_parser *parser);
+request_parse resolver_parse(resolver_parser *p, struct buffer *buffer);
+bool prepare_request_response(struct buffer *origin_buffer, uint8_t version, uint8_t reply, uint8_t atyp, const void *bnd_addr, uint16_t bnd_port);
 
 #endif //PROTOS_RESOLVERPARSER_H
