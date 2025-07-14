@@ -20,10 +20,6 @@ void signal_handler(int sig) {
     interrupted = 1;
 }
 
-/*
- * @TODO hay que arreglar cuando haces curl a goolge.com en el puerto 81. 
- */
-
 
 // SOCKS5 Protocol Constants
 #define SOCKS5_VERSION 0x05
@@ -125,7 +121,7 @@ int socks5_connect_proxy(socks5_client_t *client) {
 }
 
 // Negociación inicial SOCKS5
-// Devuelve el método elegido (0x00, 0x02, 0xFF) o -1 en error
+// Devuelve el métodó elegido (0x00, 0x02, 0xFF) o -1 en error
 int socks5_negotiate(socks5_client_t *client, int offer_auth) {
     uint8_t request[4];
     uint8_t response[SOCKS5_NEGOTIATION_RESPONSE_SIZE];

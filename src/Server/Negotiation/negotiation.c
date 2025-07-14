@@ -20,7 +20,7 @@ unsigned negotiation_read(struct selector_key *key) {
     if (read_count <= 0) {
         return ERROR; // error o desconexión
     }
-    stats_add_client_bytes(read_count);  //@todo checkear todos los lugares donde poner esto
+    stats_add_client_bytes(read_count);
 
     buffer_write_adv(&data->client_buffer, read_count);
     negotiation_parse_result result = negotiation_parse(p, &data->client_buffer);
@@ -31,7 +31,7 @@ unsigned negotiation_read(struct selector_key *key) {
     }
 
     if (result != NEGOTIATION_PARSE_OK) {
-        p->method_chosen = 0xFF;
+        p->method_chosen = NO_ACCEPTABLE_METHODS;
         return ERROR;
     }
 
@@ -65,8 +65,7 @@ unsigned negotiation_write(struct selector_key *key) {
     }
 
     negotiation_parser *p = &data->client.neg_parser;
-    // todo, podríamos llegar hasta acá y que p->method_chose sea igual a 0xFF??
-    if (p->method_chosen == 0xFF) {
+    if (p->method_chosen == NO_ACCEPTABLE_METHODS) {
         return ERROR;
     }
 
