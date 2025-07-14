@@ -6,14 +6,14 @@
 #define PROTOS_RESOLVER_H
 #include <netdb.h>
 #include "../sock5.h"
-#include "../Negotiation/negotiationParser.h"
-#include "../Auth/authParser.h"
-#include "resolverParser.h"
+#include "../Negotiation/negotiation_parser.h"
+#include "../Auth/auth_parser.h"
+#include "resolver_parser.h"
 
 typedef struct {
     int gai_error;
     struct addrinfo *result;
-} DnsResult;
+} dns_result;
 
 typedef enum{
     SUCCESS = 0x00,
@@ -27,19 +27,19 @@ typedef enum{
     ADDRESS_TYPE_NOT_SUPPORTED = 0x08
 }request_reply;
 // Funciones para el estado REQ_READ
-void requestReadInit(const unsigned state, struct selector_key *key);
-unsigned requestRead(struct selector_key *key);
+void request_read_init(const unsigned state, struct selector_key *key);
+unsigned request_read(struct selector_key *key);
 
 // Funciones para el estado REQ_WRITE
-void requestWriteInit(const unsigned state, struct selector_key *key);
-unsigned requestWrite(struct selector_key *key);
+void request_write_init(const unsigned state, struct selector_key *key);
+unsigned request_write(struct selector_key *key);
 
 // Funciones para el estado ADDR_RESOLVE
-void addressResolveInit(const unsigned state, struct selector_key *key);
-unsigned addressResolveDone(struct selector_key *key, void *data);
+void address_resolve_init(const unsigned state, struct selector_key *key);
+unsigned address_resolve_done(struct selector_key *key, void *data);
 // Funciones para el estado CONNECTING
-void requestConnectingInit(const unsigned state, struct selector_key *key);
-unsigned requestConnecting(struct selector_key *key);
+void request_connecting_init(const unsigned state, struct selector_key *key);
+unsigned request_connecting(struct selector_key *key);
 
 
 

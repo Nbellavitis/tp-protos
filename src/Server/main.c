@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include "sock5.h"
 #include "ManagementProtocol/management.h"
-#include "Negotiation/negotiationParser.h"
+#include "Negotiation/negotiation_parser.h"
 #include "main.h"
 #include "../logger.h"
 
@@ -209,7 +209,7 @@ int main (int argc,char * argv[]){
     signal(SIGTERM, sig_handler);
     signal(SIGINT, sig_handler);
     selector_status ss= SELECTOR_SUCCESS;
-    setAuthMethod(NOAUTH); // Establecer el método de autenticación por defecto
+    set_auth_method(NOAUTH); // Establecer el método de autenticación por defecto
     char * error = NULL;
     struct selector_init conf = {
         .signal = SIGALRM,
@@ -267,7 +267,7 @@ int main (int argc,char * argv[]){
     }
 
     const fd_handler socksv5 = {
-        .handle_read = socksv5PassiveAccept
+        .handle_read = socksv5_passive_accept
     };
     ss = selector_register(selector, server, &socksv5, OP_READ, NULL);
     if (ss != SELECTOR_SUCCESS) {

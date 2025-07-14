@@ -484,17 +484,17 @@ unsigned mgmt_command_read(struct selector_key *key) {
             case CMD_GET_AUTH_METHOD: {
                 char response[512];
                 snprintf(response,sizeof(response), "Current authentication method: %s",
-                         (getAuthMethod() == NOAUTH) ? "No Authentication" : "Authentication Required");
+                         (get_auth_method() == NOAUTH) ? "No Authentication" : "Authentication Required");
                 send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
                 break;
             };
             case CMD_SET_AUTH_METHOD:{
                 // Payload: "NOAUTH" o "AUTH"
                 if (strcmp(mgmt_data->parser.payload, "NOAUTH") == 0) {
-                    setAuthMethod(NOAUTH);
+                    set_auth_method(NOAUTH);
                     send_management_response(&mgmt_data->response_buffer, STATUS_OK, "Authentication method set to NOAUTH");
                 } else if (strcmp(mgmt_data->parser.payload, "AUTH") == 0) {
-                    setAuthMethod(AUTH);
+                    set_auth_method(AUTH);
                     send_management_response(&mgmt_data->response_buffer, STATUS_OK, "Authentication method set to AUTH");
                 } else {
                     send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, "Invalid authentication method. Use 'NOAUTH' or 'AUTH'");

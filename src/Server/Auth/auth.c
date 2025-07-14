@@ -1,7 +1,7 @@
 #include "auth.h"
 #include "../../logger.h"
 
-user_t *validateUser(const char *username, const char *password) {
+user_t *validate_user(const char *username, const char *password) {
     if (username == NULL || password == NULL) {
         return NULL;
     }
@@ -18,12 +18,12 @@ user_t *validateUser(const char *username, const char *password) {
     return NULL;
 }
 
-void authenticationReadInit(const unsigned state,  struct selector_key *key){
+void authentication_read_init(const unsigned state,  struct selector_key *key){
     LOG_DEBUG("Authentication phase initialized (state: %d)", state);
     struct ClientData *data = (struct ClientData *)key->data;
-    initAuthParser(&data->client.authParser);
+    init_auth_parser(&data->client.auth_parser);
     if (selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
-        closeConnection(key);
+        close_connection(key);
     }
 }
 
@@ -32,14 +32,14 @@ static unsigned process_auth_flush(const struct selector_key *key, const unsigne
     ClientData *data = (ClientData *)key->data;
 
     ssize_t bytes_written;
-    if (!buffer_flush(&data->originBuffer, key->fd, &bytes_written)) {
+    if (!buffer_flush(&data->origin_buffer, key->fd, &bytes_written)) {
         return ERROR;
     }
 
     stats_add_origin_bytes(bytes_written);
 
     // Si la escritura se bloqueó, volvemos al estado de escritura correspondiente.
-    if (buffer_can_read(&data->originBuffer)) {
+    if (buffer_can_read(&data->origin_buffer)) {
         return on_block_state;
     }
 
@@ -49,19 +49,19 @@ static unsigned process_auth_flush(const struct selector_key *key, const unsigne
 
 
 
-unsigned authenticationRead(struct selector_key *key) {
+unsigned authentication_read(struct selector_key *key) {
     ClientData *data = key->data;
-    auth_parser *p = &data->client.authParser;
-    size_t readLimit;
-    uint8_t *b = buffer_write_ptr(&data->clientBuffer, &readLimit);
-    const ssize_t readCount = recv(key->fd, b, readLimit, 0);
-    if (readCount <= 0) {
+    auth_parser *p = &data->client.auth_parser;
+    size_t read_limit;
+    uint8_t *b = buffer_write_ptr(&data->client_buffer, &read_limit);
+    const ssize_t read_count = recv(key->fd, b, read_limit, 0);
+    if (read_count <= 0) {
         return ERROR;
     }
 
-    stats_add_client_bytes(readCount);
-    buffer_write_adv(&data->clientBuffer, readCount);
-    const auth_parse result = authParse(p, &data->clientBuffer);
+    stats_add_client_bytes(read_count);
+    buffer_write_adv(&data->client_buffer, read_count);
+    const auth_parse_result result = auth_parse(p, &data->client_buffer);
 
     if (result == AUTH_PARSE_INCOMPLETE) {
         return AUTHENTICATION_READ;
@@ -70,7 +70,7 @@ unsigned authenticationRead(struct selector_key *key) {
         return ERROR;
     }
 
-    user_t * user = validateUser(p->name, p->password);
+    user_t * user = validate_user(p->name, p->password);
     bool is_valid = false;
     uint8_t status;
     if (user != NULL ) {
@@ -83,29 +83,29 @@ unsigned authenticationRead(struct selector_key *key) {
     } else {
         LOG_WARN("Authentication failed for user: %s", p->name);
         status = data->socks_status= AUTH_STATUS_FAILURE;
-        data->authFailed = true;
+        data->auth_failed = true;
     }
 
     // Preparar la respuesta y registrar el interés para escribir
-    if (!sendAuthResponse(&data->originBuffer, p->version, status)) {
+    if (!send_auth_response(&data->origin_buffer, p->version, status)) {
         return ERROR;
     }
 
-    return is_valid ? authenticationWrite(key) : authenticationFailureWrite(key);
+    return is_valid ? authentication_write(key) : authentication_failure_write(key);
 }
 
-void authenticationWriteInit(const unsigned state, struct selector_key *key) {
+void authentication_write_init(const unsigned state, struct selector_key *key) {
     LOG_DEBUG("AUTHENTICATION_WRITE_INIT: Setting interest to OP_WRITE");
     if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
-        closeConnection(key);
+        close_connection(key);
     }
 }
 
-unsigned authenticationWrite(struct selector_key *key) {
+unsigned authentication_write(struct selector_key *key) {
     return process_auth_flush(key, AUTHENTICATION_WRITE, REQ_READ);
 }
 
 // Nueva función que SOLO maneja el caso de FALLO.
-unsigned authenticationFailureWrite(struct selector_key *key) {
+unsigned authentication_failure_write(struct selector_key *key) {
     return process_auth_flush(key, AUTHENTICATION_FAILURE_WRITE, ERROR);
 }

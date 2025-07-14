@@ -6,23 +6,23 @@ static bool update_interests(const struct selector_key *key) {
     fd_interest client_interest = OP_NOOP;
     fd_interest origin_interest = OP_NOOP;
 
-    // Calcular interés para el socket del cliente (clientFd)
-    if (buffer_can_write(&d->originBuffer)) {
+    // Calcular interés para el socket del cliente (client_fd)
+    if (buffer_can_write(&d->origin_buffer)) {
         client_interest |= OP_READ;
     }
-    if (buffer_can_read(&d->clientBuffer)) {
+    if (buffer_can_read(&d->client_buffer)) {
         client_interest |= OP_WRITE;
     }
 
-    // Calcular interés para el socket de destino (originFd)
-    if (buffer_can_write(&d->clientBuffer)) {
+    // Calcular interés para el socket de destino (origin_fd)
+    if (buffer_can_write(&d->client_buffer)) {
         origin_interest |= OP_READ;
     }
-    if (buffer_can_read(&d->originBuffer)) {
+    if (buffer_can_read(&d->origin_buffer)) {
         origin_interest |= OP_WRITE;
     }
 
-    if (selector_set_interest(key->s, d->clientFd, client_interest) != SELECTOR_SUCCESS || selector_set_interest(key->s, d->originFd, origin_interest) != SELECTOR_SUCCESS) {
+    if (selector_set_interest(key->s, d->client_fd, client_interest) != SELECTOR_SUCCESS || selector_set_interest(key->s, d->origin_fd, origin_interest) != SELECTOR_SUCCESS) {
         return false;
     }
 
@@ -30,26 +30,26 @@ static bool update_interests(const struct selector_key *key) {
 }
 
 
-void socksv5HandleInit(const unsigned state, struct selector_key *key) {
+void socksv5_handle_init(const unsigned state, struct selector_key *key) {
     LOG_DEBUG("COPYING_INIT: Starting data copy between client and origin (state = %d)", state);
     if (!update_interests(key)) {
-        closeConnection(key);
+        close_connection(key);
     }
 }
 
-unsigned socksv5HandleRead(struct selector_key *key) {
+unsigned socksv5_handle_read(struct selector_key *key) {
     ClientData *d = (ClientData *)key->data;
     buffer *target_buffer;
     int source_fd, dest_fd;
 
-    if (key->fd == d->clientFd) {
-        source_fd = d->clientFd;
-        dest_fd = d->originFd;
-        target_buffer = &d->originBuffer;
+    if (key->fd == d->client_fd) {
+        source_fd = d->client_fd;
+        dest_fd = d->origin_fd;
+        target_buffer = &d->origin_buffer;
     } else {
-        source_fd = d->originFd;
-        dest_fd = d->clientFd;
-        target_buffer = &d->clientBuffer;
+        source_fd = d->origin_fd;
+        dest_fd = d->client_fd;
+        target_buffer = &d->client_buffer;
     }
 
     // Leemos del socket
@@ -61,7 +61,7 @@ unsigned socksv5HandleRead(struct selector_key *key) {
     }
     buffer_write_adv(target_buffer, n);
 
-    if (source_fd == d->clientFd) {
+    if (source_fd == d->client_fd) {
         stats_add_client_bytes(n);
     } else {
         stats_add_origin_bytes(n);
@@ -77,15 +77,15 @@ unsigned socksv5HandleRead(struct selector_key *key) {
     return update_interests(key) ? COPYING : ERROR;
 }
 
-unsigned socksv5HandleWrite( struct selector_key *key) {
+unsigned socksv5_handle_write( struct selector_key *key) {
     ClientData *d = (ClientData *)key->data;
 
-    if (key->fd == d->clientFd) {
-        if (!buffer_flush( &d->clientBuffer, d->clientFd, NULL)) {
+    if (key->fd == d->client_fd) {
+        if (!buffer_flush( &d->client_buffer, d->client_fd, NULL)) {
             return ERROR;
         }
     } else {
-        if (!buffer_flush(&d->originBuffer, d->originFd, NULL)) {
+        if (!buffer_flush(&d->origin_buffer, d->origin_fd, NULL)) {
             return ERROR;
         }
     }
@@ -94,7 +94,7 @@ unsigned socksv5HandleWrite( struct selector_key *key) {
 }
 
 
-void socksv5HandleClose(const unsigned state, struct selector_key *key) {
+void socksv5_handle_close(const unsigned state, struct selector_key *key) {
     LOG_DEBUG("%s" , "COPYING_CLOSE: Closing data handling");
 }
 
