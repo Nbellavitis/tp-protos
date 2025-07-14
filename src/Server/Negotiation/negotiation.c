@@ -5,14 +5,14 @@
 #define VERSION_5 0x05
 void negotiation_read_init(unsigned state, struct selector_key *key) {
     LOG_DEBUG("NEGOTIATION_INIT: Starting negotiation (state = %d)", state);
-    struct ClientData *data = (struct ClientData *)key->data;
+    struct client_data *data = (struct client_data *)key->data;
     init_negotiation_parser(&data->client.neg_parser);
 }
 
 
 
 unsigned negotiation_read(struct selector_key *key) {
-    ClientData *data = key->data;
+    client_data *data = key->data;
     negotiation_parser *p = &data->client.neg_parser;
     size_t read_limit;
     uint8_t *b = buffer_write_ptr(&data->client_buffer, &read_limit);
@@ -51,7 +51,7 @@ void negotiation_write_init(const unsigned state, struct selector_key *key) {
 
 unsigned negotiation_write(struct selector_key *key) {
     LOG_DEBUG("%s" ,"NEGOTIATION_WRITE: Writing negotiation response");
-    ClientData *data = key->data;
+    client_data *data = key->data;
 
     ssize_t bytes_written;
     if (!buffer_flush(&data->origin_buffer, key->fd, &bytes_written)) {

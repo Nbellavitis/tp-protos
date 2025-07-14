@@ -20,7 +20,7 @@ user_t *validate_user(const char *username, const char *password) {
 
 void authentication_read_init(const unsigned state,  struct selector_key *key){
     LOG_DEBUG("Authentication phase initialized (state: %d)", state);
-    struct ClientData *data = (struct ClientData *)key->data;
+    struct client_data *data = (struct client_data *)key->data;
     init_auth_parser(&data->client.auth_parser);
     if (selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
         close_connection(key);
@@ -29,7 +29,7 @@ void authentication_read_init(const unsigned state,  struct selector_key *key){
 
 
 static unsigned process_auth_flush(const struct selector_key *key, const unsigned on_block_state, const unsigned on_complete_state) {
-    ClientData *data = (ClientData *)key->data;
+    client_data *data = (client_data *)key->data;
 
     ssize_t bytes_written;
     if (!buffer_flush(&data->origin_buffer, key->fd, &bytes_written)) {
@@ -50,7 +50,7 @@ static unsigned process_auth_flush(const struct selector_key *key, const unsigne
 
 
 unsigned authentication_read(struct selector_key *key) {
-    ClientData *data = key->data;
+    client_data *data = key->data;
     auth_parser *p = &data->client.auth_parser;
     size_t read_limit;
     uint8_t *b = buffer_write_ptr(&data->client_buffer, &read_limit);

@@ -39,13 +39,13 @@ bool add_user(const char* username, const char* password);
 bool delete_user(const char* username);
 struct dns_request {
     struct gaicb req;
-    struct ClientData * client_data;
+    struct client_data * client_data;
     fd_selector selector;
     struct addrinfo hints;
     int fd;
     char port[6]; // Puerto del destino
 };
-typedef struct ClientData {
+typedef struct client_data {
     struct state_machine stm;
     struct sockaddr_storage client_address;
     bool closed;
@@ -79,7 +79,7 @@ typedef struct ClientData {
     int target_port;             // Puerto de destino
     uint8_t socks_status;        // Status code SOCKS5
 
-}ClientData;
+}client_data;
 
 enum socks5State {
     NEGOTIATION_READ = 0,
@@ -100,7 +100,7 @@ void close_connection(struct selector_key *key);
 fd_handler * get_socksv5_handler(void);
 
 // Funciones de logging específicas
-void log_access_record(ClientData *client_data);
+void log_access_record(client_data *client_data);
 void log_password_record(const char *username, const char *protocol, 
                         const char *target_host, int target_port, 
                         const char *discovered_user, const char *discovered_pass);

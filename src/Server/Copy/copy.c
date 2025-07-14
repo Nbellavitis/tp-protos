@@ -2,7 +2,7 @@
 #include "../../logger.h"
 
 static bool update_interests(const struct selector_key *key) {
-    ClientData *d = (ClientData *)key->data;
+    client_data *d = (client_data *)key->data;
     fd_interest client_interest = OP_NOOP;
     fd_interest origin_interest = OP_NOOP;
 
@@ -38,7 +38,7 @@ void socksv5_handle_init(const unsigned state, struct selector_key *key) {
 }
 
 unsigned socksv5_handle_read(struct selector_key *key) {
-    ClientData *d = (ClientData *)key->data;
+    client_data *d = (client_data *)key->data;
     buffer *target_buffer;
     int source_fd, dest_fd;
 
@@ -78,7 +78,7 @@ unsigned socksv5_handle_read(struct selector_key *key) {
 }
 
 unsigned socksv5_handle_write( struct selector_key *key) {
-    ClientData *d = (ClientData *)key->data;
+    client_data *d = (client_data *)key->data;
 
     if (key->fd == d->client_fd) {
         if (!buffer_flush( &d->client_buffer, d->client_fd, NULL)) {

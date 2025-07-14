@@ -59,7 +59,7 @@ void socksv5_passive_accept(struct selector_key* key){
         close(new_client_socket);
         return;
     }
-    ClientData * client_data = calloc(1,sizeof(struct ClientData));
+    client_data * client_data = calloc(1,sizeof(struct client_data));
     if (client_data == NULL) {
         perror("Error allocating memory for client data");
         close(new_client_socket);
@@ -135,11 +135,11 @@ void socksv5_passive_accept(struct selector_key* key){
 }
 
 static void socksv5_read(struct selector_key *key) {
-    ClientData *client_data = (ClientData *)key->data;
+    client_data *data = (client_data *)key->data;
 
     LOG_DEBUG("SOCKS5_READ: Reading data from socket %d", key->fd);
 
-    const enum socks5State state = stm_handler_read(&client_data->stm, key);
+    const enum socks5State state = stm_handler_read(&data->stm, key);
     if (state == ERROR || state == CLOSED) {
         close_connection(key);
     }
@@ -154,8 +154,8 @@ static void socksv5_write(struct selector_key *key) {
         LOG_ERROR("%s" ,"socksv5_write: key->data is NULL");
         return;
     }
-    ClientData *client_data = (ClientData *)key->data;
-    const enum socks5State state = stm_handler_write(&client_data->stm, key);
+    client_data *data = (client_data *)key->data;
+    const enum socks5State state = stm_handler_write(&data->stm, key);
     LOG_DEBUG("socksv5_write: stm_handler_write returned: %d", state);
     if (state == ERROR || state == CLOSED) {
         close_connection(key);
@@ -163,13 +163,13 @@ static void socksv5_write(struct selector_key *key) {
 }
 
 static void socksv5_close(struct selector_key *key) {
-    ClientData *client_data = (ClientData *)key->data;
+    client_data *data = (client_data *)key->data;
 
-    if (client_data->unregistering_origin) {
+    if (data->unregistering_origin) {
         return;
     }
 
-    stm_handler_close(&client_data->stm, key);
+    stm_handler_close(&data->stm, key);
     close_connection(key);
 }
 static void socksv5_block(struct selector_key *key, void *data) {
@@ -183,8 +183,8 @@ static void socksv5_block(struct selector_key *key, void *data) {
         LOG_ERROR("%s" ,"socksv5_block: key->data is NULL");
         return;
     }
-    ClientData *client_data = (ClientData *)key->data;
-    const enum socks5State state = stm_handler_block(&client_data->stm, key,data);
+    client_data *c_data = (client_data *)key->data;
+    const enum socks5State state = stm_handler_block(&c_data->stm, key,data);
     LOG_DEBUG("socksv5_block: stm_handler_block returned: %d", state);
     if (state == ERROR || state == CLOSED) {
         close_connection(key);
@@ -192,71 +192,71 @@ static void socksv5_block(struct selector_key *key, void *data) {
     }
 }
 void close_connection(struct selector_key *key) {
-    ClientData *client_data = (ClientData *)key->data;
-    if (client_data->closed) {
+    client_data *data = (client_data *)key->data;
+    if (data->closed) {
         return; // ya fue cerrado
     }
     stats_connection_closed();
-    client_data->closed = true;
+    data->closed = true;
     if (killed) {
 
-        if (client_data->origin_fd >= 0 && client_data->origin_fd != key->fd) {
-            selector_unregister_fd(key->s, client_data->origin_fd);
-            close(client_data->origin_fd);
+        if (data->origin_fd >= 0 && data->origin_fd != key->fd) {
+            selector_unregister_fd(key->s, data->origin_fd);
+            close(data->origin_fd);
         }
-        if (client_data->client_fd >= 0 && client_data->client_fd != key->fd) {
-            selector_unregister_fd(key->s, client_data->client_fd);
-            close(client_data->client_fd);
+        if (data->client_fd >= 0 && data->client_fd != key->fd) {
+            selector_unregister_fd(key->s, data->client_fd);
+            close(data->client_fd);
         }
     } else {
 
-        if (client_data->origin_fd >= 0) {
-            selector_unregister_fd(key->s, client_data->origin_fd);
-            close(client_data->origin_fd);
+        if (data->origin_fd >= 0) {
+            selector_unregister_fd(key->s, data->origin_fd);
+            close(data->origin_fd);
         }
-        if (client_data->client_fd >= 0) {
-            selector_unregister_fd(key->s, client_data->client_fd);
-            close(client_data->client_fd);
+        if (data->client_fd >= 0) {
+            selector_unregister_fd(key->s, data->client_fd);
+            close(data->client_fd);
         }
     }
 
-    if (client_data->dns_resolution_state == 1) {
+    if (data->dns_resolution_state == 1) {
         // Cancelar resolución pendiente
-        struct gaicb *reqs[] = { &client_data->dns_req.req };
+        struct gaicb *reqs[] = { &data->dns_req.req };
         gai_cancel(reqs[0]);
     }
 
     // Cleanup DNS resolution memory
-    if (client_data->origin_resolution != NULL) {
-        if (client_data->resolution_from_getaddrinfo) {
+    if (data->origin_resolution != NULL) {
+        if (data->resolution_from_getaddrinfo) {
             // Memoria de getaddrinfo_a() - usar freeaddrinfo
-            freeaddrinfo(client_data->origin_resolution);
+            freeaddrinfo(data->origin_resolution);
         } else {
             // Memoria manual - liberar ai_addr y estructura por separado
-            if (client_data->origin_resolution->ai_addr != NULL) {
-                free(client_data->origin_resolution->ai_addr);
+            if (data->origin_resolution->ai_addr != NULL) {
+                free(data->origin_resolution->ai_addr);
             }
-            free(client_data->origin_resolution);
+            free(data->origin_resolution);
         }
     }
 
-    // Registro de acceso antes de liberar client_data
-    log_access_record(client_data);
+    // Registro de acceso antes de liberar data
+    log_access_record(data);
 
     // Liberar buffers dinámicos
-    if (client_data->in_client_buffer != NULL) {
-        free(client_data->in_client_buffer);
+    if (data->in_client_buffer != NULL) {
+        free(data->in_client_buffer);
     }
-    if (client_data->in_origin_buffer != NULL) {
-        free(client_data->in_origin_buffer);
+    if (data->in_origin_buffer != NULL) {
+        free(data->in_origin_buffer);
     }
 
-    free(client_data);
+    free(data);
 }
 
 
 
-void log_store_for_user(const ClientData *cd)
+void log_store_for_user(const client_data *cd)
 {
     if (!cd) return;
 
@@ -294,7 +294,7 @@ void log_store_for_user(const ClientData *cd)
 
 
 
-void log_access_record(ClientData *client_data) {
+void log_access_record(client_data *client_data) {
     if (!client_data) return;
     
     // Fecha en formato ISO-8601
