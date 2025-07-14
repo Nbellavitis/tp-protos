@@ -14,7 +14,6 @@
 #include "Resolver/resolver.h"
 #include "Statistics/statistics.h"
 #include "../logger.h"
-#include "constants.h"
 
 // Declaración de función externa
 extern size_t get_current_buffer_size(void);

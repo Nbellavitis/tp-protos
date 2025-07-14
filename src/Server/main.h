@@ -1,6 +1,7 @@
 
 #include <stdbool.h>
 #include "Auth/auth.h"
+#include "constants.h"
 
 #ifndef MAIN_H
 #define MAIN_H

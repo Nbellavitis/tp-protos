@@ -25,6 +25,8 @@
 #include "args.h"
 #include "Copy/copy.h"
 #include "ManagementProtocol/management.h"
+#include "constants.h"
+
 // SOCKS5 server constants
 #define MAX_HOSTNAME_LEN        256
 
