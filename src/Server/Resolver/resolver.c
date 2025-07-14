@@ -458,54 +458,94 @@ static unsigned handle_request_error(int error, struct selector_key *key) {
 
 unsigned preSetRequestResponse(struct selector_key *key, int errorStatus) {
     ClientData *clientData = (ClientData *)key->data;
-    clientData->socks_status = errorStatus; //@todo checkear.
+    clientData->socks_status = errorStatus;
 
-    uint8_t atyp = ATYP_IPV4;
-    uint8_t addr[IPV6_ADDR_SIZE];
+    // valores fallback
+    uint8_t  atyp = ATYP_IPV4;
     uint16_t port = 0;
+    uint8_t  addr[IPV6_ADDR_SIZE] = {0};
 
-    if (clientData->originFd >= 0) {
+    if (clientData->originFd >= 0 && errorStatus == SUCCESS) {
         struct sockaddr_storage local_addr;
         socklen_t local_addr_len = sizeof(local_addr);
 
         if (getsockname(clientData->originFd, (struct sockaddr *)&local_addr, &local_addr_len) == 0) {
             if (local_addr.ss_family == AF_INET) {
-                struct sockaddr_in *addr4 = (struct sockaddr_in *)&local_addr;
-                memcpy(addr, &addr4->sin_addr, IPV4_ADDR_SIZE); // todo: magic number ?
+                const struct sockaddr_in *addr4 = (struct sockaddr_in *)&local_addr;
+                atyp = ATYP_IPV4;
                 port = ntohs(addr4->sin_port);
-                atyp = ATYP_IPV4;
+                memcpy(addr, &addr4->sin_addr, IPV4_ADDR_SIZE);
             } else if (local_addr.ss_family == AF_INET6) {
-                struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&local_addr;
-                memcpy(addr, &addr6->sin6_addr, IPV6_ADDR_SIZE);
-                port = ntohs(addr6->sin6_port);
+                const struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&local_addr;
                 atyp = ATYP_IPV6;
-            } else {
-                // Fallback si no es una familia válida
-                uint32_t ip = htonl(0);
-                memcpy(addr, &ip, IPV4_ADDR_SIZE);
-                port = 0;
-                atyp = ATYP_IPV4;
+                port = ntohs(addr6->sin6_port);
+                memcpy(addr, &addr6->sin6_addr, IPV6_ADDR_SIZE);
             }
-        } else {
-            // getsockname falló → fallback
-            uint32_t ip = htonl(0);
-            memcpy(addr, &ip, IPV4_ADDR_SIZE);
-            port = 0;
-            atyp = ATYP_IPV4;
         }
-    } else {
-        // originFd inválido → no se pudo conectar
-        uint32_t ip = htonl(0);
-        memcpy(addr, &ip, IPV4_ADDR_SIZE);
-        port = 0;
-        atyp = ATYP_IPV4;
     }
 
     if (!prepareRequestResponse(&clientData->originBuffer, SOCKS5_VERSION, errorStatus, atyp, addr, port) ||
         selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
         LOG_ERROR("%s", "preSetRequestResponse: Error preparing request response");
         return ERROR;
-    }
+        }
 
     return REQ_WRITE;
 }
+
+
+// todo: eventualmente eliminar lo de abajo. Lo deje comentado por si acaso, es la versión anterior de la funcion
+// unsigned preSetRequestResponse(struct selector_key *key, int errorStatus) {
+//     ClientData *clientData = (ClientData *)key->data;
+//     clientData->socks_status = errorStatus; //@todo checkear.
+//
+//     uint8_t atyp = ATYP_IPV4;
+//     uint8_t addr[IPV6_ADDR_SIZE];
+//     uint16_t port = 0;
+//
+//     if (clientData->originFd >= 0) {
+//         struct sockaddr_storage local_addr;
+//         socklen_t local_addr_len = sizeof(local_addr);
+//
+//         if (getsockname(clientData->originFd, (struct sockaddr *)&local_addr, &local_addr_len) == 0) {
+//             if (local_addr.ss_family == AF_INET) {
+//                 struct sockaddr_in *addr4 = (struct sockaddr_in *)&local_addr;
+//                 memcpy(addr, &addr4->sin_addr, IPV4_ADDR_SIZE); // todo: magic number ?
+//                 port = ntohs(addr4->sin_port);
+//                 atyp = ATYP_IPV4;
+//             } else if (local_addr.ss_family == AF_INET6) {
+//                 struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)&local_addr;
+//                 memcpy(addr, &addr6->sin6_addr, IPV6_ADDR_SIZE);
+//                 port = ntohs(addr6->sin6_port);
+//                 atyp = ATYP_IPV6;
+//             } else {
+//                 // Fallback si no es una familia válida
+//                 uint32_t ip = htonl(0);
+//                 memcpy(addr, &ip, IPV4_ADDR_SIZE);
+//                 port = 0;
+//                 atyp = ATYP_IPV4;
+//             }
+//         } else {
+//             // getsockname falló → fallback
+//             uint32_t ip = htonl(0);
+//             memcpy(addr, &ip, IPV4_ADDR_SIZE);
+//             port = 0;
+//             atyp = ATYP_IPV4;
+//         }
+//     } else {
+//         // originFd inválido → no se pudo conectar
+//         uint32_t ip = htonl(0);
+//         memcpy(addr, &ip, IPV4_ADDR_SIZE);
+//         port = 0;
+//         atyp = ATYP_IPV4;
+//     }
+//
+//     if (!prepareRequestResponse(&clientData->originBuffer, SOCKS5_VERSION, errorStatus, atyp, addr, port) ||
+//         selector_set_interest(key->s, clientData->clientFd, OP_WRITE) != SELECTOR_SUCCESS) {
+//         LOG_ERROR("%s", "preSetRequestResponse: Error preparing request response");
+//         return ERROR;
+//     }
+//
+//     return REQ_WRITE;
+// }
+
