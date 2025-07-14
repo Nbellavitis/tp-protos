@@ -365,17 +365,17 @@ static void error_arrival(const unsigned state, struct selector_key *key) {
 }
 static void socksv5_timeout(struct selector_key *key) {
     time_t now = time(NULL);
-    client_data *d = (client_data *)key->data;
-    const unsigned currentState = stm_state(&d->stm);
+    client_data *data = (client_data *)key->data;
+    const unsigned currentState = stm_state(&data->stm);
 
 
     if (currentState == ADDR_RESOLVE || currentState == CONNECTING) {
         return;
     }
 
-    if (difftime(now, d->last) > INACTIVITY_TIMEOUT) {
+    if (difftime(now, data->last_activity) > INACTIVITY_TIMEOUT) {
         LOG_INFO("Closing connection on fd %d due to inactivity timeout.", key->fd);
-        d->socks_status = TTL_EXPIRED;
+        data->socks_status = TTL_EXPIRED;
         close_connection(key);
     }
 }
