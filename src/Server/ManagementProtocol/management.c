@@ -197,7 +197,7 @@ bool parse_management_command(management_parser *parser, struct buffer *buffer) 
 
     return parser->complete;
 }
-
+/*
 bool send_management_response(struct buffer *buffer, uint8_t status, const char *payload) {
 
     uint8_t payload_len = payload ? strlen(payload) : 0;
@@ -223,7 +223,52 @@ bool send_management_response(struct buffer *buffer, uint8_t status, const char 
     }
 
     return true;
+}*/
+bool send_management_response_raw(struct buffer *buffer,
+                                  uint8_t         status,
+                                  const uint8_t  *payload,
+                                  uint8_t         payload_len)
+{
+    size_t avail;
+    buffer_write_ptr(buffer, &avail);
+    if (payload_len > MAX_MGMT_PAYLOAD_LEN || avail < (size_t)(3 + payload_len)) {
+        LOG_ERROR("raw response overflow");
+        return false;
+    }
+    buffer_write(buffer, MANAGEMENT_VERSION);
+    buffer_write(buffer, status);
+    buffer_write(buffer, payload_len);
+    if (payload_len > 0) {
+        for (int i = 0; i < payload_len; i++) {
+            buffer_write(buffer, payload[i]);
+        }
+    }
+    return true;
 }
+bool send_management_response(struct buffer *buffer,
+                              uint8_t         status,
+                              const char     *msg_utf8)
+{
+    uint8_t len = (uint8_t)strnlen(msg_utf8, MAX_MGMT_PAYLOAD_LEN);
+    size_t avail;
+    buffer_write_ptr(buffer, &avail);
+    if (avail < (size_t)(3 + len)) {
+        LOG_ERROR("response buffer overflow");
+        return false;
+    }
+    buffer_write(buffer, MANAGEMENT_VERSION);
+    buffer_write(buffer, status);
+    buffer_write(buffer, len);
+
+    if (len > 0) {
+        for (int i = 0; i < len; i++) {
+            buffer_write(buffer, msg_utf8[i]);
+        }
+    }
+
+    return true;
+}
+
 
 // State handlers
 void mgmt_auth_read_init(unsigned state __attribute__((unused)), struct selector_key *key) {
@@ -355,7 +400,7 @@ unsigned mgmt_command_read(struct selector_key *key) {
         // Procesar comando
         switch (mgmt_data->parser.command) {
             case CMD_STATS: {
-                char stats_response[STATS_RESPONSE_SIZE];
+                /*char stats_response[STATS_RESPONSE_SIZE];
                 snprintf(stats_response, sizeof(stats_response),
                          "Connections opened: %u\nConnections closed: %u\nCurrent connections: %u\nClient bytes: %u\nOrigin bytes: %u",
                          stats_get_connections_opened(),
@@ -363,11 +408,21 @@ unsigned mgmt_command_read(struct selector_key *key) {
                          stats_get_current_connections(),
                          stats_get_client_bytes(),
                          stats_get_origin_bytes());
-                send_management_response(&mgmt_data->response_buffer, STATUS_OK, stats_response);
+                send_management_response(&mgmt_data->response_buffer, STATUS_OK, stats_response);*/
+                uint32_t v[5] = { stats_get_connections_opened(),
+                                  stats_get_connections_closed(),
+                                  stats_get_current_connections(),
+                                  stats_get_client_bytes(),
+                                  stats_get_origin_bytes() };
+                uint8_t payload[20];
+                for (int i = 0; i < 5; i++)
+                    ((uint32_t *)payload)[i] = htonl(v[i]);
+
+                send_management_response_raw(&mgmt_data->response_buffer, STATUS_OK, payload, sizeof payload);
                 break;
             }
             case CMD_LIST_USERS: {
-                char users_response[USERS_RESPONSE_SIZE] = "Users:\n";
+                /*char users_response[USERS_RESPONSE_SIZE] = "Users:\n";
                 struct users* users = get_authorized_users();
                 int num_users = get_num_authorized_users();
 
@@ -383,7 +438,21 @@ unsigned mgmt_command_read(struct selector_key *key) {
                     strcat(users_response, "No users configured");
                 }
 
-                send_management_response(&mgmt_data->response_buffer, STATUS_OK, users_response);
+                send_management_response(&mgmt_data->response_buffer, STATUS_OK, users_response);*/
+                struct users *u = get_authorized_users();
+                uint8_t n = (uint8_t)get_num_authorized_users();
+
+                uint8_t pl[MAX_MGMT_PAYLOAD_LEN];
+                pl[0] = n;
+                size_t off = 1;
+
+                for (uint8_t i = 0; i < n && off < sizeof pl; i++) {
+                    size_t len = strlen(u[i].name) + 1;          // incluye '\0'
+                    if (off + len > sizeof pl) break;
+                    memcpy(pl + off, u[i].name, len);
+                    off += len;
+                }
+                send_management_response_raw(&mgmt_data->response_buffer, STATUS_OK, pl, (uint8_t)off);
                 break;
             }
             case CMD_ADD_USER: {
@@ -459,26 +528,38 @@ unsigned mgmt_command_read(struct selector_key *key) {
                 break;
             };
             case CMD_SET_BUFFER_SIZE: {
-                // Payload: tamaño del buffer como string
-                size_t new_size = (size_t)atoi(mgmt_data->parser.payload);
-                if (set_buffer_size(new_size)) {
-                    char response[256];
-                    snprintf(response, sizeof(response), "Buffer size changed to %zu bytes", new_size);
-                    send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
-                } else {
-                    char response[MGMT_EXTENDED_RESPONSE_SIZE];
-                    snprintf(response, sizeof(response), 
-                             "Invalid buffer size. Available sizes: " AVAILABLE_BUFFER_SIZES_STR);
-                    send_management_response(&mgmt_data->response_buffer, STATUS_ERROR, response);
+                if (mgmt_data->parser.payload_len != 4) {
+                    send_management_response(&mgmt_data->response_buffer,
+                                             STATUS_ERROR, "");
+                    break;
                 }
+                uint32_t net_val;
+                memcpy(&net_val, mgmt_data->parser.payload, 4);
+                uint32_t new_size = ntohl(net_val);
+
+
+                if (set_buffer_size(new_size))
+                    send_management_response(&mgmt_data->response_buffer,STATUS_OK, "");
+                else
+                    send_management_response(&mgmt_data->response_buffer,STATUS_ERROR, "");
                 break;
-            };
+
+                }
+
+
             case CMD_GET_BUFFER_INFO: {
-                char response[512];
-                snprintf(response, sizeof(response), 
-                         "Current buffer size: %zu bytes\nAvailable sizes: " AVAILABLE_BUFFER_SIZES_STR,
-                         get_current_buffer_size());
-                send_management_response(&mgmt_data->response_buffer, STATUS_OK, response);
+       
+                static const uint32_t allowed[] = {4096,8192,16384,32768,65536,131072};
+                const uint8_t N = sizeof allowed / sizeof allowed[0];
+
+                uint8_t pl[1 + 4 + 4 * 6];                     // cur(4) + N(1) + lista
+                uint32_t cur = htonl((uint32_t)get_current_buffer_size());
+                memcpy(pl, &cur, 4);
+                pl[4] = N;
+                for (uint8_t i = 0; i < N; i++)
+                    *(uint32_t *)(pl + 5 + i * 4) = htonl(allowed[i]);
+
+                send_management_response_raw(&mgmt_data->response_buffer, STATUS_OK, pl, 5 + 4 * N);
                 break;
             };
             case CMD_GET_AUTH_METHOD: {

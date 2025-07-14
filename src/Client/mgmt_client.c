@@ -24,6 +24,7 @@
 #define CMD_GET_AUTH_METHOD 0x0A
 #define CMD_GET_LOG_BY_USER 0x0B
 
+#define RESP_BUF 526
 
 // Status codes
 #define STATUS_OK 0x00
@@ -40,6 +41,31 @@ typedef struct {
     int authenticated;
 } mgmt_client_t;
 
+
+static int send_raw(mgmt_client_t *c, uint8_t cmd,
+                    const uint8_t *pl, uint8_t len)
+{
+    uint8_t msg[3 + 255];
+    msg[0] = MANAGEMENT_VERSION;
+    msg[1] = cmd;
+    msg[2] = len;
+    if (len) memcpy(msg + 3, pl, len);
+
+    return (send(c->socket_fd, msg, 3 + len, MSG_NOSIGNAL) == 3 + len) ? 0 : -1;
+}
+
+static int recv_raw(mgmt_client_t *c,
+                    uint8_t *st, uint8_t *pl, uint8_t *len)
+{
+    uint8_t hdr[3];
+    if (read(c->socket_fd, hdr, 3) != 3) return -1;
+    if (hdr[0] != MANAGEMENT_VERSION) return -1;
+
+    *st  = hdr[1];
+    *len = hdr[2];
+    if (*len && read(c->socket_fd, pl, *len) != *len) return -1;
+    return 0;
+}
 
 void mgmt_handle_disconnection(mgmt_client_t *client) {
     if (client->socket_fd >= 0) {
@@ -185,45 +211,33 @@ int mgmt_authenticate(mgmt_client_t *client, const char *username, const char *p
     }
 }
 
-// Obtener estadísticas
-int mgmt_get_stats(mgmt_client_t *client) {
-    if (!client->authenticated) {
-        printf("Not authenticated\n");
-        return -1;
-    }
-    
-    if (send_mgmt_command(client, CMD_STATS, NULL) < 0) {
-        return -1;
-    }
-    
-    uint8_t status;
-    char response[RESPONSE_BUFFER_SIZE];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
-    }
-    
-    printf("Server Statistics:\n%s\n", response);
+int mgmt_get_stats(mgmt_client_t *c)
+{
+    uint8_t st, len, pl[32];
+    if (send_raw(c, CMD_STATS, NULL, 0) < 0) return -1;
+    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (st != STATUS_OK || len != 20) return -1;
+
+    uint32_t *v = (uint32_t *)pl;
+    printf("Opened : %u\nClosed : %u\nCurrent: %u\nClient : %u\nOrigin : %u\n",
+           ntohl(v[0]), ntohl(v[1]), ntohl(v[2]), ntohl(v[3]), ntohl(v[4]));
     return 0;
 }
 
-// Listar usuarios
-int mgmt_list_users(mgmt_client_t *client) {
-    if (!client->authenticated) {
-        printf("Not authenticated\n");
-        return -1;
+int mgmt_list_users(mgmt_client_t *c)
+{
+    uint8_t st, len, pl[RESP_BUF];
+    if (send_raw(c, CMD_LIST_USERS, NULL, 0) < 0) return -1;
+    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (st != STATUS_OK) return -1;
+
+    uint8_t n = pl[0];
+    printf("Users (%u):\n", n);
+    char *p = (char *)(pl + 1);
+    for (uint8_t i = 0; i < n; i++) {
+        printf("  %s\n", p);
+        p += strlen(p) + 1;
     }
-    
-    if (send_mgmt_command(client, CMD_LIST_USERS, NULL) < 0) {
-        return -1;
-    }
-    
-    uint8_t status;
-    char response[RESPONSE_BUFFER_SIZE];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
-    }
-    
-    printf("%s\n", response);
     return 0;
 }
 
@@ -317,50 +331,29 @@ int mgmt_change_password(mgmt_client_t *client, const char *username, const char
     return status == STATUS_OK ? 0 : -1;
 }
 
-// Obtener información del buffer
-int mgmt_get_buffer_info(mgmt_client_t *client) {
-    if (!client->authenticated) {
-        printf("Not authenticated\n");
-        return -1;
+int mgmt_get_buffer_info(mgmt_client_t *c)
+{
+    uint8_t st, len, pl[64];
+    if (send_raw(c, CMD_GET_BUFFER_INFO, NULL, 0) < 0) return -1;
+    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (st != STATUS_OK || len < 5) return -1;
+
+    uint32_t cur = ntohl(*(uint32_t *)pl);
+    uint8_t n = pl[4];
+    printf("Current: %u\nAllowed:", cur);
+    for (uint8_t i = 0; i < n; i++) {
+        printf(" %u", ntohl(*(uint32_t *)(pl + 5 + i * 4)));
     }
-    
-    if (send_mgmt_command(client, CMD_GET_BUFFER_INFO, NULL) < 0) {
-        return -1;
-    }
-    
-    uint8_t status;
-    char response[RESPONSE_BUFFER_SIZE];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
-    }
-    
-    printf("Buffer Information:\n%s\n", response);
+    putchar('\n');
     return 0;
 }
-
-// Cambiar tamaño del buffer
-int mgmt_set_buffer_size(mgmt_client_t *client, const char *buffer_size_str) {
-    if (!client->authenticated) {
-        printf("Not authenticated\n");
-        return -1;
-    }
-    
-    if (send_mgmt_command(client, CMD_SET_BUFFER_SIZE, buffer_size_str) < 0) {
-        return -1;
-    }
-    
-    uint8_t status;
-    char response[RESPONSE_BUFFER_SIZE];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
-    }
-    
-    if (status == STATUS_OK) {
-        printf("Success: %s\n", response);
-    } else {
-        printf("Error: %s\n", response);
-    }
-    return status == STATUS_OK ? 0 : -1;
+int mgmt_set_buffer(mgmt_client_t *c, uint32_t size)
+{
+    uint32_t net = htonl(size);
+    uint8_t st, len, pl[RESP_BUF];
+    if (send_raw(c, CMD_SET_BUFFER_SIZE, (uint8_t *)&net, 4) < 0) return -1;
+    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    return (st == STATUS_OK) ? 0 : -1;
 }
 
 void mgmt_set_auth_method(mgmt_client_t *client, char * method) {
@@ -538,13 +531,40 @@ void interactive_menu(mgmt_client_t *client) {
                     mgmt_change_password(client, username, password);
                     break;
                 case 6: mgmt_get_buffer_info(client); break;
-                case 7:
-                    printf("New buffer size (4096, 8192, 16384, 32768, 65536, 131072): ");
-                    if (fgets(username, sizeof(username), stdin)) {
-                        username[strcspn(username, "\n")] = 0;
+                case 7: {  /* Set buffer size (binario) */
+                    //@TODO change
+
+                    static const uint32_t sizes[] = {
+                            4096, 8192, 16384, 32768, 65536, 131072
+                    };
+                    int choice = 0;
+
+                    puts("\nSeleccione nuevo tamaño de buffer:");
+                    puts("  1) 4096");
+                    puts("  2) 8192");
+                    puts("  3) 16384");
+                    puts("  4) 32768");
+                    puts("  5) 65536");
+                    puts("  6) 131072");
+                    printf("Opción [1‑6]: ");
+
+                    if (scanf("%d", &choice) != 1 || choice < 1 || choice > 6) {
+                        /* descartar el resto de la línea */
+                        int ch;
+                        while ((ch = getchar()) != '\n' && ch != EOF);
+                        fprintf(stderr, "Opción inválida\n");
+                        break;
                     }
-                    mgmt_set_buffer_size(client, username);
-                    break;
+
+                    /* descartar el '\n' pendiente */
+                    int ch;
+                    while ((ch = getchar()) != '\n' && ch != EOF);
+
+                    uint32_t new_size = sizes[choice - 1];
+                    if (mgmt_set_buffer(client, new_size) == 0) {
+                        printf("Buffer actualizado a %u bytes\n", new_size);
+                    }
+                    break;}
                 case 8:
                     printf("Select an authentication method:\n");
                     printf("1. No Authentication\n2. Password Authentication\nChoice: ");
