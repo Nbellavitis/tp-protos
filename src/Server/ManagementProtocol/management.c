@@ -45,6 +45,22 @@ static const struct state_definition management_states[] = {
         {.state = MGMT_ERROR, .on_arrival = mgmt_error_arrival}
 };
 
+static void cleanup_management_connection(struct selector_key *key) {
+    ManagementData *mgmt_data = (ManagementData *)key->data;
+
+    if (mgmt_data != NULL && !mgmt_data->closed) {
+        LOG_INFO("Cleaning up resources for management connection: %d", mgmt_data->client_fd);
+
+        if (mgmt_data->client_fd >= 0) {
+            close(mgmt_data->client_fd);
+        }
+        free(mgmt_data);
+        key->data = NULL; // Buena práctica para evitar usar punteros inválidos
+        mgmt_data->closed = true; // Prevenir doble liberación
+    }
+}
+
+
 void mgtm_init_admin() {
     const char *env_user = getenv(ADMIN_USER_ENV_VAR);
     const char *env_pass = getenv(ADMIN_PASSWORD_ENV_VAR);
@@ -58,7 +74,11 @@ void management_passive_accept(struct selector_key* key) {
     struct sockaddr_storage client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     int new_client_socket = accept(key->fd, (struct sockaddr*)&client_addr, &client_addr_len);
-
+    if (selector_fd_set_nio(new_client_socket) == -1) {
+        LOG_ERROR("Failed to set non-blocking mode for management client socket");
+        close(new_client_socket);
+        return;
+    }
     if (new_client_socket < 0) {
         perror("Error accepting management connection");
         return;
@@ -126,25 +146,13 @@ static void management_write(struct selector_key *key) {
 }
 
 static void management_close(struct selector_key *key) {
-    ManagementData *mgmt_data = (ManagementData *)key->data;
-    stm_handler_close(&mgmt_data->stm, key);
-    close_management_connection(key);
+    cleanup_management_connection(key);
 }
-
 void close_management_connection(struct selector_key *key) {
-    ManagementData *mgmt_data = (ManagementData *)key->data;
-    if (mgmt_data->closed) {
-        return;
+    ManagementData *md = key->data;
+    if (md != NULL && !md->closed) {
+        selector_unregister_fd(key->s, key->fd);
     }
-
-    mgmt_data->closed = true;
-    LOG_INFO("Closing management connection: %d", mgmt_data->client_fd);
-
-    if (mgmt_data->client_fd >= 0) {
-        selector_unregister_fd(key->s, mgmt_data->client_fd);
-        close(mgmt_data->client_fd);
-    }
-    free(mgmt_data);
 }
 
 // Parser functions

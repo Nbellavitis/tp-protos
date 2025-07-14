@@ -68,7 +68,7 @@ typedef struct ClientData {
     uint8_t *inOriginBuffer;    // Buffer dinámico
     size_t bufferSize;          // Tamaño actual del buffer
     bool unregistering_origin;
-    
+    bool authFailed; // Indica si la autenticación falló
     // Para logging de acceso
 
     user_t * user;

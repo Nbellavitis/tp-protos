@@ -6,7 +6,10 @@
 #include <string.h>
 #include "../users.h"
 
-
+typedef enum{
+    AUTH_SUCCESS = 0,
+    AUTH_FAILED = 1,
+}auth_status;
 user_t * validateUser(const char* username, const char* password);
 void authenticationReadInit(const unsigned state ,  struct selector_key * key);
 
