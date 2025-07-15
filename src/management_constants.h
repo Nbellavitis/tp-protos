@@ -1,0 +1,67 @@
+
+
+#ifndef _MANAGEMENT_CONSTANTS_H
+#define _MANAGEMENT_CONSTANTS_H
+
+
+
+#define ADMIN_DEFAULT_USER "admin"
+#define ADMIN_DEFAULT_PASSWORD "admin123"
+#define ADMIN_USER_ENV_VAR "ADMIN_USERNAME"
+#define ADMIN_PASSWORD_ENV_VAR "ADMIN_PASSWORD"
+
+
+// Management protocol constants
+#define MAX_USERNAME_LEN        10
+#define MAX_PASSWORD_LEN        63
+#define MAX_MGMT_PAYLOAD_LEN    255
+
+// Management response buffer sizes
+
+#define MGMT_PAYLOAD_SIZE               256
+
+
+#define AVAILABLE_BUFFER_SIZES_STR      "4096, 8192, 16384, 32768, 65536, 131072"
+
+
+#define MANAGEMENT_VERSION 0x01
+#define MANAGEMENT_BUFFER_SIZE 4096
+
+// Comandos del protocolo
+#define CMD_AUTH 0x01
+#define CMD_STATS 0x02
+#define CMD_LIST_USERS 0x03
+#define CMD_ADD_USER 0x04
+#define CMD_DELETE_USER 0x05
+#define CMD_CHANGE_PASSWORD 0x06
+#define CMD_SET_BUFFER_SIZE 0x07
+#define CMD_GET_BUFFER_INFO 0x08
+#define CMD_SET_AUTH_METHOD 0x09
+#define CMD_GET_AUTH_METHOD 0x0A
+#define CMD_GET_LOG_BY_USER 0x0B
+
+// Status codes
+#define STATUS_OK 0x00
+#define STATUS_ERROR 0x01
+#define STATUS_AUTH_REQUIRED 0x02
+#define STATUS_AUTH_FAILED 0x03
+#define STATUS_NOT_FOUND 0x04
+#define STATUS_FULL 0x05
+
+#define STATUS_INVALID_FORMAT   0x06
+#define STATUS_LEN_EXCEEDED     0x07
+#define STATUS_ALREADY_EXISTS   0x08
+#define STATUS_NOT_ALLOWED      0x09
+#define STATUS_RESERVED_USER 0x0A
+
+
+#define STATS_FIELDS          5
+#define STATS_PAYLOAD_BYTES  (STATS_FIELDS * sizeof(uint32_t))
+
+#define BUFFER_SIZE_CNT   ((uint8_t)(sizeof(buffer_sizes) / sizeof(buffer_sizes[0])))
+#define BUFFER_SIZE_MIN   (buffer_sizes[0])
+#define BUFFER_SIZE_MAX   (buffer_sizes[BUFFER_SIZE_CNT-1])
+
+
+
+#endif

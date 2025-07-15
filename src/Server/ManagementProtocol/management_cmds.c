@@ -209,10 +209,9 @@ static void cmd_get_auth_method(ManagementData *md)
 
 
 
-//@TODO: por como esta definido el protocolo hay veces que se trunca la respuesta!!!!. El maximo del payload es 256 y el maximo de host lenght es eso tambien! hay que agrandar el payload y cambiar un poco esta funcion.
 static void cmd_get_log_by_user(ManagementData *md)
 {
-    /* 1) Autenticación obligatoria */
+
     if (!md->authenticated) {
         send_management_response(&md->response_buffer,
                                  STATUS_AUTH_REQUIRED,
@@ -220,20 +219,19 @@ static void cmd_get_log_by_user(ManagementData *md)
         return;
     }
 
-    /* 2) Extraer usuario y offset del payload */
     char uname[MAX_USERNAME_LEN + 1];
     uint32_t offset = 0;
     size_t ulen = 0;
 
     // El payload ahora es: [username]\0[4-byte offset]
-    // Buscamos el terminador NUL para separar el nombre del offset
+
     char *nul_char = memchr(md->parser.payload, '\0', md->parser.payload_len);
     if (nul_char == NULL || (nul_char - md->parser.payload + 1 + sizeof(uint32_t)) > md->parser.payload_len) {
-        // Formato antiguo o inválido, asumimos solo username y offset 0
+
         ulen = md->parser.payload_len > MAX_USERNAME_LEN ? MAX_USERNAME_LEN : md->parser.payload_len;
         memcpy(uname, md->parser.payload, ulen);
     } else {
-        // Formato nuevo, extraemos username y offset
+
         ulen = nul_char - md->parser.payload;
         if (ulen > MAX_USERNAME_LEN) ulen = MAX_USERNAME_LEN;
         memcpy(uname, md->parser.payload, ulen);
@@ -245,7 +243,7 @@ static void cmd_get_log_by_user(ManagementData *md)
     uname[ulen] = '\0';
 
 
-    /* 3) Buscar el bucket del usuario (lógica existente) */
+
     user_t *u = NULL;
     if (strcmp(uname, "anonymous") == 0) {
         u = get_anon_user();
@@ -264,7 +262,7 @@ static void cmd_get_log_by_user(ManagementData *md)
         return;
     }
 
-    /* 4) Armar payload paginado */
+
     uint8_t payload[MAX_MGMT_PAYLOAD_LEN];
     // Reservamos los primeros 4 bytes para el 'next_offset'
     size_t plen = sizeof(uint32_t);
@@ -272,7 +270,7 @@ static void cmd_get_log_by_user(ManagementData *md)
     char ts[TIMESTAMP_BUFFER_SIZE];
     struct tm tm_;
 
-    // Empezamos a iterar desde el offset solicitado
+
     uint32_t i = offset;
     for (; i < u->used && plen < MAX_MGMT_PAYLOAD_LEN; i++) {
         gmtime_r(&u->history[i].ts, &tm_);
@@ -292,14 +290,10 @@ static void cmd_get_log_by_user(ManagementData *md)
         plen += (size_t)n;
     }
 
-    /* 5) Escribir el 'next_offset' al inicio del payload */
-    // Si 'i' no ha llegado al final del historial, es el offset para el próximo chunk.
-    // Si no, es 0, indicando que no hay más datos.
     uint32_t next_offset = (i < u->used) ? i : 0;
     uint32_t net_next_offset = htonl(next_offset);
     memcpy(payload, &net_next_offset, sizeof(uint32_t));
 
-    /* 6) Responder STATUS_OK con el chunk (puede estar vacío si un log es muy grande) */
     send_management_response_raw(&md->response_buffer, STATUS_OK, payload, plen);
 }
 
@@ -323,15 +317,9 @@ void mgmt_dispatch_command(ManagementData *md)
     if (cmd >= CMD_STATS && cmd <= CMD_GET_LOG_BY_USER) {
         mgmt_cmd_fn fn = mgmt_cmd_table[cmd - CMD_STATS];
         fn(md);
-
-    } else if (cmd == CMD_AUTH) {
-        send_management_response(&md->response_buffer,
-                                 STATUS_ERROR,
-                                 "Invalid operation: already authenticated");  //@TODO check
-
-    } else {
-        send_management_response(&md->response_buffer,
-                                 STATUS_ERROR,
-                                 "Unknown command");                        // @Todo check. Podria cambiar el error code.
+        return;
     }
+
+    send_status_only(md,STATUS_ERROR);
+
 }

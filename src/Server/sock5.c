@@ -44,8 +44,8 @@ static const struct state_definition client_actions[] = {
     {.state = CONNECTING, .on_arrival = NULL, .on_write_ready = request_connecting},
     {.state = REQ_WRITE, .on_arrival = request_write_init, .on_write_ready = request_write},
     {.state = COPYING,   .on_arrival = socksv5_handle_init,.on_read_ready = socksv5_handle_read,.on_write_ready = socksv5_handle_write,.on_departure = socksv5_handle_close},
-    {.state = CLOSED, .on_arrival = close_arrival},
-    {.state=ERROR, .on_arrival = error_arrival}
+    {.state = CLOSED, },
+    {.state=ERROR, }
 };
 void socksv5_passive_accept(struct selector_key* key){
     struct sockaddr_storage client_address;
@@ -124,7 +124,7 @@ void socksv5_passive_accept(struct selector_key* key){
         close(new_client_socket);
         return;
     }
-    if(selector_fd_set_nio(new_client_socket) == -1) { //todo check si esta bien
+    if(selector_fd_set_nio(new_client_socket) == -1) {
         LOG_ERROR("Failed to set non-blocking mode for new client socket %d", new_client_socket);
         free(client_data->in_client_buffer);
         free(client_data->in_origin_buffer);
@@ -367,14 +367,7 @@ fd_handler * get_socksv5_handler(void) {
 }
 
 
-//@TODO tiene sentido esto?
-static void close_arrival(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("Arriving at CLOSED state (state = %d, key = %p)", state, (void *)key);
-}
 
-static void error_arrival(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("Arriving at ERROR state (state = %d, key = %p)", state, (void *)key);
-}
 static void socksv5_timeout(struct selector_key *key) {
     time_t now = time(NULL);
     client_data *data = (client_data *)key->data;

@@ -166,9 +166,6 @@ bool set_buffer_size(size_t new_size) {
     return false; // Tamaño no válido
 }
 
-size_t get_available_buffer_sizes(void) {       //@todo no se usa.
-    return num_available_sizes;
-}
 
 // Función para obtener los tamaños disponibles como array
 const size_t* get_available_buffer_sizes_array(void) {

@@ -1,12 +1,8 @@
-//
-// Created by lulos on 6/27/2025.
-//
-
 #include "statistics.h"
 #include <stdio.h>
 #include "../../logger.h"
 
-struct stats g_stats = {0};  //todo por ahora los hice gloables, es algo malo eso?
+struct stats g_stats = {0};
 
 void stats_connection_opened(void) {
     g_stats.hist_conn++;

@@ -30,7 +30,7 @@
 #include "selector.h"
 
 // SOCKS5 server constants
-#define MAX_HOSTNAME_LEN        256
+
 
 #define BUFFER_SIZE BUFFER_SIZE_32K
 
@@ -76,7 +76,7 @@ typedef struct client_data {
   /*  char username[MAX_USERNAME_LEN];          // Usuario autenticado*/
     char client_ip[INET6_ADDRSTRLEN];   // IP del cliente
     int client_port;             // Puerto del cliente
-    char target_host[MAX_HOSTNAME_LEN];       // Host de destino         //@todo hacer MALLOQUABLE
+    char target_host[MAX_HOSTNAME_LEN];       // Host de destino
     int target_port;             // Puerto de destino
     uint8_t socks_status;        // Status code SOCKS5
 

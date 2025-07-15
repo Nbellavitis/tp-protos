@@ -1,7 +1,7 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-#define MAXPENDING              10 // todo: va acá? o en main.h ?
+#define MAXPENDING              10
 #define SELECTOR_TIMEOUT_SEC    10
 
 // Network protocol constants (used across multiple modules)
@@ -19,5 +19,9 @@
 
 #define TIMESTAMP_BUFFER_SIZE   32
 #define LOG_LINE_SIZE           256
+
+
+#define MAX_HOSTNAME_LEN        256
+
 
 #endif // CONSTANTS_H
