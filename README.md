@@ -75,14 +75,9 @@ Un cliente interactivo en C que permite:
 
 ### Ejecución
 ```sh
-./bin/client/socks5_client [proxy_host] [proxy_port]
+./bin/client/socks5_client
 ```
-- Si no se pasan argumentos, usa los valores por defecto
 
-### Ejemplo de uso
-```sh
-./bin/client/socks5_client 127.0.0.1 1080
-```
 
 ---
 
@@ -98,14 +93,9 @@ Un cliente de administración para el protocolo de management del servidor. Perm
 
 ### Ejecución
 ```sh
-./bin/client/mgmt_client [mgmt_host] [mgmt_port]
+./bin/client/mgmt_client
 ```
-- Si no se pasan argumentos, usa los valores por defecto
 
-### Ejemplo de uso
-```sh
-./bin/client/mgmt_client 127.0.0.1 9090
-```
 
 ---
 
@@ -126,7 +116,7 @@ Un cliente de administración para el protocolo de management del servidor. Perm
   ```sh
   export ADMIN_USERNAME=tuadmin
   export ADMIN_PASSWORD=tuclave
-  ./bin/server/socks5d ...
+  ./bin/server/socks5d 
   ```
 
 ---
