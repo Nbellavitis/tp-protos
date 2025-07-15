@@ -350,7 +350,7 @@ static int h_logs(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
     if(read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u) < 0) {
-        return -1;
+        return 0;
     }
     if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
 
@@ -381,7 +381,7 @@ static int h_logs(mgmt_client_t *c)
 
         if (st != STATUS_OK) {
             puts(status_to_str(st));
-            return -1;
+            return 0;
         }
 
         if (len < sizeof(uint32_t)) {
