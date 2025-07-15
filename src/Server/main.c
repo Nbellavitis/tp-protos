@@ -11,9 +11,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "sock5.h"
+#include "users.h"
 #include "ManagementProtocol/management.h"
 #include "Negotiation/negotiation_parser.h"
-#include "main.h"
 #include "../logger.h"
 
  bool killed = false;
