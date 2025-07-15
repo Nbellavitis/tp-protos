@@ -64,22 +64,43 @@ static void cmd_stats(ManagementData *md)
 
 static void cmd_list_users(ManagementData *md)
 {
-    struct users *u = get_authorized_users();
+
+    uint32_t offset = 0;
+    if (md->parser.payload_len == sizeof(uint32_t)) {
+        uint32_t net_offset;
+        memcpy(&net_offset, md->parser.payload, sizeof(uint32_t));
+        offset = ntohl(net_offset);
+    }
+
+
+    user_t *u = get_authorized_users();
     uint8_t n = (uint8_t)get_num_authorized_users();
 
+
     uint8_t pl[MAX_MGMT_PAYLOAD_LEN];
-    pl[0] = n;
-    size_t off = 1;
+    size_t plen = sizeof(uint32_t);
 
-    for (uint8_t i = 0; i < n && off < MAX_MGMT_PAYLOAD_LEN; i++) {
-        size_t l = strlen(u[i].name) + 1;           /* incluye NUL */
-        if (off + l > MAX_MGMT_PAYLOAD_LEN) break;
-        memcpy(pl + off, u[i].name, l);
-        off += l;
+
+    uint8_t i = offset;
+    for (; i < n && plen < MAX_MGMT_PAYLOAD_LEN; i++) {
+        size_t name_len = strlen(u[i].name) + 1;
+
+        if (plen + name_len > MAX_MGMT_PAYLOAD_LEN) {
+            break;
+        }
+
+        memcpy(pl + plen, u[i].name, name_len);
+        plen += name_len;
     }
-    send_management_response_raw(&md->response_buffer, STATUS_OK, pl, (uint8_t)off);
-}
 
+
+    uint32_t next_offset = (i < n) ? i : 0;
+    uint32_t net_next_offset = htonl(next_offset);
+    memcpy(pl, &net_next_offset, sizeof(uint32_t));
+
+
+    send_management_response_raw(&md->response_buffer, STATUS_OK, pl, (uint8_t)plen);
+}
 
 void cmd_add_user(ManagementData *md)
 {
