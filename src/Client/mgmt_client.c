@@ -6,6 +6,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "../management_constants.h"
+#include <sys/types.h>
+#include <netdb.h>
+
+
 #define DEFAULT_MGMT_HOST          "127.0.0.1"
 #define DEFAULT_MGMT_PORT          8080
 #define INPUT_SMALL_BUF            32
@@ -16,6 +20,11 @@
 #define STATS_PAYLOAD_BYTES        (STATS_FIELDS * sizeof(uint32_t))
 #define RESPONSE_BUFFER_SIZE       MGMT_RESPONSE_SIZE
 #define FULL_PAYLOAD_BUF           (MAX_MGMT_PAYLOAD_LEN + 1)     /* con '\0'*/
+#define INPUT_BUF_SIZE   64
+#define MAX_PORT_NUMBER 65535
+
+
+#include <errno.h>
 static const uint32_t BUF_SIZE_OPTIONS[] =
         {
                 4 * 1024,
@@ -127,29 +136,44 @@ static void disconnect(mgmt_client_t *c)
 
 static int connect_server(mgmt_client_t *c)
 {
-    c->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (c->socket_fd < 0)
-    {
-        perror("socket()failed—cannot create TCP socket");
+    char portstr[6];
+    snprintf(portstr, sizeof portstr, "%d", c->server_port);
+
+    struct addrinfo hints = {
+            .ai_family   = AF_UNSPEC,
+            .ai_socktype = SOCK_STREAM,
+    }, *res, *rp;
+
+    int err = getaddrinfo(c->server_host, portstr, &hints, &res);
+    if (err != 0) {
+        fprintf(stderr, "Invalid address '%s': %s\n",
+                c->server_host, gai_strerror(err));
         return -1;
     }
-    struct sockaddr_in sa =
-            {
-                    .sin_family = AF_INET,
-                    .sin_port   = htons(c->server_port)
-            };
-    if (inet_pton(AF_INET, c->server_host, &sa.sin_addr) <= 0)
-    {
-        perror("inet_pton()failed—invalid management server address");
-        disconnect(c);
+
+    for (rp = res; rp; rp = rp->ai_next) {
+        c->socket_fd = socket(rp->ai_family,
+                              rp->ai_socktype,
+                              rp->ai_protocol);
+        if (c->socket_fd < 0) continue;
+
+        if (connect(c->socket_fd,
+                    rp->ai_addr,
+                    rp->ai_addrlen) == 0)
+        {
+            /* success */
+            break;
+        }
+        close(c->socket_fd);
+    }
+
+    freeaddrinfo(res);
+
+    if (!rp) {
+        perror("Could not connect to server");
         return -1;
     }
-    if (connect(c->socket_fd, (struct sockaddr *)&sa, sizeof sa) < 0)
-    {
-        perror("connect()failed—unable to reach management server");
-        disconnect(c);
-        return -1;
-    }
+
     printf("Connected to %s:%d\n", c->server_host, c->server_port);
     return 0;
 }
@@ -443,12 +467,62 @@ static void menu_loop(mgmt_client_t *c)
         MENU_FUNCS[ch - 1](c);
     }
 }
+
+static void prompt_server_config(char *host, size_t host_sz, int *port)
+{
+    char buf[INPUT_SMALL_BUF];
+
+    for (;;) {
+        if (read_line("Management server IP [" DEFAULT_MGMT_HOST "]: ",
+                      buf, sizeof buf) < 0 ||
+            buf[0] == '\0')
+        {
+            // EOF or blank ⇒ use default
+            strncpy(host, DEFAULT_MGMT_HOST, host_sz);
+            break;
+        }
+        struct in_addr  tmp4;
+        struct in6_addr tmp6;
+        if (inet_pton(AF_INET,  buf, &tmp4) == 1 ||
+            inet_pton(AF_INET6, buf, &tmp6) == 1)
+        {
+            strncpy(host, buf, host_sz);
+            break;
+        }
+        puts("IP inválida. Debe ser IPv4 o IPv6.");
+    }
+
+    // --- port loop ---
+    for (;;) {
+        char prompt[INPUT_SMALL_BUF];
+        snprintf(prompt, sizeof prompt,
+                 "Management server port [%d]: ", DEFAULT_MGMT_PORT);
+
+        if (read_line(prompt, buf, sizeof buf) < 0 ||
+            buf[0] == '\0')
+        {
+            *port = DEFAULT_MGMT_PORT;
+            break;
+        }
+        errno = 0;
+        char *end;
+        long v = strtol(buf, &end, 10);
+        if (errno == 0 && *end == '\0'
+            && v >= 1 && v <= MAX_PORT_NUMBER)
+        {
+            *port = (int)v;
+            break;
+        }
+        fprintf(stderr,
+                "Puerto inválido. Entre 1 y %d.\n",
+                MAX_PORT_NUMBER);
+    }
+}
 /* -------------------------------------------------------------------------- */
 int main(int argc, char *argv[])
 {
     mgmt_client_t cli = { .socket_fd = -1, .authenticated = 0 };
-    strcpy(cli.server_host, (argc >= 2) ? argv[1] : DEFAULT_MGMT_HOST);
-    cli.server_port = (argc >= 3) ? atoi(argv[2]) : DEFAULT_MGMT_PORT;
+    prompt_server_config(cli.server_host,sizeof cli.server_host,&cli.server_port);
     menu_loop(&cli);
     disconnect(&cli);
     return 0;
