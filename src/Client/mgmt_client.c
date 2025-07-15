@@ -5,6 +5,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <bits/types/sig_atomic_t.h>
+#include <signal.h>
 #include "../Server/ManagementProtocol/management.h"
 
 #define DEFAULT_MGMT_HOST          "127.0.0.1"
@@ -16,7 +18,7 @@
 #define STATS_FIELDS               5
 #define STATS_PAYLOAD_BYTES        (STATS_FIELDS * sizeof(uint32_t))
 #define RESPONSE_BUFFER_SIZE       MGMT_RESPONSE_SIZE
-#define FULL_PAYLOAD_BUF           (MAX_MGMT_PAYLOAD_LEN + 1)     /* con '\0'    */             //@TODO check.
+#define FULL_PAYLOAD_BUF           (MAX_MGMT_PAYLOAD_LEN + 1)     /* con '\0'*/
 static const uint32_t BUF_SIZE_OPTIONS[] =
         {
                 4 * 1024,
@@ -28,6 +30,8 @@ static const uint32_t BUF_SIZE_OPTIONS[] =
         };
 #define BUF_OPTIONS_COUNT  (sizeof BUF_SIZE_OPTIONS / sizeof BUF_SIZE_OPTIONS[0])
 
+static uint8_t read_buffer[FULL_PAYLOAD_BUF+1];
+
 typedef struct
 {
     int  socket_fd;
@@ -37,28 +41,33 @@ typedef struct
 } mgmt_client_t;
 
 
-static void read_line(const char *prompt, char *buf, size_t n)
+static int read_line(const char *prompt, char *buf, size_t n)
 {
     printf("%s", prompt);
     if (!fgets(buf, (int)n, stdin))
     {
-        puts("\nEOF");
-        exit(0);
+        clearerr(stdin);
+        puts("\n");
+        return -1;
     }
     buf[strcspn(buf, "\n")] = 0;
+    return 0;
 }
 
 static int ask_choice(const char *prompt, int min, int max)
 {
     char line[INPUT_SMALL_BUF];
     int  v;
-    for (;;)
+    for(;;)
     {
-        read_line(prompt, line, sizeof line);
+        if(read_line(prompt, line, sizeof line) < 0) {
+            return -1;
+        };
         v = atoi(line);
         if (v >= min && v <= max) return v;
         printf("Value %d‑%d\n", min, max);
     }
+    return -1;
 }
 
 static int check_len(const char *label, const char *s, size_t max)
@@ -101,14 +110,14 @@ static int send_raw(mgmt_client_t *c, uint8_t cmd, const uint8_t *pl, uint8_t le
            HEADER_LEN + len ? 0 : -1;
 }
 
-static int recv_raw(mgmt_client_t *c, uint8_t *st, uint8_t *pl, uint8_t *len)
+static int recv_raw(mgmt_client_t *c, uint8_t *st, uint8_t *len)
 {
     uint8_t hdr[HEADER_LEN];
     if (read(c->socket_fd, hdr, HEADER_LEN) != HEADER_LEN) return -1;
     if (hdr[0] != MANAGEMENT_VERSION) return -1;
     *st  = hdr[1];
     *len = hdr[2];
-    if (*len && read(c->socket_fd, pl, *len) != *len) return -1;
+    if (*len && read(c->socket_fd, read_buffer, *len) != *len) return -1;
     return 0;
 }
 /* -------------------------------------------------------------------------- */
@@ -152,8 +161,12 @@ static int auth_server(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
     char p[INPUT_LINE_BUF];
-    read_line("Username: ", u, sizeof u);
-    read_line("Password: ", p, sizeof p);
+    if(read_line("Username: ", u, sizeof u) < 0){
+        return -1;
+    };
+    if(read_line("Password: ", p, sizeof p)<0){
+        return -1;
+    };
     if (check_len("Username", u, MAX_USERNAME_LEN) ||
         check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
 
@@ -166,8 +179,7 @@ static int auth_server(mgmt_client_t *c)
     }
     uint8_t st;
     uint8_t len;
-    uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0)
+    if (recv_raw(c, &st, &len) < 0)
     {
         perror("recv()failed—no response from management server");
         return -1;
@@ -182,15 +194,14 @@ static int h_stats(mgmt_client_t *c)
 {
     uint8_t st;
     uint8_t len;
-    uint8_t pl[STATS_PAYLOAD_BYTES];
     if (send_raw(c, CMD_STATS, NULL, 0) < 0) return -1;
-    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (recv_raw(c, &st, &len) < 0) return -1;
     if (st != STATUS_OK || len != STATS_PAYLOAD_BYTES)
     {
         puts(status_to_str(st));
         return -1;
     }
-    uint32_t *v = (uint32_t *)pl;
+    uint32_t *v = (uint32_t *)read_buffer;
     printf("Opened : %u\n", ntohl(v[0]));
     printf("Closed : %u\n", ntohl(v[1]));
     printf("Current: %u\n", ntohl(v[2]));
@@ -203,16 +214,15 @@ static int h_list(mgmt_client_t *c)
 {
     uint8_t st;
     uint8_t len;
-    uint8_t pl[FULL_PAYLOAD_BUF];
     if (send_raw(c, CMD_LIST_USERS, NULL, 0) < 0) return -1;
-    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (recv_raw(c, &st, &len) < 0) return -1;
     if (st != STATUS_OK)
     {
         puts(status_to_str(st));
         return -1;
     }
-    uint8_t n = pl[0];
-    char   *p = (char *)(pl + 1);
+    uint8_t n = read_buffer[0];
+    char   *p = (char *)(read_buffer + 1);
     printf("Users (%u):\n", n);
     for (uint8_t i = 0; i < n; i++)
     {
@@ -226,8 +236,12 @@ static int h_add(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
     char p[INPUT_LINE_BUF];
-    read_line("New user: ", u, sizeof u);
-    read_line("New pass: ", p, sizeof p);
+    if(read_line("New user: ", u, sizeof u)<0){
+        return -1;
+    };
+    if(read_line("New pass: ", p, sizeof p)<0){
+        return -1;
+    };
     if (check_len("Username", u, MAX_USERNAME_LEN) ||
         check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
 
@@ -240,8 +254,7 @@ static int h_add(mgmt_client_t *c)
     }
     uint8_t st;
     uint8_t len;
-    uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+    if (recv_raw(c, &st , &len) < 0) return -1;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -249,13 +262,15 @@ static int h_add(mgmt_client_t *c)
 static int h_del(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
-    read_line("User delete: ", u, sizeof u);
+    if(read_line("User delete: ", u, sizeof u)<0){
+        return -1;
+    };
     if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
     if (send_raw(c, CMD_DELETE_USER, (uint8_t *)u, (uint8_t)strlen(u)) < 0) return -1;
     uint8_t st;
     uint8_t len;
-    uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+
+    if (recv_raw(c, &st, &len) < 0) return -1;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -264,18 +279,21 @@ static int h_chpwd(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
     char p[INPUT_LINE_BUF];
-    read_line("User: ", u, sizeof u);
-    read_line("New pass: ", p, sizeof p);
+    if(read_line("User: ", u, sizeof u)<0){
+        return -1;
+    };
+    if(read_line("New pass: ", p, sizeof p)<0){
+        return -1;
+    };
     if (check_len("Username", u, MAX_USERNAME_LEN) ||
         check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
 
-    char pl[CREDENTIALS_BUF];
-    snprintf(pl, sizeof pl, "%s:%s", u, p);
+    char * pl = (char *)read_buffer;
+    snprintf(pl, sizeof(read_buffer), "%s:%s", u, p);
     if (send_raw(c, CMD_CHANGE_PASSWORD, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0) return -1;
     uint8_t st;
     uint8_t len;
-    uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+    if (recv_raw(c, &st, &len) < 0) return -1;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -284,15 +302,14 @@ static int h_bufinfo(mgmt_client_t *c)
 {
     uint8_t st;
     uint8_t len;
-    uint8_t pl[sizeof(uint32_t)];
     if (send_raw(c, CMD_GET_BUFFER_INFO, NULL, 0) < 0) return -1;
-    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (recv_raw(c, &st, &len) < 0) return -1;
     if (st != STATUS_OK || len != sizeof(uint32_t))
     {
         puts(status_to_str(st));
         return -1;
     }
-    printf("Current buffer size: %u bytes\n", ntohl(*(uint32_t *)pl));
+    printf("Current buffer size: %u bytes\n", ntohl(*(uint32_t *)read_buffer));
     return 0;
 }
 
@@ -304,12 +321,14 @@ static int h_setbuf(mgmt_client_t *c)
         printf(" %zu) %u\n", i + 1, BUF_SIZE_OPTIONS[i]);
     }
     int idx = ask_choice("Choice: ", 1, BUF_OPTIONS_COUNT);
+    if(idx<0){
+        return -1;
+    }
     uint32_t net = htonl(BUF_SIZE_OPTIONS[idx - 1]);
     if (send_raw(c, CMD_SET_BUFFER_SIZE, (uint8_t *)&net, sizeof net) < 0) return -1;
     uint8_t st;
     uint8_t len;
-    uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+    if (recv_raw(c, &st,  &len) < 0) return -1;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -318,12 +337,14 @@ static int h_setauth(mgmt_client_t *c)
 {
     puts("1) NOAUTH\n2) AUTH");
     int opt = ask_choice("Choice: ", 1, 2);
+    if(opt<0){
+        return -1;
+    }
     const char *m = opt == 1 ? "NOAUTH" : "AUTH";
     if (send_raw(c, CMD_SET_AUTH_METHOD, (uint8_t *)m, (uint8_t)strlen(m)) < 0) return -1;
     uint8_t st;
     uint8_t len;
-    uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+    if (recv_raw(c, &st, &len) < 0) return -1;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -332,35 +353,35 @@ static int h_getauth(mgmt_client_t *c)
 {
     uint8_t st;
     uint8_t len;
-    uint8_t pl[1];
     if (send_raw(c, CMD_GET_AUTH_METHOD, NULL, 0) < 0) return -1;
-    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (recv_raw(c, &st,  &len) < 0) return -1;
     if (st != STATUS_OK || len != 1)
     {
         puts(status_to_str(st));
         return -1;
     }
-    puts(pl[0] ? "AUTH" : "NOAUTH");
+    puts(read_buffer[0] ? "AUTH" : "NOAUTH");
     return 0;
 }
 
 static int h_logs(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
-    read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u);
+    if(read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u) < 0){
+        return -1;
+    };
     if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
     if (send_raw(c, CMD_GET_LOG_BY_USER, (uint8_t *)u, (uint8_t)strlen(u)) < 0) return -1;
     uint8_t st;
     uint8_t len;
-    char resp[FULL_PAYLOAD_BUF];
-    if (recv_raw(c, &st, (uint8_t *)resp, &len) < 0) return -1;
+    if (recv_raw(c, &st,  &len) < 0) return -1;
     if (st != STATUS_OK)
     {
         puts(status_to_str(st));
         return -1;
     }
-    resp[len] = '\0';
-    printf("\n%s\n", resp);
+    read_buffer[len] = '\0';
+    printf("\n%s\n", read_buffer);
     return 0;
 }
 /* -------------------------------------------------------------------------- */
@@ -404,7 +425,9 @@ static void menu_loop(mgmt_client_t *c)
     while (!c->authenticated)
     {
         puts("1) Connect & Authenticate\n2) Exit");
-        if (ask_choice("Choice: ", 1, 2) == 2) return;
+        int ask = ask_choice("Choice: ", 1, 2);
+        if (ask == 2 || ask < 0) return;
+
         if (connect_server(c) == 0) auth_server(c);
     }
     while (1)
@@ -412,11 +435,12 @@ static void menu_loop(mgmt_client_t *c)
         puts("\n=== Management Client ===");
         draw_menu();
         int ch = ask_choice("Choice: ", 1, MENU_COUNT);
-        if (!MENU[ch - 1].f)
+        if(ch< 0 ){
+            continue;
+        }
+        if ( !MENU[ch - 1].f)
         {
-            disconnect(c);
-            puts("Disconnected.");
-            break;
+            return;
         }
         MENU[ch - 1].f(c);
     }
