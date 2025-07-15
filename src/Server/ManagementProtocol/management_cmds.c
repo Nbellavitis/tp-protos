@@ -175,22 +175,6 @@ static void cmd_set_buffer_size(ManagementData *md)
     send_status_only(md, STATUS_ERROR);
 }
 
-//static void cmd_get_buffer_info(ManagementData *md)
-//{
-//    uint8_t pl[1 + 4 + 4 * BUFFER_SIZE_CNT];
-//    uint32_t cur = htonl((uint32_t)get_current_buffer_size());
-//
-//    memcpy(pl, &cur, 4);
-//    pl[4] = BUFFER_SIZE_CNT;
-//
-//    for (uint8_t i = 0; i < BUFFER_SIZE_CNT; i++)
-//        *(uint32_t *)(pl + 5 + i * 4) = htonl(buffer_sizes[i]);
-//
-//    send_management_response_raw(&md->response_buffer,
-//                                 STATUS_OK,
-//                                 pl,
-//                                 5 + 4 * BUFFER_SIZE_CNT);
-//}
 
 static void cmd_get_buffer_info(ManagementData *md)
 {
