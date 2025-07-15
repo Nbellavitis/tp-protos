@@ -75,21 +75,19 @@ request_parse resolver_parse(resolver_parser *p, struct buffer *buffer) {
                     case ATYP_DOMAIN:
                         if (p->bytes_read == 0) {
                             p->domain_length = byte;
-                            // Validar que domain_length no sea cero
-                            if (p->domain_length == 0) {
+                            // Si el cliente pide un dominio de longitud 0 o más grande que nuestro buffer,
+                            // es un error de protocolo inmediato.
+                            if (p->domain_length == 0 || p->domain_length >= MAX_DOMAIN_LEN) {
                                 p->error = true;
                                 return REQUEST_PARSE_ERROR;
                             }
-                            p->bytes_read = DOMAIN_LENGTH_OFFSET;  // Lee un byte que va a ser la longitud del dominio
+                            p->bytes_read = DOMAIN_LENGTH_OFFSET;
                         } else {
-                            // Verificar bounds antes de escribir
-                            if (p->bytes_read - DOMAIN_LENGTH_OFFSET >= MAX_DOMAIN_LEN) {
-                                p->error = true;
-                                return REQUEST_PARSE_ERROR;
-                            }
                             p->domain[p->bytes_read - DOMAIN_LENGTH_OFFSET] = byte;
                             p->bytes_read++;
-                            if (p->bytes_read > p->domain_length) {
+
+
+                            if ((p->bytes_read - DOMAIN_LENGTH_OFFSET) == p->domain_length) {
                                 p->state = RESOLVER_STATE_PORT;
                                 p->bytes_read = 0;
                             }

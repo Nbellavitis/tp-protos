@@ -364,9 +364,9 @@ static int h_getauth(mgmt_client_t *c)
 static int h_logs(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
-    if(read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u) < 0){
+    if(read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u) < 0) {
         return -1;
-    };
+    }
     if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
 
     uint32_t offset = 0;
@@ -391,8 +391,11 @@ static int h_logs(mgmt_client_t *c)
         /* 2. Recibir la respuesta del chunk */
         uint8_t st;
         uint8_t len;
-        uint8_t resp[FULL_PAYLOAD_BUF]; // Usamos un buffer de uint8_t
-        if (recv_raw(c, resp, &len) < 0) return -1;
+        // LLAMADA CORREGIDA A recv_raw:
+        if (recv_raw(c, &st, &len) < 0) { // Se debe pasar &st y &len. read_buffer es global.
+            perror("recv_raw failed");
+            return -1;
+        }
 
         if (st != STATUS_OK) {
             puts(status_to_str(st));
@@ -406,12 +409,12 @@ static int h_logs(mgmt_client_t *c)
 
         /* 3. Extraer el 'next_offset' y los datos del log */
         uint32_t next_offset_net;
-        memcpy(&next_offset_net, resp, sizeof(uint32_t));
+        memcpy(&next_offset_net, read_buffer, sizeof(uint32_t)); // Leer del buffer global
         offset = ntohl(next_offset_net);
 
         // Imprimir el contenido del log (el resto del payload)
         if (len > sizeof(uint32_t)) {
-            fwrite(resp + sizeof(uint32_t), 1, len - sizeof(uint32_t), stdout);
+            fwrite(read_buffer + sizeof(uint32_t), 1, len - sizeof(uint32_t), stdout);
         }
 
         /* 4. Decidir si se necesita pedir otro chunk */
