@@ -40,8 +40,6 @@ static void cleanup_management_connection(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
 
     if (mgmt_data != NULL && !mgmt_data->closed) {
-        LOG_INFO("Cleaning up resources for management connection: %d", mgmt_data->client_fd);
-
         if (mgmt_data->client_fd >= 0) {
             close(mgmt_data->client_fd);
         }
