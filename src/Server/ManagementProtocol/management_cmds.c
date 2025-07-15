@@ -1,6 +1,3 @@
-//
-// Created by lulos on 7/14/2025.
-//
 
 #include "management_cmds.h"
 
@@ -228,7 +225,6 @@ static void cmd_get_log_by_user(ManagementData *md)
     uint32_t offset = 0;
     size_t ulen = 0;
 
-    // El payload ahora es: [username]\0[4-byte offset]
 
     char *nul_char = memchr(md->parser.payload, '\0', md->parser.payload_len);
     if (nul_char == NULL || (nul_char - md->parser.payload + 1 + sizeof(uint32_t)) > md->parser.payload_len) {
@@ -269,7 +265,6 @@ static void cmd_get_log_by_user(ManagementData *md)
 
 
     uint8_t payload[MAX_MGMT_PAYLOAD_LEN];
-    // Reservamos los primeros 4 bytes para el 'next_offset'
     size_t plen = sizeof(uint32_t);
 
     char ts[TIMESTAMP_BUFFER_SIZE];
@@ -289,7 +284,6 @@ static void cmd_get_log_by_user(ManagementData *md)
 
         if (n < 0) continue;
         if ((size_t)n >= room) {
-            // No cabe la línea completa, terminamos este chunk aquí
             break;
         }
         plen += (size_t)n;

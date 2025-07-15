@@ -360,11 +360,10 @@ static int h_logs(mgmt_client_t *c)
     printf("\n--- Logs for %s ---\n", u);
 
     while (has_more_data) {
-        /* 1. Armar payload de la solicitud: [username]\0[offset] */
         uint8_t req_pl[MAX_USERNAME_LEN + 1 + sizeof(uint32_t)];
         size_t ulen = strlen(u);
         memcpy(req_pl, u, ulen);
-        req_pl[ulen] = '\0'; // Añadir el NUL terminator
+        req_pl[ulen] = '\0';
 
         uint32_t net_offset = htonl(offset);
         memcpy(req_pl + ulen + 1, &net_offset, sizeof(uint32_t));
@@ -373,11 +372,9 @@ static int h_logs(mgmt_client_t *c)
 
         if (send_raw(c, CMD_GET_LOG_BY_USER, req_pl, req_len) < 0) return -1;
 
-        /* 2. Recibir la respuesta del chunk */
         uint8_t st;
         uint8_t len;
-        // LLAMADA CORREGIDA A recv_raw:
-        if (recv_raw(c, &st, &len) < 0) { // Se debe pasar &st y &len. read_buffer es global.
+        if (recv_raw(c, &st, &len) < 0) {
             perror("recv_raw failed");
             return -1;
         }
@@ -392,24 +389,20 @@ static int h_logs(mgmt_client_t *c)
             return -1;
         }
 
-        /* 3. Extraer el 'next_offset' y los datos del log */
         uint32_t next_offset_net;
-        memcpy(&next_offset_net, read_buffer, sizeof(uint32_t)); // Leer del buffer global
+        memcpy(&next_offset_net, read_buffer, sizeof(uint32_t));
         offset = ntohl(next_offset_net);
 
-        // Imprimir el contenido del log (el resto del payload)
         if (len > sizeof(uint32_t)) {
             fwrite(read_buffer + sizeof(uint32_t), 1, len - sizeof(uint32_t), stdout);
         }
 
-        /* 4. Decidir si se necesita pedir otro chunk */
         has_more_data = (offset != 0);
     }
 
     printf("--- End of logs ---\n");
     return 0;
 }
-/* -------------------------------------------------------------------------- */
 typedef int (*fn)(mgmt_client_t *);
 typedef struct { const char *txt; fn f; } item;
 
@@ -448,16 +441,14 @@ static void draw_menu(void)
 /* -------------------------------------------------------------------------- */
 static void menu_loop(mgmt_client_t *c)
 {
-    // El bucle ahora comprueba la bandera en cada iteración
     while (!interrupted)
     {
-        while (!c->authenticated && !interrupted) // También aquí
+        while (!c->authenticated && !interrupted)
         {
             puts("1) Connect & Authenticate\n2) Exit");
             int ask = ask_choice("Choice: ", 1, 2);
             if (ask == 2 || ask < 0 || interrupted) {
-                // Si se interrumpió o el usuario eligió salir, terminamos
-                interrupted = 1; // Aseguramos la salida del bucle exterior
+                interrupted = 1;
                 break;
             }
 
@@ -466,18 +457,17 @@ static void menu_loop(mgmt_client_t *c)
             }
         }
 
-        if (interrupted) break; // Salir si se interrumpió durante la autenticación
+        if (interrupted) break;
 
         puts("\n=== Management Client ===");
         draw_menu();
         int ch = ask_choice("Choice: ", 1, MENU_COUNT);
         if (ch < 0 || interrupted) {
-            // Si read_line falló (ej. por Ctrl+D) o se interrumpió
             break;
         }
 
         fn handler = MENU_FUNCS[ch - 1];
-        if (!handler) { // Opción "Disconnect"
+        if (!handler) {
             disconnect(c);
             continue;
         }
@@ -490,7 +480,6 @@ static void menu_loop(mgmt_client_t *c)
 }
 
 
-/* -------------------------------------------------------------------------- */
 int main(int argc, char *argv[])
 {
     struct sigaction sa;

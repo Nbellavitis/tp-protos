@@ -13,10 +13,8 @@
 #include <errno.h>
 #include "../../logger.h"
 
-// Declaraciones externas
 unsigned start_connection(struct selector_key * key);
 unsigned preset_request_response(struct selector_key * key,int errorStatus);
-// Funciones para registrar sockets en el selector
 void dns_resolution_done(union sigval sv);
 static unsigned handle_request_error(int error, struct selector_key *key);
 
@@ -66,7 +64,6 @@ static struct sockaddr_in6 *create_sockaddr_ipv6(const resolver_parser *parser) 
     return addr;
 }
 
-// Función auxiliar para crear addrinfo para IPs directas
 static bool create_direct_addrinfo(client_data *data, const resolver_parser *parser) {
     cleanup_previous_resolution(data);
 
@@ -104,7 +101,6 @@ static bool create_direct_addrinfo(client_data *data, const resolver_parser *par
 }
 
 
-// Funciones para la máquina de estados
 void request_read_init(const unsigned state, struct selector_key *key) {
     client_data *data = (client_data *)key->data;
     init_resolver_parser(&data->client.req_parser);
@@ -113,7 +109,6 @@ void request_read_init(const unsigned state, struct selector_key *key) {
     }
 }
 
-// Función auxiliar para capturar información para el logging
 static void capture_target_info(client_data *data) {
     resolver_parser *parser = &data->client.req_parser;
     data->target_port = parser->port;
@@ -143,12 +138,11 @@ unsigned request_read(struct selector_key *key) {
     client_data *data = (client_data *)key->data;
     resolver_parser *parser = &data->client.req_parser;
 
-    // Leer del socket al buffer
     size_t writeLimit;
     uint8_t *b = buffer_write_ptr(&data->client_buffer, &writeLimit);
     const ssize_t readCount = recv(key->fd, b, writeLimit, 0);
     if (readCount <= 0) {
-        return ERROR; // error o desconexión
+        return ERROR;
     }
     buffer_write_adv(&data->client_buffer, readCount);
 
@@ -169,7 +163,6 @@ unsigned request_read(struct selector_key *key) {
         return ERROR;
     }
 
-    // Capturar información para logging de acceso
     capture_target_info(data);
 
 
@@ -183,7 +176,6 @@ unsigned request_read(struct selector_key *key) {
         return ADDR_RESOLVE;
     }
 
-    // Para IPv4/IPv6 directas, saltear ADDR_RESOLVE
     if (!create_direct_addrinfo(data, parser)) {
         LOG_ERROR("%s" ,"REQ_READ: Failed to create addrinfo for direct IP");
         data->socks_status = GENERAL_FAILURE;
@@ -231,11 +223,9 @@ void address_resolve_init(const unsigned state, struct selector_key *key) {
     client_data *data = (client_data *)key->data;
     resolver_parser *parser = &data->client.req_parser;
 
-    // Limpiar resolución previa si existe
     cleanup_previous_resolution(data);
 
 
-    // Configurar estructura DNS
     struct dns_request *dns_req = &data->dns_req;
     snprintf(dns_req->port, sizeof(dns_req->port), "%u", (parser->port));
     memset(&dns_req->hints, 0, sizeof(dns_req->hints));
@@ -267,7 +257,6 @@ void address_resolve_init(const unsigned state, struct selector_key *key) {
         return;
     }
 
-    // Desactivar eventos hasta que termine la resolución DNS
     data->dns_resolution_state = DNS_STATE_IN_PROGRESS;
     if(selector_set_interest(key->s, key->fd, OP_NOOP) != SELECTOR_SUCCESS) {
         LOG_ERROR("%s" ,"ADDR_RESOLVE_INIT: Error disabling events");
@@ -282,7 +271,6 @@ unsigned address_resolve_write(struct selector_key *key) {
 
 
 unsigned address_resolve_done(struct selector_key *key, void *data) {
-    // Si estamos acá es con un ATYP_DOMAIN.
     client_data *c_data = (client_data *)key->data;
     dns_result *dns_result_data = (dns_result *)data;
 
@@ -315,7 +303,6 @@ unsigned request_connecting(struct selector_key *key) {
     }
 
     if (so_error != 0) {
-        // Falló la conexión, intentamos con la siguiente dirección.
         data->unregistering_origin = true;
         selector_unregister_fd(key->s, data->origin_fd);
         data->unregistering_origin = false;
@@ -382,7 +369,6 @@ unsigned start_connection(struct selector_key * key) {
     const int connect_result = connect(data->origin_fd, ai->ai_addr, ai->ai_addrlen);
 
     if (connect_result == 0) {
-        // Conexión inmediata (muuy extraño)
         if (selector_register(key->s, data->origin_fd, get_socksv5_handler(), OP_WRITE, data)) {
             LOG_ERROR("%s" , "CONNECTING_INIT: Error registering origin socket (immediate)");
             close(data->origin_fd);
@@ -403,7 +389,6 @@ unsigned start_connection(struct selector_key * key) {
         return CONNECTING;
     }
 
-//    LOG_ERROR("CONNECTING_INIT: Error connecting: %s", strerror(errno));
     data->unregistering_origin = true;
     selector_unregister_fd(key->s, data->origin_fd);
     data->unregistering_origin = false;
@@ -449,7 +434,6 @@ unsigned preset_request_response(struct selector_key *key, int errorStatus) {
     client_data *data = (client_data *)key->data;
     data->socks_status = errorStatus;
 
-    // valores fallback
     uint8_t  atyp = ATYP_IPV4;
     uint16_t port = 0;
     uint8_t  addr[IPV6_ADDR_SIZE] = {0};

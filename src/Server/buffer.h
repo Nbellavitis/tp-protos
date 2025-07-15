@@ -2,8 +2,8 @@
 #define BUFFER_H_VelRDAxzvnuFmwEaR0ftrkIinkT
 
 #include <stdbool.h>
-#include <unistd.h>  // size_t, ssize_t
-#include <stdint.h> // uint8_t
+#include <unistd.h>
+#include <stdint.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include "../logger.h"

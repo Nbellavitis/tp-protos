@@ -11,12 +11,10 @@
 #define ADMIN_PASSWORD_ENV_VAR "ADMIN_PASSWORD"
 
 
-// Management protocol constants
 #define MAX_USERNAME_LEN        10
 #define MAX_PASSWORD_LEN        63
 #define MAX_MGMT_PAYLOAD_LEN    255
 
-// Management response buffer sizes
 
 #define MGMT_PAYLOAD_SIZE               256
 
@@ -27,7 +25,6 @@
 #define MANAGEMENT_VERSION 0x01
 #define MANAGEMENT_BUFFER_SIZE 4096
 
-// Comandos del protocolo
 #define CMD_AUTH 0x01
 #define CMD_STATS 0x02
 #define CMD_LIST_USERS 0x03
@@ -40,7 +37,6 @@
 #define CMD_GET_AUTH_METHOD 0x0A
 #define CMD_GET_LOG_BY_USER 0x0B
 
-// Status codes
 #define STATUS_OK 0x00
 #define STATUS_ERROR 0x01
 #define STATUS_AUTH_REQUIRED 0x02

@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-// Niveles de log
 #define LOG_LEVEL_ERROR 0
 #define LOG_LEVEL_WARN  1
 #define LOG_LEVEL_INFO  2
@@ -19,7 +18,6 @@
 #define LOG_LEVEL LOG_LEVEL_INFO
 #endif
 
-// Función auxiliar inline para evitar problemas con variádicas
 static inline void _log_print(FILE *stream, const char *tag, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
@@ -29,7 +27,6 @@ static inline void _log_print(FILE *stream, const char *tag, const char *fmt, ..
     va_end(args);
 }
 
-// Macros por nivel de log
 #if LOG_LEVEL >= LOG_LEVEL_ERROR
 #  define LOG_ERROR(...) _log_print(stderr, "ERROR", __VA_ARGS__)
 #else
@@ -54,4 +51,4 @@ static inline void _log_print(FILE *stream, const char *tag, const char *fmt, ..
 #  define LOG_DEBUG(...) ((void)0)
 #endif
 
-#endif // LOGGER_H
+#endif

@@ -9,9 +9,9 @@
 #define AUTH_PASS_SIZE          256
 
 typedef enum {
-    AUTH_PARSE_INCOMPLETE,  // faltan bytes, seguí esperando
-    AUTH_PARSE_OK,          // parseo exitoso
-    AUTH_PARSE_ERROR        // error de protocolo (versión inválida, datos inconsistentes)
+    AUTH_PARSE_INCOMPLETE,
+    AUTH_PARSE_OK,
+    AUTH_PARSE_ERROR
 } auth_parse_result;
 typedef struct auth_parser {
     uint8_t version;

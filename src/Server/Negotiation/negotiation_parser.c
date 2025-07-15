@@ -54,7 +54,7 @@ negotiation_parse_result negotiation_parse(negotiation_parser *p, struct buffer 
 void init_negotiation_parser(negotiation_parser *parser){
     parser->version = 0;
     parser->nmethods = 0;
-    parser->method_chosen = auth_method; //default pass y user
+    parser->method_chosen = auth_method;
     parser->i = 0;
 }
 
@@ -64,7 +64,7 @@ bool send_negotiation_response(struct buffer *originBuffer, uint8_t method) {
     }
     buffer_write(originBuffer, SOCKS5_VERSION);
     buffer_write(originBuffer, method);
-    stats_add_origin_bytes(2); // 1 byte SOCKS5_VERSION + 1 byte method
+    stats_add_origin_bytes(2);
 
     return true;
 }

@@ -24,7 +24,6 @@ void stats_add_origin_bytes(unsigned n) {
     g_stats.bytes_o2c += n;
 }
 
-// Getters para las estadísticas
 unsigned stats_get_connections_opened(void) {
     return g_stats.hist_conn;
 }

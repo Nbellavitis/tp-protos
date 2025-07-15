@@ -15,15 +15,12 @@
 #include "Statistics/statistics.h"
 #include "../logger.h"
 
-// Declaración de función externa
 extern size_t get_current_buffer_size(void);
 extern bool killed;
 static void socksv5_read(struct selector_key *key);
 static void socksv5_write(struct selector_key *key);
 static void socksv5_close(struct selector_key *key);
 static void socksv5_block(struct selector_key *key, void *data);
-static void close_arrival(const unsigned state, struct selector_key *key);
-static void error_arrival(const unsigned state, struct selector_key *key);
 static void socksv5_timeout(struct selector_key *key);
 static fd_handler  handler = {
      .handle_read = socksv5_read,
@@ -40,8 +37,8 @@ static const struct state_definition client_actions[] = {
     {.state = AUTHENTICATION_WRITE, .on_arrival = authentication_write_init, .on_write_ready = authentication_write},
     {.state = AUTHENTICATION_FAILURE_WRITE, .on_arrival = authentication_write_init, .on_write_ready = authentication_failure_write},
     {.state = REQ_READ,.on_arrival = request_read_init,.on_read_ready = request_read},
-    {.state = ADDR_RESOLVE, .on_arrival = address_resolve_init, .on_write_ready = address_resolve_write, .on_block_ready = address_resolve_done}, //todo cambiar nombre!?
-    {.state = CONNECTING, .on_arrival = NULL, .on_write_ready = request_connecting},
+    {.state = ADDR_RESOLVE, .on_arrival = address_resolve_init, .on_write_ready = address_resolve_write, .on_block_ready = address_resolve_done},
+    {.state = CONNECTING,  .on_write_ready = request_connecting},
     {.state = REQ_WRITE, .on_arrival = request_write_init, .on_write_ready = request_write},
     {.state = COPYING,   .on_arrival = socksv5_handle_init,.on_read_ready = socksv5_handle_read,.on_write_ready = socksv5_handle_write,.on_departure = socksv5_handle_close},
     {.state = CLOSED, },
@@ -80,7 +77,6 @@ void socksv5_passive_accept(struct selector_key* key){
     client_data->dns_resolution_state = 0;
     client_data->unregistering_origin = false;
     client_data->auth_failed = false;
-    // Inicializar campos de logging
     client_data->user = NULL;
     memset(client_data->client_ip, 0, sizeof(client_data->client_ip));
     memset(client_data->target_host, 0, sizeof(client_data->target_host));
@@ -88,7 +84,6 @@ void socksv5_passive_accept(struct selector_key* key){
     client_data->target_port = 0;
     client_data->socks_status = 0;
     client_data->last_activity = time(NULL);
-    // Extraer IP y puerto del cliente
     if (client_address.ss_family == AF_INET) {
         struct sockaddr_in *addr_in = (struct sockaddr_in *)&client_address;
         inet_ntop(AF_INET, &addr_in->sin_addr, client_data->client_ip, INET6_ADDRSTRLEN);
@@ -98,7 +93,6 @@ void socksv5_passive_accept(struct selector_key* key){
         inet_ntop(AF_INET6, &addr_in6->sin6_addr, client_data->client_ip, INET6_ADDRSTRLEN);
         client_data->client_port = ntohs(addr_in6->sin6_port);
     }
-    // Asignar buffers dinámicos con el tamaño actual
     client_data->buffer_size = get_current_buffer_size();
     client_data->in_client_buffer = malloc(client_data->buffer_size);
     client_data->in_origin_buffer = malloc(client_data->buffer_size);
@@ -194,7 +188,7 @@ static void socksv5_block(struct selector_key *key, void *data) {
 void close_connection(struct selector_key *key) {
     client_data *data = (client_data *)key->data;
     if (data->closed) {
-        return; // ya fue cerrado
+        return;
     }
     stats_connection_closed();
     data->closed = true;
@@ -221,18 +215,14 @@ void close_connection(struct selector_key *key) {
     }
 
     if (data->dns_resolution_state == 1) {
-        // Cancelar resolución pendiente
         struct gaicb *reqs[] = { &data->dns_req.req };
         gai_cancel(reqs[0]);
     }
 
-    // Cleanup DNS resolution memory
     if (data->origin_resolution != NULL) {
         if (data->resolution_from_getaddrinfo) {
-            // Memoria de getaddrinfo_a() - usar freeaddrinfo
             freeaddrinfo(data->origin_resolution);
         } else {
-            // Memoria manual - liberar ai_addr y estructura por separado
             if (data->origin_resolution->ai_addr != NULL) {
                 free(data->origin_resolution->ai_addr);
             }
@@ -245,7 +235,6 @@ void close_connection(struct selector_key *key) {
         log_access_record(data);
     }
 
-    // Liberar buffers dinámicos
     if (data->in_client_buffer != NULL) {
         free(data->in_client_buffer);
     }
@@ -263,8 +252,7 @@ void close_connection(struct selector_key *key) {
 void log_store_for_user(const client_data *cd)
 {
     if (!cd) return;
-    if (killed) return; // Evitamos use-after-free
-
+    if (killed) return;
     user_t *u = cd->user ? cd->user : get_anon_user();
     if (!u) return;
 
@@ -285,7 +273,6 @@ void log_store_for_user(const client_data *cd)
     strncpy(rec->client_ip, cd->client_ip, INET6_ADDRSTRLEN - 1);
     rec->client_ip[INET6_ADDRSTRLEN - 1] = '\0';
 
-    // 2. Copiar el puerto del cliente
     rec->client_port = (uint16_t)cd->client_port;
 
     strncpy(rec->dst_host, cd->target_host, MAX_LOG_HOSTNAME_LEN - 1);
@@ -300,16 +287,13 @@ void log_store_for_user(const client_data *cd)
 void log_access_record(client_data *client_data) {
     if (!client_data) return;
     
-    // Evitamos use-after-free
     if (killed) return;
     
-    // Fecha en formato ISO-8601
     time_t now = time(NULL);
     struct tm *utc_tm = gmtime(&now);
     char timestamp[TIMESTAMP_BUFFER_SIZE];
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
     
-    // REGISTRO DE ACCESO: fecha\tusuario\tA\tip_origen\tpuerto_origen\tdestino\tpuerto_destino\tstatus
     if (client_data->auth_failed) {
         LOG_INFO("%-25s  %-12s  %-2s  %-17s  %-6d  %-25s  %-6d  %-12s",
                  timestamp,
@@ -336,30 +320,9 @@ void log_access_record(client_data *client_data) {
 
 }
 
-void log_password_record(const char *username, const char *protocol, 
-                        const char *target_host, int target_port, 
-                        const char *discovered_user, const char *discovered_pass) {
-    // Fecha en formato ISO-8601
-    time_t now = time(NULL);
-    struct tm *utc_tm = gmtime(&now);
-    char timestamp[TIMESTAMP_BUFFER_SIZE];
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc_tm);
-    
-    // REGISTRO DE PASSWORDS: fecha\tusuario\tP\tprotocolo\tdestino\tpuerto_destino\tusuario_desc\tpass_desc
-    LOG_INFO("%s\t%s\tP\t%s\t%s\t%d\t%s\t%s",
-           timestamp,
-           username ? username : "anonymous",
-           protocol,
-           target_host,
-           target_port,
-           discovered_user,
-           discovered_pass);
-}
-
 fd_handler * get_socksv5_handler(void) {
     return &handler;
 }
-
 
 
 static void socksv5_timeout(struct selector_key *key) {

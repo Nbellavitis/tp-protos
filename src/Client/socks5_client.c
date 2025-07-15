@@ -103,7 +103,6 @@ int socks5_negotiate(socks5_client_t *client, int offer_auth) {
         return -1;
     }
 
-    // Recibir respuesta del servidor
     ssize_t received = recv(client->socket_fd, response, SOCKS5_NEGOTIATION_RESPONSE_SIZE, 0);
     if (received != SOCKS5_NEGOTIATION_RESPONSE_SIZE) {
         printf("[SOCKS5] Error receiving negotiation response, got %ld bytes\n", received);
@@ -140,7 +139,6 @@ int socks5_negotiate(socks5_client_t *client, int offer_auth) {
     }
 }
 
-// Autenticación username/password
 int socks5_authenticate(socks5_client_t *client) {
     uint8_t request[AUTH_REQUEST_BUFFER_SIZE];
     uint8_t response[SOCKS5_AUTH_RESPONSE_SIZE];
@@ -193,7 +191,6 @@ int socks5_connect_target(socks5_client_t *client, const char *target_host, int 
     request[pos++] = SOCKS5_CMD_CONNECT;
     request[pos++] = SOCKS5_RESERVED;
     
-    // Determinar tipo de dirección
     struct in_addr addr;
     struct in6_addr addr6;
     if (inet_pton(AF_INET, target_host, &addr) == 1) {
@@ -338,7 +335,7 @@ void interactive_menu(socks5_client_t *client) {
                         client->password[strcspn(client->password, "\n")] = 0;
                     }
                     if (socks5_connect_proxy(client) == 0) {
-                        int method = socks5_negotiate(client, 1); // Ofrecer autenticación
+                        int method = socks5_negotiate(client, 1);
                         if (method == USERPASS) {
                             client->authenticated = 1;
                             printf("Authentication successful!\n");
@@ -424,8 +421,6 @@ int main(int argc, char *argv[]) {
 
 
 
-//    strcpy(client.proxy_host, DEFAULT_SOCKS5_HOST);
-//    client.proxy_port = DEFAULT_SOCKS5_PORT;
 
     prompt_server_config(client.proxy_host, sizeof(client.proxy_host),  &client.proxy_port, false);
 

@@ -3,11 +3,9 @@
 #include <signal.h>
 #include <netdb.h>
 
-// Global configuration strings
 char *mgmnt_server_ip = "Management server IP [" DEFAULT_MGMT_HOST "]: ";
 char *socks_server_ip = "Socks5 server IP [" DEFAULT_SOCKS5_HOST "]: ";
 
-// Buffer size constants
 #define BUFF_SIZE 256
 #define INPUT_SMALL_BUF 32
 
@@ -66,10 +64,9 @@ int connect_server(const char *server_host, int server_port, int *socket_fd) {
         setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
         if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) {
-            break; // Success
+            break;
         }
 
-        // Detailed error reporting
         char addr_str[INET6_ADDRSTRLEN];
         const char *result = NULL;
         if (rp->ai_family == AF_INET) {
@@ -97,7 +94,6 @@ int connect_server(const char *server_host, int server_port, int *socket_fd) {
         return -1;
     }
 
-    // Disable timeout after successful connection
     struct timeval timeout = {0, 0};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
@@ -110,18 +106,13 @@ void prompt_server_config(char *host, size_t host_sz, int *port, bool mgmt) {
     char *str = mgmt ? mgmnt_server_ip : socks_server_ip;
     char buf[BUFF_SIZE];
 
-    // Host/IP/Dominio configuration (simplificado)
     if (read_line(str, buf, sizeof buf) < 0 || buf[0] == '\0') {
-        // Si el usuario no ingresa nada, usar el default
         strncpy(host, mgmt ? DEFAULT_MGMT_HOST : DEFAULT_SOCKS5_HOST, host_sz -1);
     } else {
-        // Si ingresa algo, simplemente lo copiamos.
-        // getaddrinfo se encargará de resolverlo después.
         strncpy(host, buf, host_sz - 1);
     }
-    host[host_sz - 1] = '\0'; // Asegurar terminación NUL
+    host[host_sz - 1] = '\0';
 
-    // Port configuration (sin cambios, ya estaba bien)
     for (;;) {
         char prompt[INPUT_SMALL_BUF];
         int default_port = mgmt ? DEFAULT_MGMT_PORT : DEFAULT_SOCKS5_PORT;

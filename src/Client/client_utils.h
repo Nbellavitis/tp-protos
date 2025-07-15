@@ -1,7 +1,3 @@
-//
-// Created by lulos on 7/15/2025.
-//
-
 #ifndef _CLIENT_UTILS_H
 #define _CLIENT_UTILS_H
 #include <sys/types.h>
@@ -36,4 +32,4 @@ int read_line(const char *prompt, char *buf, size_t n);
 int ask_choice(const char *prompt, int min, int max);
 int connect_server(const char *server_host, int server_port, int *socket_fd);
 
-#endif //NEGOTIATION_C_CLIENT_UTILS_H
+#endif

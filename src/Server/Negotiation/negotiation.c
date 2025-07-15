@@ -18,7 +18,7 @@ unsigned negotiation_read(struct selector_key *key) {
     uint8_t *b = buffer_write_ptr(&data->client_buffer, &read_limit);
     const ssize_t read_count = recv(key->fd, b, read_limit, 0);
     if (read_count <= 0) {
-        return ERROR; // error o desconexión
+        return ERROR;
     }
     stats_add_client_bytes(read_count);
 
@@ -45,7 +45,7 @@ unsigned negotiation_read(struct selector_key *key) {
 void negotiation_write_init(const unsigned state, struct selector_key *key) {
     LOG_DEBUG("NEGOTIATION_WRITE_INIT: Setting interest to OP_WRITE");
     if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
-        close_connection(key); // Es un error crítico, no podemos continuar.
+        close_connection(key);
     }
 }
 

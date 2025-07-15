@@ -6,7 +6,6 @@ static bool update_interests(const struct selector_key *key) {
     fd_interest client_interest = OP_NOOP;
     fd_interest origin_interest = OP_NOOP;
 
-    // Calcular interés para el socket del cliente (client_fd)
     if (buffer_can_write(&d->origin_buffer)) {
         client_interest |= OP_READ;
     }
@@ -14,7 +13,6 @@ static bool update_interests(const struct selector_key *key) {
         client_interest |= OP_WRITE;
     }
 
-    // Calcular interés para el socket de destino (origin_fd)
     if (buffer_can_write(&d->client_buffer)) {
         origin_interest |= OP_READ;
     }
@@ -52,7 +50,6 @@ unsigned socksv5_handle_read(struct selector_key *key) {
         target_buffer = &d->client_buffer;
     }
 
-    // Leemos del socket
     size_t capacity;
     uint8_t *ptr = buffer_write_ptr(target_buffer, &capacity);
     ssize_t n = recv(source_fd, ptr, capacity, 0);
@@ -68,12 +65,10 @@ unsigned socksv5_handle_read(struct selector_key *key) {
     }
 
 
-    // Intentamos escribir en el otro socket
     if (!buffer_flush(target_buffer, dest_fd, NULL)) {
         return ERROR;
     }
 
-    // Actualizamos los intereses y retornamos
     return update_interests(key) ? COPYING : ERROR;
 }
 

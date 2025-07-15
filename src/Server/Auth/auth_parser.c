@@ -63,6 +63,6 @@ bool send_auth_response(struct buffer *origin_buffer, uint8_t version, uint8_t s
     buffer_write(origin_buffer, version);
     buffer_write(origin_buffer, status);
 
-    stats_add_origin_bytes(2); // 1 byte version + 1 byte status
+    stats_add_origin_bytes(2);
     return true;
 }

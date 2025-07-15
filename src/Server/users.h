@@ -1,7 +1,3 @@
-//
-// Created by lulos on 7/13/2025.
-//
-
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>

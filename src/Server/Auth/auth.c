@@ -38,7 +38,6 @@ static unsigned process_auth_flush(const struct selector_key *key, const unsigne
 
     stats_add_origin_bytes(bytes_written);
 
-    // Si la escritura se bloqueó, volvemos al estado de escritura correspondiente.
     if (buffer_can_read(&data->origin_buffer)) {
         return on_block_state;
     }
@@ -74,9 +73,6 @@ unsigned authentication_read(struct selector_key *key) {
     bool is_valid = false;
     uint8_t status;
     if (user != NULL ) {
-//        LOG_INFO("Authentication successful for user: %s", p->name);
-       /* strncpy(data->username, p->name, sizeof(data->username) - 1);
-        data->username[sizeof(data->username) - 1] = '\0';*/
        data->user = user;
        is_valid = true;
        status = AUTH_STATUS_SUCCESS;
@@ -86,7 +82,6 @@ unsigned authentication_read(struct selector_key *key) {
         data->auth_failed = true;
     }
 
-    // Preparar la respuesta y registrar el interés para escribir
     if (!send_auth_response(&data->origin_buffer, p->version, status)) {
         return ERROR;
     }
@@ -105,7 +100,6 @@ unsigned authentication_write(struct selector_key *key) {
     return process_auth_flush(key, AUTHENTICATION_WRITE, REQ_READ);
 }
 
-// Nueva función que SOLO maneja el caso de FALLO.
 unsigned authentication_failure_write(struct selector_key *key) {
     return process_auth_flush(key, AUTHENTICATION_FAILURE_WRITE, ERROR);
 }

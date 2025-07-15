@@ -1,7 +1,3 @@
-//
-// Created by nicke on 26/6/2025.
-//
-
 #ifndef PROTOS_RESOLVER_H
 #define PROTOS_RESOLVER_H
 #include <netdb.h>
@@ -26,19 +22,15 @@ typedef enum{
     COMMAND_NOT_SUPPORTED = 0x07,
     ADDRESS_TYPE_NOT_SUPPORTED = 0x08
 }request_reply;
-// Funciones para el estado REQ_READ
+
 void request_read_init(const unsigned state, struct selector_key *key);
 unsigned request_read(struct selector_key *key);
 
-// Funciones para el estado REQ_WRITE
 void request_write_init(const unsigned state, struct selector_key *key);
 unsigned request_write(struct selector_key *key);
 
-// Funciones para el estado ADDR_RESOLVE
 void address_resolve_init(const unsigned state, struct selector_key *key);
 unsigned address_resolve_done(struct selector_key *key, void *data);
-// Funciones para el estado CONNECTING
-void request_connecting_init(const unsigned state, struct selector_key *key);
 unsigned request_connecting(struct selector_key *key);
 
 unsigned address_resolve_write(struct selector_key *key);
@@ -47,4 +39,4 @@ unsigned address_resolve_write(struct selector_key *key);
 
 
 
-#endif //PROTOS_RESOLVER_H
+#endif
