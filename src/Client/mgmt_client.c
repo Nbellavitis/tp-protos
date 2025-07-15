@@ -218,26 +218,34 @@ static int h_add(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
     char p[INPUT_LINE_BUF];
-    if(read_line("New user: ", u, sizeof u)<0){
-        return -1;
-    };
-    if(read_line("New pass: ", p, sizeof p)<0){
-        return -1;
-    };
-    if (check_len("Username", u, MAX_USERNAME_LEN) ||
-        check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
 
+    if (read_line("New user: ", u, sizeof u) != 0) {
+        fprintf(stderr, "Error: Username is too long (max %d chars).\n", MAX_USERNAME_LEN);
+        return 0;
+    }
+
+    // Pedimos la contraseña y verificamos si fue truncada
+    if (read_line("New pass: ", p, sizeof p) != 0) {
+        fprintf(stderr, "Error: Password is too long (max %d chars).\n", MAX_PASSWORD_LEN);
+        return 0;
+    }
     char pl[CREDENTIALS_BUF];
     snprintf(pl, sizeof pl, "%s:%s", u, p);
-    if (send_raw(c, CMD_ADD_USER, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0)
-    {
-        perror("send()failed—could not transmit Add‑User command");
+
+    if (send_raw(c, CMD_ADD_USER, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0) {
+        perror("send() failed—could not transmit Add-User command");
         return -1;
     }
+
     uint8_t st;
     uint8_t len;
-    if (recv_raw(c, &st , &len) < 0) return -1;
+    if (recv_raw(c, &st, &len) < 0) {
+        perror("recv() failed—no response from management server");
+        return -1;
+    }
+
     puts(status_to_str(st));
+
     return 0;
 }
 

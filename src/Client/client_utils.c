@@ -19,16 +19,20 @@ int read_line(const char *prompt, char *buf, size_t n) {
         return -1;
     }
 
-
+    int was_truncated = 0;
     char *newline = strchr(buf, '\n');
+
     if (newline != NULL) {
+
         *newline = '\0';
     } else {
+        was_truncated = 1;
         int ch;
         while ((ch = fgetc(stdin)) != '\n' && ch != EOF);
     }
 
-    return 0;
+
+    return was_truncated;
 }
 
 int ask_choice(const char *prompt, int min, int max) {
