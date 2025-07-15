@@ -349,18 +349,57 @@ static int h_logs(mgmt_client_t *c)
     char u[INPUT_LINE_BUF];
     read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u);
     if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
-    if (send_raw(c, CMD_GET_LOG_BY_USER, (uint8_t *)u, (uint8_t)strlen(u)) < 0) return -1;
-    uint8_t st;
-    uint8_t len;
-    char resp[FULL_PAYLOAD_BUF];
-    if (recv_raw(c, &st, (uint8_t *)resp, &len) < 0) return -1;
-    if (st != STATUS_OK)
-    {
-        puts(status_to_str(st));
-        return -1;
+
+    uint32_t offset = 0;
+    int has_more_data = 1;
+
+    printf("\n--- Logs for %s ---\n", u);
+
+    while (has_more_data) {
+        /* 1. Armar payload de la solicitud: [username]\0[offset] */
+        uint8_t req_pl[MAX_USERNAME_LEN + 1 + sizeof(uint32_t)];
+        size_t ulen = strlen(u);
+        memcpy(req_pl, u, ulen);
+        req_pl[ulen] = '\0'; // Añadir el NUL terminator
+
+        uint32_t net_offset = htonl(offset);
+        memcpy(req_pl + ulen + 1, &net_offset, sizeof(uint32_t));
+
+        size_t req_len = ulen + 1 + sizeof(uint32_t);
+
+        if (send_raw(c, CMD_GET_LOG_BY_USER, req_pl, req_len) < 0) return -1;
+
+        /* 2. Recibir la respuesta del chunk */
+        uint8_t st;
+        uint8_t len;
+        uint8_t resp[FULL_PAYLOAD_BUF]; // Usamos un buffer de uint8_t
+        if (recv_raw(c, &st, resp, &len) < 0) return -1;
+
+        if (st != STATUS_OK) {
+            puts(status_to_str(st));
+            return -1;
+        }
+
+        if (len < sizeof(uint32_t)) {
+            puts("Error: Invalid response chunk from server.");
+            return -1;
+        }
+
+        /* 3. Extraer el 'next_offset' y los datos del log */
+        uint32_t next_offset_net;
+        memcpy(&next_offset_net, resp, sizeof(uint32_t));
+        offset = ntohl(next_offset_net);
+
+        // Imprimir el contenido del log (el resto del payload)
+        if (len > sizeof(uint32_t)) {
+            fwrite(resp + sizeof(uint32_t), 1, len - sizeof(uint32_t), stdout);
+        }
+
+        /* 4. Decidir si se necesita pedir otro chunk */
+        has_more_data = (offset != 0);
     }
-    resp[len] = '\0';
-    printf("\n%s\n", resp);
+
+    printf("--- End of logs ---\n");
     return 0;
 }
 /* -------------------------------------------------------------------------- */

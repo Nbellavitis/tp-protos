@@ -212,7 +212,7 @@ static void cmd_get_auth_method(ManagementData *md)
 //@TODO: por como esta definido el protocolo hay veces que se trunca la respuesta!!!!. El maximo del payload es 256 y el maximo de host lenght es eso tambien! hay que agrandar el payload y cambiar un poco esta funcion.
 static void cmd_get_log_by_user(ManagementData *md)
 {
-    /* 0)  Autenticación obligatoria */
+    /* 1) Autenticación obligatoria */
     if (!md->authenticated) {
         send_management_response(&md->response_buffer,
                                  STATUS_AUTH_REQUIRED,
@@ -220,15 +220,32 @@ static void cmd_get_log_by_user(ManagementData *md)
         return;
     }
 
-    /* 1)  Usuario en payload */
+    /* 2) Extraer usuario y offset del payload */
     char uname[MAX_USERNAME_LEN + 1];
-    size_t ulen = md->parser.payload_len > MAX_USERNAME_LEN
-                  ? MAX_USERNAME_LEN
-                  : md->parser.payload_len;
-    memcpy(uname, md->parser.payload, ulen);
+    uint32_t offset = 0;
+    size_t ulen = 0;
+
+    // El payload ahora es: [username]\0[4-byte offset]
+    // Buscamos el terminador NUL para separar el nombre del offset
+    char *nul_char = memchr(md->parser.payload, '\0', md->parser.payload_len);
+    if (nul_char == NULL || (nul_char - md->parser.payload + 1 + sizeof(uint32_t)) > md->parser.payload_len) {
+        // Formato antiguo o inválido, asumimos solo username y offset 0
+        ulen = md->parser.payload_len > MAX_USERNAME_LEN ? MAX_USERNAME_LEN : md->parser.payload_len;
+        memcpy(uname, md->parser.payload, ulen);
+    } else {
+        // Formato nuevo, extraemos username y offset
+        ulen = nul_char - md->parser.payload;
+        if (ulen > MAX_USERNAME_LEN) ulen = MAX_USERNAME_LEN;
+        memcpy(uname, md->parser.payload, ulen);
+
+        uint32_t net_offset;
+        memcpy(&net_offset, nul_char + 1, sizeof(uint32_t));
+        offset = ntohl(net_offset);
+    }
     uname[ulen] = '\0';
 
-    /* 2)  Buscar el bucket */
+
+    /* 3) Buscar el bucket del usuario (lógica existente) */
     user_t *u = NULL;
     if (strcmp(uname, "anonymous") == 0) {
         u = get_anon_user();
@@ -242,48 +259,49 @@ static void cmd_get_log_by_user(ManagementData *md)
             }
         }
     }
-    if (!u) {     /* usuario inexistente */
-        send_management_response(&md->response_buffer,
-                                 STATUS_NOT_FOUND,
-                                 "User not found");
+    if (!u) {
+        send_management_response(&md->response_buffer, STATUS_NOT_FOUND, "User not found");
         return;
     }
 
-    /* 3)  Armar payload truncado (≤255 B) */
-    char  payload[MGMT_PAYLOAD_SIZE];       /* MAX_MGMT_PAYLOAD_LEN bytes + '\0' */
-    size_t plen = 0;
+    /* 4) Armar payload paginado */
+    uint8_t payload[MAX_MGMT_PAYLOAD_LEN];
+    // Reservamos los primeros 4 bytes para el 'next_offset'
+    size_t plen = sizeof(uint32_t);
 
-    char   ts[TIMESTAMP_BUFFER_SIZE], line[LOG_LINE_SIZE];
+    char ts[TIMESTAMP_BUFFER_SIZE];
     struct tm tm_;
 
-    for (size_t i = 0; i < u->used && plen < MAX_MGMT_PAYLOAD_LEN; i++) {
+    // Empezamos a iterar desde el offset solicitado
+    uint32_t i = offset;
+    for (; i < u->used && plen < MAX_MGMT_PAYLOAD_LEN; i++) {
         gmtime_r(&u->history[i].ts, &tm_);
         strftime(ts, sizeof ts, "%Y-%m-%dT%H:%M:%SZ", &tm_);
 
-        /* espacio disponible, dejando 1 para '\0' */
         size_t room = MAX_MGMT_PAYLOAD_LEN - plen;
-        int n = snprintf(payload + plen, room + 1,
+        int n = snprintf((char*)payload + plen, room,
                          "%s\t%s\t%u\t%s\t%u\t0x%02X\n",
-                         ts,
-                         u->history[i].client_ip,
-                         u->history[i].client_port,
-                         u->history[i].dst_host,
-                         u->history[i].dst_port,
-                         u->history[i].status);
+                         ts, u->history[i].client_ip, u->history[i].client_port,
+                         u->history[i].dst_host, u->history[i].dst_port, u->history[i].status);
 
-        if (n < 0) continue;          /* error improbable */
-        if ((size_t)n >= room) {      /* se truncó la línea */
-            plen = MAX_MGMT_PAYLOAD_LEN;               /* llenamos el cupo y salimos */
+        if (n < 0) continue;
+        if ((size_t)n >= room) {
+            // No cabe la línea completa, terminamos este chunk aquí
             break;
         }
-        plen += (size_t)n;            /* línea completa añadida */
+        plen += (size_t)n;
     }
-    payload[plen] = '\0';             /* asegurar terminación */
 
-    /* 4)  Responder STATUS_OK con el payload (truncado o no) */
-    send_management_response(&md->response_buffer, STATUS_OK, payload);
+    /* 5) Escribir el 'next_offset' al inicio del payload */
+    // Si 'i' no ha llegado al final del historial, es el offset para el próximo chunk.
+    // Si no, es 0, indicando que no hay más datos.
+    uint32_t next_offset = (i < u->used) ? i : 0;
+    uint32_t net_next_offset = htonl(next_offset);
+    memcpy(payload, &net_next_offset, sizeof(uint32_t));
+
+    /* 6) Responder STATUS_OK con el chunk (puede estar vacío si un log es muy grande) */
+    send_management_response_raw(&md->response_buffer, STATUS_OK, payload, plen);
 }
-
 
 
 static const mgmt_cmd_fn mgmt_cmd_table[] = {

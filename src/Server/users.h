@@ -14,7 +14,7 @@
 
 #define USER_HISTORY_LOG_BLOCK 10
 #define MAX_HOST_LEN 256  //@todo cambiar a otro archivo. Borrar magic number de los otros.
-
+#define MAX_LOG_HOSTNAME_LEN 70
 
 typedef struct  {
     time_t   ts;                           /* momento en epoch UTC          */

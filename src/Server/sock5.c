@@ -276,22 +276,26 @@ void log_store_for_user(const client_data *cd)
         if (!tmp) {
             LOG_ERROR("access_log: realloc failed (user=%s)",
                       u->name ? u->name : "anonymous");
-            return;   /* se descarta el registro si no hay memoria */  //@todo esta bien?
+            return;
         }
         u->history = tmp;
         u->cap     = new_cap;
     }
 
     access_rec_t *rec = &u->history[u->used++];
-    rec->ts          = time(NULL);
+    rec->ts = time(NULL);
 
-    strncpy(rec->client_ip, cd->client_ip, sizeof(rec->client_ip));
-    rec->client_ip[sizeof(rec->client_ip)-1] = '\0';
+
+    strncpy(rec->client_ip, cd->client_ip, INET6_ADDRSTRLEN - 1);
+    rec->client_ip[INET6_ADDRSTRLEN - 1] = '\0';
+
 
     rec->client_port = (uint16_t)cd->client_port;
 
-    strncpy(rec->dst_host, cd->target_host, sizeof(rec->dst_host));
-    rec->dst_host[sizeof(rec->dst_host)-1] = '\0';
+
+    strncpy(rec->dst_host, cd->target_host, MAX_LOG_HOSTNAME_LEN - 1);
+    rec->dst_host[MAX_LOG_HOSTNAME_LEN - 1] = '\0';
+
 
     rec->dst_port = (uint16_t)cd->target_port;
     rec->status   = cd->socks_status;
