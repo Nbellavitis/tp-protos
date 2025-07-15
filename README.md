@@ -104,3 +104,80 @@ Un cliente de administración para el protocolo de management del servidor. Perm
 - Compilar con un compilador C estándar (gcc recomendado).
 - El servidor debe estar corriendo y accesible en la IP/puerto configurados.
 
+---
+
+## Ubicación de materiales y artefactos
+
+- **Servidor:**  
+  Ejecutable en `bin/server/socks5d`
+- **Clientes:**  
+  Ejecutables en `bin/client/` (`socks5_client`, `mgmt_client`).
+- **Scripts de stress y pruebas:**  
+  En la raíz del proyecto (`test.sh`, `test2.sh`, `test3.sh`, etc.).
+- **Documentación y reportes:**  
+  En la raíz (`README.md` e informe).
+
+---
+
+## Cómo compilar y generar ejecutables
+
+```sh
+make clean   # Limpia binarios previos
+make all     # sirve para compilar una versión más rápida del código ignorando flags de chequeo de memoria que puede ralentizar el código
+make all BUILD=debug # sirve para hacer una validación del código y entender bien qué está pasando ante cualquier fallo del programa
+```
+
+Los ejecutables se generan en:
+- `bin/server/` para el servidor
+- `bin/client/` para los clientes
+
+---
+
+## Cómo ejecutar los artefactos generados
+
+### **Servidor SOCKS5**
+```sh
+./bin/server/socks5d [opciones]
+```
+- Ejemplo: `./bin/server/socks5d -l 0.0.0.0 -p 1080`
+- Opciones disponibles: ver documentación o `./bin/server/socks5d -h`
+
+### **Cliente SOCKS5**
+```sh
+./bin/client/socks5_client [proxy_host] [proxy_port] 
+```
+- Si no se pasan argumentos, usa los valores por defecto.
+
+### **Cliente de administración**
+```sh
+./bin/client/mgmt_client [mgmt_host] [mgmt_port]
+```
+- Si no se pasan argumentos, usa los valores por defecto.
+
+---
+
+## Variables de entorno para administración
+
+- Puedes configurar el usuario y contraseña de admin mediante variables de entorno antes de ejecutar el servidor (si no se configura usara las credenciales por deafualt q son admin:admin123):
+  ```sh
+  export ADMIN_USERNAME=admin
+  export ADMIN_PASSWORD=admin123
+  ./bin/server/socks5d ...
+  ```
+
+---
+
+## Ejemplo de estructura de carpetas tras compilar
+
+```
+tp-protos/
+├── bin/
+│   ├── server/
+│   │   └── socks5d
+│   └── client/
+│       ├── socks5_client
+│       └── mgmt_client
+├── README.md
+└── ...
+```
+
