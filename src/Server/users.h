@@ -5,22 +5,24 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
-#include "sock5.h"
+#include <netinet/in.h>
 
 #ifndef _USERS_H
 #define _USERS_H
 
+#include "constants.h"
+
+
 #define ANON_USER_NAME "anonymous"
 
 #define USER_HISTORY_LOG_BLOCK 10
-#define MAX_HOST_LEN 256  //@todo cambiar a otro archivo. Borrar magic number de los otros.
 
 
 typedef struct  {
     time_t   ts;                           /* momento en epoch UTC          */
     char     client_ip[INET6_ADDRSTRLEN];  /* origen                        */
     uint16_t client_port;
-    char     dst_host[MAX_HOST_LEN];       /* destino textual               */
+    char     dst_host[MAX_HOSTNAME_LEN];       /* destino textual               */
     uint16_t dst_port;
     uint8_t  status;                       /* RFC 1928 reply code           */
 } access_rec_t;

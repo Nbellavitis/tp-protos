@@ -20,4 +20,8 @@
 #define TIMESTAMP_BUFFER_SIZE   32
 #define LOG_LINE_SIZE           256
 
+
+#define MAX_HOSTNAME_LEN        256
+
+
 #endif // CONSTANTS_H

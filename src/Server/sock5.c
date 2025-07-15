@@ -44,8 +44,8 @@ static const struct state_definition client_actions[] = {
     {.state = CONNECTING, .on_arrival = NULL, .on_write_ready = request_connecting},
     {.state = REQ_WRITE, .on_arrival = request_write_init, .on_write_ready = request_write},
     {.state = COPYING,   .on_arrival = socksv5_handle_init,.on_read_ready = socksv5_handle_read,.on_write_ready = socksv5_handle_write,.on_departure = socksv5_handle_close},
-    {.state = CLOSED, .on_arrival = close_arrival},
-    {.state=ERROR, .on_arrival = error_arrival}
+    {.state = CLOSED, },
+    {.state=ERROR, }
 };
 void socksv5_passive_accept(struct selector_key* key){
     struct sockaddr_storage client_address;
@@ -276,7 +276,7 @@ void log_store_for_user(const client_data *cd)
         if (!tmp) {
             LOG_ERROR("access_log: realloc failed (user=%s)",
                       u->name ? u->name : "anonymous");
-            return;   /* se descarta el registro si no hay memoria */  //@todo esta bien?
+            return;   /* se descarta el registro si no hay memoria */
         }
         u->history = tmp;
         u->cap     = new_cap;
@@ -363,14 +363,7 @@ fd_handler * get_socksv5_handler(void) {
 }
 
 
-//@TODO tiene sentido esto?
-static void close_arrival(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("Arriving at CLOSED state (state = %d, key = %p)", state, (void *)key);
-}
 
-static void error_arrival(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("Arriving at ERROR state (state = %d, key = %p)", state, (void *)key);
-}
 static void socksv5_timeout(struct selector_key *key) {
     time_t now = time(NULL);
     client_data *data = (client_data *)key->data;
