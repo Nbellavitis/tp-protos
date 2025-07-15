@@ -309,9 +309,6 @@ void interactive_menu(socks5_client_t *client) {
 
         printf("Choice: ");
         if (!fgets(input, sizeof(input), stdin)) {
-            if (interrupted) {
-                printf("\nSignal received, exiting gracefully...\n");
-            }
             break;
         }
 
@@ -442,10 +439,6 @@ int main(int argc, char *argv[]) {
    
     socks5_disconnect(&client);
    
-    
-    if (interrupted) {
-        printf("[CLIENT_DEBUG] main: Received interrupt signal, exiting...\n");
-    }
-    
+
     return 0;
 }

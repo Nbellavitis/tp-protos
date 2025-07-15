@@ -81,6 +81,7 @@ unsigned authentication_read(struct selector_key *key) {
         data->auth_failed = true;
     }
 
+
     if (!send_auth_response(&data->origin_buffer, p->version, status)) {
         return ERROR;
     }

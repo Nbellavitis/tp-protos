@@ -28,10 +28,17 @@ unsigned negotiation_read(struct selector_key *key) {
         return NEGOTIATION_READ;
     }
 
+
     if (result != NEGOTIATION_PARSE_OK) {
+        data->auth_failed = true;
         p->method_chosen = NO_ACCEPTABLE_METHODS;
         return ERROR;
     }
+
+    if(p->method_chosen == NO_ACCEPTABLE_METHODS){
+        data->auth_failed = true;
+    }
+
 
     if (!send_negotiation_response(&data->origin_buffer, p->method_chosen)) {
         return ERROR;
