@@ -359,7 +359,6 @@ unsigned mgmt_command_write(struct selector_key *key) {
     return MGMT_COMMAND_READ;
 }
 
-// TODO: no creo que tengan sentido estas funciones. Eliminar
 void mgmt_closed_arrival(unsigned state __attribute__((unused)), struct selector_key *key __attribute__((unused))) {
     LOG_DEBUG("%s" ,"Management connection closed");
 }
@@ -367,10 +366,6 @@ void mgmt_closed_arrival(unsigned state __attribute__((unused)), struct selector
 void mgmt_error_arrival(unsigned state __attribute__((unused)), struct selector_key *key __attribute__((unused))) {
     LOG_ERROR("%s" ,"Management connection error");
 }
-
-
-
-
 
 
 bool send_management_response_raw(struct buffer *buffer,

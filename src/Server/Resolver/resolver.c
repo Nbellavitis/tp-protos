@@ -260,7 +260,7 @@ void address_resolve_init(const unsigned state, struct selector_key *key) {
     if (getaddrinfo_a(GAI_NOWAIT, reqs, GETADDRINFO_A_COUNT, &sev) != 0) {
         LOG_ERROR("%s","ADDR_RESOLVE_INIT: Error starting DNS resolution");
         data->dns_resolution_state = DNS_STATE_ERROR;
-        if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) { // todo: ¿para que se hace este select?
+        if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {
             close_connection(key);
         }
 

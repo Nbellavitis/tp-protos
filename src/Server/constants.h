@@ -1,7 +1,7 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-#define MAXPENDING              10 // todo: va acá? o en main.h ?
+#define MAXPENDING              10
 #define SELECTOR_TIMEOUT_SEC    10
 
 // Network protocol constants (used across multiple modules)

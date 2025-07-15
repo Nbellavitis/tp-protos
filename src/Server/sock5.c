@@ -124,7 +124,7 @@ void socksv5_passive_accept(struct selector_key* key){
         close(new_client_socket);
         return;
     }
-    if(selector_fd_set_nio(new_client_socket) == -1) { //todo check si esta bien
+    if(selector_fd_set_nio(new_client_socket) == -1) {
         LOG_ERROR("Failed to set non-blocking mode for new client socket %d", new_client_socket);
         free(client_data->in_client_buffer);
         free(client_data->in_origin_buffer);

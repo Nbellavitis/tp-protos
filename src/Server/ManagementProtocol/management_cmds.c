@@ -305,15 +305,9 @@ void mgmt_dispatch_command(ManagementData *md)
     if (cmd >= CMD_STATS && cmd <= CMD_GET_LOG_BY_USER) {
         mgmt_cmd_fn fn = mgmt_cmd_table[cmd - CMD_STATS];
         fn(md);
-
-    } else if (cmd == CMD_AUTH) {
-        send_management_response(&md->response_buffer,
-                                 STATUS_ERROR,
-                                 "Invalid operation: already authenticated");  //@TODO check
-
-    } else {
-        send_management_response(&md->response_buffer,
-                                 STATUS_ERROR,
-                                 "Unknown command");                        // @Todo check. Podria cambiar el error code.
+        return;
     }
+
+    send_status_only(md,STATUS_ERROR);
+
 }

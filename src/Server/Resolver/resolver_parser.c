@@ -149,7 +149,7 @@ bool prepare_request_response(struct buffer *origin_buffer, uint8_t version, uin
     }
 
     // RSV
-    buffer_write(origin_buffer, 0x00); // todo magic number
+    buffer_write(origin_buffer, 0x00);
 
     // Verificar espacio para ATYP
     if (!buffer_can_write(origin_buffer)) {
