@@ -111,10 +111,10 @@ static int auth_server(mgmt_client_t *c)
     char u[INPUT_LINE_BUF];
     char p[INPUT_LINE_BUF];
     if(read_line("Username: ", u, sizeof u) < 0){
-        return -1;
+        return 0;
     };
     if(read_line("Password: ", p, sizeof p)<0){
-        return -1;
+        return 0;
     };
     if (check_len("Username", u, MAX_USERNAME_LEN) ||
         check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
@@ -148,7 +148,7 @@ static int h_stats(mgmt_client_t *c)
     if (st != STATUS_OK || len != STATS_PAYLOAD_BYTES)
     {
         puts(status_to_str(st));
-        return -1;
+        return 0;
     }
     uint32_t *v = (uint32_t *)read_buffer;
     printf("Historical opened connections: %u\n", ntohl(v[0]));
@@ -184,7 +184,7 @@ static int h_list(mgmt_client_t *c)
 
         if (st != STATUS_OK) {
             puts(status_to_str(st));
-            return -1;
+            return 0;
         }
 
         if (len < sizeof(uint32_t)) {
@@ -220,13 +220,13 @@ static int h_add(mgmt_client_t *c)
     char p[INPUT_LINE_BUF];
 
     if (read_line("New user: ", u, sizeof u) != 0) {
-        fprintf(stderr, "Error: Username is too long (max %d chars).\n", MAX_USERNAME_LEN);
+        fprintf(stderr, "Error: Username is empty or too long (max %d chars).\n", MAX_USERNAME_LEN);
         return 0;
     }
 
     // Pedimos la contraseña y verificamos si fue truncada
     if (read_line("New pass: ", p, sizeof p) != 0) {
-        fprintf(stderr, "Error: Password is too long (max %d chars).\n", MAX_PASSWORD_LEN);
+        fprintf(stderr, "Error: Password is empty or too long (max %d chars).\n", MAX_PASSWORD_LEN);
         return 0;
     }
     char pl[CREDENTIALS_BUF];
@@ -253,9 +253,9 @@ static int h_del(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
     if(read_line("User delete: ", u, sizeof u)<0){
-        return -1;
+        return 0;
     };
-    if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
+    if (check_len("Username", u, MAX_USERNAME_LEN)) return 0;
     if (send_raw(c, CMD_DELETE_USER, (uint8_t *)u, (uint8_t)strlen(u)) < 0) return -1;
     uint8_t st;
     uint8_t len;
@@ -270,17 +270,17 @@ static int h_chpwd(mgmt_client_t *c)
     char u[INPUT_LINE_BUF];
     char p[INPUT_LINE_BUF];
     if(read_line("User: ", u, sizeof u)<0){
-        return -1;
+        return 0;
     };
     if(read_line("New pass: ", p, sizeof p)<0){
-        return -1;
+        return 0;
     };
     if (check_len("Username", u, MAX_USERNAME_LEN) ||
-        check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
+        check_len("Password", p, MAX_PASSWORD_LEN)) return 0;
 
     char * pl = (char *)read_buffer;
     snprintf(pl, sizeof(read_buffer), "%s:%s", u, p);
-    if (send_raw(c, CMD_CHANGE_PASSWORD, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0) return -1;
+    if (send_raw(c, CMD_CHANGE_PASSWORD, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0) return 0;
     uint8_t st;
     uint8_t len;
     if (recv_raw(c, &st, &len) < 0) return -1;
@@ -297,7 +297,7 @@ static int h_bufinfo(mgmt_client_t *c)
     if (st != STATUS_OK || len != sizeof(uint32_t))
     {
         puts(status_to_str(st));
-        return -1;
+        return 0;
     }
     printf("Current buffer size: %u bytes\n", ntohl(*(uint32_t *)read_buffer));
     return 0;
@@ -312,7 +312,7 @@ static int h_setbuf(mgmt_client_t *c)
     }
     int idx = ask_choice("Choice: ", 1, BUF_OPTIONS_COUNT);
     if(idx<0){
-        return -1;
+        return 0;
     }
     uint32_t net = htonl(BUF_SIZE_OPTIONS[idx - 1]);
     if (send_raw(c, CMD_SET_BUFFER_SIZE, (uint8_t *)&net, sizeof net) < 0) return -1;
@@ -328,7 +328,7 @@ static int h_setauth(mgmt_client_t *c)
     puts("1) NOAUTH\n2) AUTH");
     int opt = ask_choice("Choice: ", 1, 2);
     if(opt<0){
-        return -1;
+        return 0;
     }
     const char *m = opt == 1 ? "NOAUTH" : "AUTH";
     if (send_raw(c, CMD_SET_AUTH_METHOD, (uint8_t *)m, (uint8_t)strlen(m)) < 0) return -1;
@@ -348,7 +348,7 @@ static int h_getauth(mgmt_client_t *c)
     if (st != STATUS_OK || len != 1)
     {
         puts(status_to_str(st));
-        return -1;
+        return 0;
     }
     puts(read_buffer[0] ? "AUTH" : "NOAUTH");
     return 0;
@@ -360,7 +360,7 @@ static int h_logs(mgmt_client_t *c)
     if(read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u) < 0) {
         return 0;
     }
-    if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
+    if (check_len("Username", u, MAX_USERNAME_LEN)) return 0;
 
     uint32_t offset = 0;
     int has_more_data = 1;
@@ -475,7 +475,7 @@ static void menu_loop(mgmt_client_t *c)
         }
 
         fn handler = MENU_FUNCS[ch - 1];
-        if (!handler) {
+        if (!handler) {                     //el usuario eligio desconectarse.
             disconnect(c);
             continue;
         }
