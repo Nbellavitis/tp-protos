@@ -65,6 +65,7 @@ unsigned authentication_read(struct selector_key *key) {
         return AUTHENTICATION_READ;
     }
     if (result != AUTH_PARSE_OK) {
+        data->auth_failed = true;
         return ERROR;
     }
 

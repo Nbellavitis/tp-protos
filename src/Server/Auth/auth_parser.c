@@ -21,14 +21,12 @@ auth_parse_result auth_parse(auth_parser *p, struct buffer *b) {
         if(p->version == 0){
             if(byte != AUTH_VERSION){
                 p->error = true;
-                LOG_ERROR("AUTH_PARSE: Invalid version %d", byte);
                 return AUTH_PARSE_ERROR;
             }
             p->version = byte;
         }else if(p->name_length == 0){
                 if(byte == 0){
                     p->error = true;
-                    LOG_ERROR("%s", "AUTH_PARSE: Invalid name length. Must be grater than 0.");
                     return AUTH_PARSE_ERROR;
                 }
                 p->name_length = byte;
@@ -41,7 +39,6 @@ auth_parse_result auth_parse(auth_parser *p, struct buffer *b) {
         }else if (p->password_length == 0) {
             if (byte == 0) {
                 p->error = true;
-                LOG_ERROR("%s" ,"AUTH_PARSE: Invalid password length. Must be grater than 0");
                 return AUTH_PARSE_ERROR;
             }
             p->password_length = byte;
