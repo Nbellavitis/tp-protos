@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 #include "../management_constants.h"
 #include "client_utils.h"
-
+#include <signal.h>
 
 #define INPUT_LINE_BUF             (MAX_USERNAME_LEN + 1)
 #define CREDENTIALS_BUF            (MAX_USERNAME_LEN + 1 + MAX_PASSWORD_LEN + 1)
@@ -19,7 +19,7 @@
 #define INPUT_BUF_SIZE   64
 #define MAX_PORT_NUMBER 65535
 
-
+static volatile sig_atomic_t interrupted = 0;
 
 static const uint32_t BUF_SIZE_OPTIONS[] =
         {
@@ -34,7 +34,9 @@ static const uint32_t BUF_SIZE_OPTIONS[] =
 #define BUF_OPTIONS_COUNT  (sizeof BUF_SIZE_OPTIONS / sizeof BUF_SIZE_OPTIONS[0])
 
 static uint8_t read_buffer[FULL_PAYLOAD_BUF+1];
-
+static void sigint_handler(int signum) {
+    interrupted = 1;
+}
 typedef struct
 {
     int  socket_fd;
@@ -446,43 +448,43 @@ static void draw_menu(void)
 /* -------------------------------------------------------------------------- */
 static void menu_loop(mgmt_client_t *c)
 {
-    while (1)
+    // El bucle ahora comprueba la bandera en cada iteración
+    while (!interrupted)
     {
-
-        while (!c->authenticated)
+        while (!c->authenticated && !interrupted) // También aquí
         {
             puts("1) Connect & Authenticate\n2) Exit");
             int ask = ask_choice("Choice: ", 1, 2);
-            if (ask == 2 || ask < 0) return;
+            if (ask == 2 || ask < 0 || interrupted) {
+                // Si se interrumpió o el usuario eligió salir, terminamos
+                interrupted = 1; // Aseguramos la salida del bucle exterior
+                break;
+            }
 
             if (connect_server( c->server_host , c->server_port , &c->socket_fd) == 0) {
                 auth_server(c);
             }
-
         }
 
+        if (interrupted) break; // Salir si se interrumpió durante la autenticación
 
         puts("\n=== Management Client ===");
         draw_menu();
         int ch = ask_choice("Choice: ", 1, MENU_COUNT);
-        if (ch < 0) {
-            disconnect(c);
-            return;
+        if (ch < 0 || interrupted) {
+            // Si read_line falló (ej. por Ctrl+D) o se interrumpió
+            break;
         }
 
         fn handler = MENU_FUNCS[ch - 1];
-        if (!handler) {
+        if (!handler) { // Opción "Disconnect"
             disconnect(c);
-
             continue;
         }
 
-
         if (handler(c) < 0) {
-
             printf("Command failed. The connection may have been lost.\n");
             disconnect(c);
-
         }
     }
 }
@@ -491,6 +493,11 @@ static void menu_loop(mgmt_client_t *c)
 /* -------------------------------------------------------------------------- */
 int main(int argc, char *argv[])
 {
+    struct sigaction sa;
+    sa.sa_handler = sigint_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
     mgmt_client_t cli = { .socket_fd = -1, .authenticated = 0 };
     prompt_server_config(cli.server_host,sizeof cli.server_host,&cli.server_port, true);
     menu_loop(&cli);

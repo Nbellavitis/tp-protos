@@ -57,7 +57,7 @@ int connect_server(const char *server_host, int server_port, int *socket_fd) {
     for (rp = res; rp; rp = rp->ai_next) {
         fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
         if (fd < 0) {
-            perror("socket creation failed");
+            LOG_ERROR("socket creation failed");
             continue;
         }
 

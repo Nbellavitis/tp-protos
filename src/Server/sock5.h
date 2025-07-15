@@ -39,6 +39,7 @@ struct users* get_authorized_users(void);
 int get_num_authorized_users(void);
 
 bool delete_user(const char* username);
+
 struct dns_request {
     struct gaicb req;
     struct client_data * client_data;

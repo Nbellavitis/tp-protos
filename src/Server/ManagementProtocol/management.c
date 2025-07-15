@@ -75,7 +75,7 @@ void management_passive_accept(struct selector_key* key) {
         return;
     }
     if (new_client_socket < 0) {
-        perror("Error accepting management connection");
+        LOG_ERROR("Error accepting management connection");
         return;
     }
 
@@ -87,7 +87,7 @@ void management_passive_accept(struct selector_key* key) {
 
     ManagementData* mgmt_data = calloc(1, sizeof(ManagementData));
     if (mgmt_data == NULL) {
-        perror("Error allocating memory for management data");
+        LOG_ERROR("Error allocating memory for management data");
         close(new_client_socket);
         return;
     }
