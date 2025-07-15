@@ -392,7 +392,7 @@ static int h_logs(mgmt_client_t *c)
         uint8_t st;
         uint8_t len;
         uint8_t resp[FULL_PAYLOAD_BUF]; // Usamos un buffer de uint8_t
-        if (recv_raw(c, &st, resp, &len) < 0) return -1;
+        if (recv_raw(c, resp, &len) < 0) return -1;
 
         if (st != STATUS_OK) {
             puts(status_to_str(st));
