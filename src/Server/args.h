@@ -11,7 +11,7 @@
 #define DEFAULT_MGMT_PORT       8080
 #define MAX_PORT_NUMBER         65536
 #define DEFAULT_MGMT_ADDR       "127.0.0.1"
-#define DEFAULT_SOCKS_ADDR "127.0.0.1"
+#define DEFAULT_SOCKS_ADDR "0.0.0.0"
 
 
 struct socks5args
