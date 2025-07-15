@@ -12,12 +12,22 @@ char *socks_server_ip = "Socks5 server IP [" DEFAULT_SOCKS5_HOST "]: ";
 
 int read_line(const char *prompt, char *buf, size_t n) {
     printf("%s", prompt);
+
     if (!fgets(buf, (int)n, stdin)) {
         clearerr(stdin);
-        puts("\n");
+        puts("");
         return -1;
     }
-    buf[strcspn(buf, "\n")] = '\0';
+
+
+    char *newline = strchr(buf, '\n');
+    if (newline != NULL) {
+        *newline = '\0';
+    } else {
+        int ch;
+        while ((ch = fgetc(stdin)) != '\n' && ch != EOF);
+    }
+
     return 0;
 }
 

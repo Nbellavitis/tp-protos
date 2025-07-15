@@ -68,10 +68,10 @@ static const char *status_to_str(uint8_t st)
                     "Not found",
                     "Capacity full",
                     "Invalid format",
-                    "Length exceeded",
                     "Already exists",
                     "Not allowed",
-                    "Reserved user"
+                    "Reserved user",
+
             };
     return (st <= STATUS_RESERVED_USER) ? tbl[st] : "Unknown status";
 }
@@ -238,7 +238,7 @@ static int h_add(mgmt_client_t *c)
     uint8_t len;
     if (recv_raw(c, &st , &len) < 0) return -1;
     puts(status_to_str(st));
-    return st == STATUS_OK ? 0 : -1;
+    return 0;
 }
 
 static int h_del(mgmt_client_t *c)
@@ -254,7 +254,7 @@ static int h_del(mgmt_client_t *c)
 
     if (recv_raw(c, &st, &len) < 0) return -1;
     puts(status_to_str(st));
-    return st == STATUS_OK ? 0 : -1;
+    return 0;
 }
 
 static int h_chpwd(mgmt_client_t *c)
@@ -277,7 +277,7 @@ static int h_chpwd(mgmt_client_t *c)
     uint8_t len;
     if (recv_raw(c, &st, &len) < 0) return -1;
     puts(status_to_str(st));
-    return st == STATUS_OK ? 0 : -1;
+    return 0;
 }
 
 static int h_bufinfo(mgmt_client_t *c)
@@ -312,7 +312,7 @@ static int h_setbuf(mgmt_client_t *c)
     uint8_t len;
     if (recv_raw(c, &st,  &len) < 0) return -1;
     puts(status_to_str(st));
-    return st == STATUS_OK ? 0 : -1;
+    return 0;
 }
 
 static int h_setauth(mgmt_client_t *c)
@@ -328,7 +328,7 @@ static int h_setauth(mgmt_client_t *c)
     uint8_t len;
     if (recv_raw(c, &st, &len) < 0) return -1;
     puts(status_to_str(st));
-    return st == STATUS_OK ? 0 : -1;
+    return 0;
 }
 
 static int h_getauth(mgmt_client_t *c)

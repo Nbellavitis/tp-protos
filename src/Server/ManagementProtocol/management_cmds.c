@@ -105,6 +105,10 @@ void cmd_add_user(ManagementData *md)
     if (!c) { send_status_only(md, STATUS_INVALID_FORMAT); return; }
 
     *c = '\0';
+    if (strlen(md->parser.payload) > MAX_USERNAME_LEN) {
+        send_status_only(md, STATUS_ERROR);
+        return;
+    }
     add_user_result_t r = add_user(md->parser.payload, c+1);
 
     switch (r) {
