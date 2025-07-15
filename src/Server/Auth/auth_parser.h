@@ -1,7 +1,3 @@
-//
-// Created by nicke on 25/6/2025.
-//
-
 #ifndef PROTOS_AUTHPARSER_H
 #define PROTOS_AUTHPARSER_H
 #include <stdint.h>
@@ -32,4 +28,4 @@ void init_auth_parser(auth_parser *parser);
 bool send_auth_response(struct buffer *origin_buffer, uint8_t version, uint8_t status);
 auth_parse_result auth_parse(auth_parser *p, struct buffer *b);
 
-#endif //PROTOS_AUTHPARSER_H
+#endif

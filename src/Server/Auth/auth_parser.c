@@ -1,6 +1,3 @@
-//
-// Created by nicke on 25/6/2025.
-//
 #include <stdio.h>
 #include "auth_parser.h"
 #include "../../logger.h"

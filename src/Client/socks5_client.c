@@ -12,7 +12,6 @@
 #define DEFAULT_SOCKS5_HOST "127.0.0.1"
 #define DEFAULT_SOCKS5_PORT 1080
 
-// Variable global para detectar Ctrl+C
 volatile sig_atomic_t interrupted = 0;
 
 void signal_handler(int sig) {
@@ -21,7 +20,6 @@ void signal_handler(int sig) {
 }
 
 
-// SOCKS5 Protocol Constants
 #define SOCKS5_VERSION 0x05
 #define SOCKS5_AUTH_VERSION 0x01
 #define SOCKS5_CMD_CONNECT 0x01
@@ -33,12 +31,10 @@ void signal_handler(int sig) {
 #define USERPASS 0x02
 #define AUTH_METHOD_FAIL 0xFF
 
-// SOCKS5 Status and Response Constants
 #define SOCKS5_SUCCESS 0x00
 #define SOCKS5_RESERVED 0x00
 #define AUTH_SUCCESS 0x00
 
-// Buffer Size Constants
 #define PROXY_HOST_BUFFER_SIZE 256
 #define USERNAME_BUFFER_SIZE 256
 #define PASSWORD_BUFFER_SIZE 256
@@ -51,7 +47,6 @@ void signal_handler(int sig) {
 #define TARGET_HOST_BUFFER_SIZE 256
 #define PATH_BUFFER_SIZE 512
 
-// Network Protocol Constants
 #define IPV4_ADDR_SIZE 4
 #define IPV6_ADDR_SIZE 16
 #define PORT_SIZE 2
@@ -59,20 +54,16 @@ void signal_handler(int sig) {
 #define SOCKS5_AUTH_RESPONSE_SIZE 2
 #define SOCKS5_MIN_CONNECT_RESPONSE_SIZE 4
 
-// Method and Request Size Constants
 #define SINGLE_METHOD_COUNT 1
 #define NEGOTIATION_REQUEST_SIZE 3
 
-// Default Values Constants
 #define DEFAULT_HTTP_PORT 80
 
-// Menu Choice Constants
 #define MENU_AUTHENTICATE 1
 #define MENU_BASIC_TEST 2
 #define MENU_CUSTOM_REQUEST 3
 #define MENU_EXIT 4
 
-// Argument Processing Constants
 #define MIN_ARGS_PROXY_HOST 2
 #define MIN_ARGS_PROXY_PORT 3
 #define MIN_ARGS_USERNAME 4
@@ -87,10 +78,8 @@ typedef struct {
     int authenticated;
 } socks5_client_t;
 
-// Function declarations
 int socks5_authenticate(socks5_client_t *client);
 
-// Conectar al proxy SOCKS5
 int socks5_connect_proxy(socks5_client_t *client) {
 
     client->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -120,19 +109,17 @@ int socks5_connect_proxy(socks5_client_t *client) {
     return 0;
 }
 
-// Negociación inicial SOCKS5
-// Devuelve el métodó elegido (0x00, 0x02, 0xFF) o -1 en error
 int socks5_negotiate(socks5_client_t *client, int offer_auth) {
     uint8_t request[4];
     uint8_t response[SOCKS5_NEGOTIATION_RESPONSE_SIZE];
 
-    request[0] = SOCKS5_VERSION;    // Version
+    request[0] = SOCKS5_VERSION;
     if (offer_auth) {
-        request[1] = 1;                 // Number of methods
-        request[2] = USERPASS; // Username/password
+        request[1] = 1;
+        request[2] = USERPASS;
     } else {
-        request[1] = 1;                 // Number of methods
-        request[2] = NOAUTH;  // No authentication
+        request[1] = 1;
+        request[2] = NOAUTH;
     }
 
     int req_len = NEGOTIATION_REQUEST_SIZE;
@@ -187,12 +174,11 @@ int socks5_authenticate(socks5_client_t *client) {
     
    
     
-    // Construir request de autenticación
-    request[pos++] = SOCKS5_AUTH_VERSION;           // Version
-    request[pos++] = strlen(client->username);      // Username length
+    request[pos++] = SOCKS5_AUTH_VERSION;
+    request[pos++] = strlen(client->username);
     memcpy(request + pos, client->username, strlen(client->username));
     pos += strlen(client->username);
-    request[pos++] = strlen(client->password);      // Password length
+    request[pos++] = strlen(client->password);
     memcpy(request + pos, client->password, strlen(client->password));
     pos += strlen(client->password);
     
@@ -202,8 +188,7 @@ int socks5_authenticate(socks5_client_t *client) {
         perror("[SOCKS5] Error sending authentication");
         return -1;
     }
-    
-    // Recibir respuesta
+
   
     ssize_t received = recv(client->socket_fd, response, SOCKS5_AUTH_RESPONSE_SIZE, 0);
     if (received != SOCKS5_AUTH_RESPONSE_SIZE) {
@@ -224,40 +209,34 @@ int socks5_authenticate(socks5_client_t *client) {
     return 0;
 }
 
-// Conectar a través del proxy SOCKS5
 int socks5_connect_target(socks5_client_t *client, const char *target_host, int target_port) {
     uint8_t request[CONNECT_REQUEST_BUFFER_SIZE];
     uint8_t response[CONNECT_RESPONSE_BUFFER_SIZE];
     int pos = 0;
     
-    // Construir request de conexión
 
-    request[pos++] = SOCKS5_VERSION;        // Version
-    request[pos++] = SOCKS5_CMD_CONNECT;    // Command: CONNECT
-    request[pos++] = SOCKS5_RESERVED;                  // Reserved
+    request[pos++] = SOCKS5_VERSION;
+    request[pos++] = SOCKS5_CMD_CONNECT;
+    request[pos++] = SOCKS5_RESERVED;
     
     // Determinar tipo de dirección
     struct in_addr addr;
     struct in6_addr addr6;
     if (inet_pton(AF_INET, target_host, &addr) == 1) {
-        // Es una dirección IPv4
         request[pos++] = SOCKS5_ATYP_IPV4;
         memcpy(request + pos, &addr, IPV4_ADDR_SIZE);
         pos += IPV4_ADDR_SIZE;
     } else if (inet_pton(AF_INET6, target_host, &addr6) == 1) {
-        // Es una dirección IPv6
         request[pos++] = SOCKS5_ATYP_IPV6;
         memcpy(request + pos, &addr6, IPV6_ADDR_SIZE);
         pos += IPV6_ADDR_SIZE;
     } else {
-        // Es un nombre de dominio
         request[pos++] = SOCKS5_ATYP_DOMAIN;
         request[pos++] = strlen(target_host);
         memcpy(request + pos, target_host, strlen(target_host));
         pos += strlen(target_host);
     }
     
-    // Puerto (big-endian)
     uint16_t port_be = htons(target_port);
     memcpy(request + pos, &port_be, PORT_SIZE);
     pos += PORT_SIZE;
@@ -269,7 +248,6 @@ int socks5_connect_target(socks5_client_t *client, const char *target_host, int 
         return -1;
     }
     
-    // Recibir respuesta
     ssize_t received = recv(client->socket_fd, response, sizeof(response), 0);
     if (received < SOCKS5_MIN_CONNECT_RESPONSE_SIZE) {
         perror("Error receiving connect response");
@@ -290,13 +268,11 @@ int socks5_connect_target(socks5_client_t *client, const char *target_host, int 
     return 0;
 }
 
-// Realizar petición HTTP simple
 int socks5_http_test(socks5_client_t *client, const char *target_host, int target_port, const char *path) {
     if (socks5_connect_target(client, target_host, target_port) < 0) {
         return -1;
     }
     
-    // Construir petición HTTP
     char http_request[HTTP_REQUEST_BUFFER_SIZE];
     snprintf(http_request, sizeof(http_request),
              "GET %s HTTP/1.1\r\n"
@@ -314,7 +290,6 @@ int socks5_http_test(socks5_client_t *client, const char *target_host, int targe
     printf("Response:\n");
     printf("===========================================\n");
     
-    // Leer respuesta
     char buffer[HTTP_RESPONSE_BUFFER_SIZE];
     ssize_t bytes_read;
     while ((bytes_read = recv(client->socket_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
@@ -326,7 +301,7 @@ int socks5_http_test(socks5_client_t *client, const char *target_host, int targe
     return 0;
 }
 
-// Desconectar
+
 void socks5_disconnect(socks5_client_t *client) {
     
     if (client->socket_fd >= 0) {
@@ -338,7 +313,6 @@ void socks5_disconnect(socks5_client_t *client) {
     
 }
 
-// Menú interactivo
 void interactive_menu(socks5_client_t *client) {
     char input[INPUT_BUFFER_SIZE];
     char target_host[TARGET_HOST_BUFFER_SIZE];
@@ -509,18 +483,15 @@ void interactive_menu(socks5_client_t *client) {
 int main(int argc, char *argv[]) {
    
     
-    // Configurar manejador de señales
     signal(SIGINT, signal_handler);
     
     socks5_client_t client = {0};
     
-    // Valores por defecto
     strcpy(client.proxy_host, DEFAULT_SOCKS5_HOST);
     client.proxy_port = DEFAULT_SOCKS5_PORT;
     client.socket_fd = -1;
     client.authenticated = 0;
     
-    // Parsear argumentos
     if (argc >= MIN_ARGS_PROXY_HOST) {
         strcpy(client.proxy_host, argv[1]);
     }

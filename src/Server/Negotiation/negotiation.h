@@ -1,7 +1,3 @@
-//
-// Created by nicke on 25/6/2025.
-//
-
 #ifndef NEGOTIATION_H
 #define NEGOTIATION_H
 #include "../sock5.h"
