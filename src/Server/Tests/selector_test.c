@@ -3,7 +3,6 @@
 
 #define INITIAL_SIZE ((size_t) 1024)
 
-// para poder testear las funciones estaticas
 #include "../selector.c"
 
 START_TEST (test_selector_error) {
@@ -14,7 +13,6 @@ START_TEST (test_selector_error) {
         SELECTOR_IARGS,
         SELECTOR_IO,
     };
-    // verifica que `selector_error' tiene mensajes especificos
     for(unsigned i = 0 ; i < N(data); i++) {
         ck_assert_str_ne(ERROR_DEFAULT_MSG, selector_error(data[i]));
     }
@@ -71,7 +69,6 @@ START_TEST (test_ensure_capacity) {
 }
 END_TEST
 
-// callbacks de prueba
 static void *data_mark = (void *)0x0FF1CE;
 static unsigned destroy_count = 0;
 static void
@@ -107,7 +104,6 @@ START_TEST (test_selector_register_fd) {
     ck_assert_ptr_eq (data_mark,  item->data);
 
     selector_destroy(s);
-    // destroy desregistró?
     ck_assert_uint_eq(1,          destroy_count);
 
 }

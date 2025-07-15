@@ -5,482 +5,499 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <stdint.h>
-#include "../Server/args.h"
+#include "../management_constants.h"
+#include "client_utils.h"
+#include <signal.h>
 
-// Comandos del protocolo de management
-#define MANAGEMENT_VERSION 0x01
-#define CMD_AUTH 0x01
-#define CMD_STATS 0x02
-#define CMD_LIST_USERS 0x03
-#define CMD_ADD_USER 0x04
-#define CMD_DELETE_USER 0x05
-#define CMD_CHANGE_PASSWORD 0x06
+#define INPUT_LINE_BUF             (MAX_USERNAME_LEN + 1)
+#define CREDENTIALS_BUF            (MAX_USERNAME_LEN + 1 + MAX_PASSWORD_LEN + 1)
+#define HEADER_LEN                 3                              /* VER+CMD+LEN */
+#define STATS_FIELDS               5
+#define STATS_PAYLOAD_BYTES        (STATS_FIELDS * sizeof(uint32_t))
+#define RESPONSE_BUFFER_SIZE       MGMT_RESPONSE_SIZE
+#define FULL_PAYLOAD_BUF           (MAX_MGMT_PAYLOAD_LEN + 1)     /* con '\0'*/
+#define INPUT_BUF_SIZE   64
+#define MAX_PORT_NUMBER 65535
 
-// Status codes
-#define STATUS_OK 0x00
-#define STATUS_ERROR 0x01
-#define STATUS_AUTH_REQUIRED 0x02
-#define STATUS_AUTH_FAILED 0x03
-#define STATUS_NOT_FOUND 0x04
-#define STATUS_FULL 0x05
+static volatile sig_atomic_t interrupted = 0;
 
-typedef struct {
-    int socket_fd;
+static const uint32_t BUF_SIZE_OPTIONS[] =
+        {
+                4 * 1024,
+                8 * 1024,
+                16 * 1024,
+                32 * 1024,
+                64 * 1024,
+                128 * 1024
+        };
+
+#define BUF_OPTIONS_COUNT  (sizeof BUF_SIZE_OPTIONS / sizeof BUF_SIZE_OPTIONS[0])
+
+static uint8_t read_buffer[FULL_PAYLOAD_BUF+1];
+static void sigint_handler(int signum) {
+    interrupted = 1;
+}
+typedef struct
+{
+    int  socket_fd;
     char server_host[256];
-    int server_port;
-    int authenticated;
+    int  server_port;
+    int  authenticated;
 } mgmt_client_t;
 
-// Enviar comando al servidor
-int send_mgmt_command(mgmt_client_t *client, uint8_t cmd, const char *payload) {
-    uint8_t payload_len = payload ? strlen(payload) : 0;
-    
-    // Construir mensaje: [VER][CMD][LEN][PAYLOAD]
-    uint8_t message[259]; // 3 + 255 max payload + 1
-    message[0] = MANAGEMENT_VERSION;
-    message[1] = cmd;
-    message[2] = payload_len;
-    
-    int total_len = 3;
-    if (payload_len > 0) {
-        memcpy(message + 3, payload, payload_len);
-        total_len += payload_len;
-    }
-    
-    ssize_t sent = send(client->socket_fd, message, total_len, 0);
-    if (sent != total_len) {
-        perror("Error sending command");
+
+
+static int check_len(const char *label, const char *s, size_t max)
+{
+    if (strlen(s) > max)
+    {
+        printf("%s too long (>%zu)\n", label, max);
         return -1;
     }
-    
     return 0;
 }
 
-// Recibir respuesta del servidor
-int recv_mgmt_response(mgmt_client_t *client, uint8_t *status, char *response_data, size_t max_len) {
-    uint8_t header[3];
-    
-    // Recibir header: [VER][STATUS][LEN]
-    ssize_t received = recv(client->socket_fd, header, 3, 0);
-    if (received != 3) {
-        perror("Error receiving response header");
-        return -1;
-    }
-    
-    if (header[0] != MANAGEMENT_VERSION) {
-        printf("Invalid response version: 0x%02x\n", header[0]);
-        return -1;
-    }
-    
-    *status = header[1];
-    uint8_t payload_len = header[2];
-    
-    if (payload_len > 0) {
-        if (payload_len >= max_len) {
-            printf("Response too large: %d bytes\n", payload_len);
-            return -1;
-        }
-        
-        received = recv(client->socket_fd, response_data, payload_len, 0);
-        if (received != payload_len) {
-            perror("Error receiving response payload");
-            return -1;
-        }
-        response_data[payload_len] = '\0';
-    } else {
-        response_data[0] = '\0';
-    }
-    
-    return 0;
+static const char *status_to_str(uint8_t st)
+{
+    static const char *tbl[] =
+            {
+                    "Success",
+                    "Error",
+                    "Auth required",
+                    "Auth failed",
+                    "Not found",
+                    "Capacity full",
+                    "Invalid format",
+                    "Already exists",
+                    "Not allowed",
+                    "Reserved user",
+
+            };
+    return (st <= STATUS_RESERVED_USER) ? tbl[st] : "Unknown status";
 }
 
-// Conectar al servidor
-int mgmt_connect(mgmt_client_t *client) {
-    client->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (client->socket_fd < 0) {
-        perror("Error creating socket");
-        return -1;
-    }
-    
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(client->server_port);
-    
-    if (inet_pton(AF_INET, client->server_host, &server_addr.sin_addr) <= 0) {
-        perror("Invalid server address");
-        close(client->socket_fd);
-        return -1;
-    }
-    
-    if (connect(client->socket_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Error connecting to server");
-        close(client->socket_fd);
-        return -1;
-    }
-    
-    printf("Connected to management server %s:%d\n", client->server_host, client->server_port);
-    return 0;
+static int send_raw(mgmt_client_t *c, uint8_t cmd, const uint8_t *pl, uint8_t len)
+{
+    uint8_t msg[HEADER_LEN + MAX_MGMT_PAYLOAD_LEN];
+    msg[0] = MANAGEMENT_VERSION;
+    msg[1] = cmd;
+    msg[2] = len;
+    if (len) memcpy(msg + HEADER_LEN, pl, len);
+    return send(c->socket_fd, msg, HEADER_LEN + len, MSG_NOSIGNAL) ==
+           HEADER_LEN + len ? 0 : -1;
 }
 
-// Autenticar con el servidor
-int mgmt_authenticate(mgmt_client_t *client, const char *username, const char *password) {
-    char credentials[512];
-    snprintf(credentials, sizeof(credentials), "%s:%s", username, password);
-    
-    if (send_mgmt_command(client, CMD_AUTH, credentials) < 0) {
-        return -1;
-    }
-    
-    uint8_t status;
-    char response[1024];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
-    }
-    
-    if (status == STATUS_OK) {
-        printf("Authentication successful: %s\n", response);
-        client->authenticated = 1;
+static int recv_raw(mgmt_client_t *c, uint8_t *st, uint8_t *len)
+{
+    uint8_t hdr[HEADER_LEN];
+    if (read(c->socket_fd, hdr, HEADER_LEN) != HEADER_LEN) return -1;
+    if (hdr[0] != MANAGEMENT_VERSION) return -1;
+    *st  = hdr[1];
+    *len = hdr[2];
+    if (*len && read(c->socket_fd, read_buffer, *len) != *len) return -1;
+    return 0;
+}
+/* -------------------------------------------------------------------------- */
+static void disconnect(mgmt_client_t *c)
+{
+    if (c->socket_fd >= 0) close(c->socket_fd);
+    c->socket_fd = -1;
+    c->authenticated = 0;
+}
+
+
+static int auth_server(mgmt_client_t *c)
+{
+    char u[INPUT_LINE_BUF];
+    char p[INPUT_LINE_BUF];
+    if(read_line("Username: ", u, sizeof u) < 0){
         return 0;
-    } else {
-        printf("Authentication failed: %s\n", response);
-        return -1;
-    }
-}
+    };
+    if(read_line("Password: ", p, sizeof p)<0){
+        return 0;
+    };
+    if (check_len("Username", u, MAX_USERNAME_LEN) ||
+        check_len("Password", p, MAX_PASSWORD_LEN)) return -1;
 
-// Obtener estadísticas
-int mgmt_get_stats(mgmt_client_t *client) {
-    if (!client->authenticated) {
-        printf("Not authenticated\n");
+    char cred[CREDENTIALS_BUF];
+    snprintf(cred, sizeof cred, "%s:%s", u, p);
+    if (send_raw(c, CMD_AUTH, (uint8_t *)cred, (uint8_t)strlen(cred)) < 0)
+    {
+        perror("send()failed—could not transmit authentication message");
         return -1;
     }
-    
-    if (send_mgmt_command(client, CMD_STATS, NULL) < 0) {
+    uint8_t st;
+    uint8_t len;
+    if (recv_raw(c, &st, &len) < 0)
+    {
+        perror("recv()failed—no response from management server");
         return -1;
     }
-    
-    uint8_t status;
-    char response[1024];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
+    puts(status_to_str(st));
+    c->authenticated = (st == STATUS_OK);
+    return c->authenticated ? 0 : -1;
+}
+/* -------------------------------------------------------------------------- */
+/* handlers                                                                   */
+static int h_stats(mgmt_client_t *c)
+{
+    uint8_t st;
+    uint8_t len;
+    if (send_raw(c, CMD_STATS, NULL, 0) < 0) return -1;
+    if (recv_raw(c, &st, &len) < 0) return -1;
+    if (st != STATUS_OK || len != STATS_PAYLOAD_BYTES)
+    {
+        puts(status_to_str(st));
+        return 0;
     }
-    
-    printf("Server Statistics:\n%s\n", response);
+    uint32_t *v = (uint32_t *)read_buffer;
+    printf("Historical opened connections: %u\n", ntohl(v[0]));
+    printf("Historical closed connections: %u\n", ntohl(v[1]));
+    printf("Current connections: %u\n", ntohl(v[2]));
+    printf("Bytes from client to server: %u\n", ntohl(v[3]));
+    printf("Bytes from server to client: %u\n", ntohl(v[4]));
     return 0;
 }
 
-// Listar usuarios
-int mgmt_list_users(mgmt_client_t *client) {
-    if (!client->authenticated) {
-        printf("Not authenticated\n");
-        return -1;
+static int h_list(mgmt_client_t *c)
+{
+    uint32_t offset = 0;
+    int has_more_data = 1;
+    int user_count = 0;
+
+    printf("Users:\n");
+
+    while (has_more_data) {
+        uint32_t net_offset = htonl(offset);
+        if (send_raw(c, CMD_LIST_USERS, (uint8_t *)&net_offset, sizeof(net_offset)) < 0) {
+            perror("send_raw failed");
+            return -1;
+        }
+
+
+        uint8_t st;
+        uint8_t len;
+        if (recv_raw(c, &st, &len) < 0) {
+            perror("recv_raw failed");
+            return -1;
+        }
+
+        if (st != STATUS_OK) {
+            puts(status_to_str(st));
+            return 0;
+        }
+
+        if (len < sizeof(uint32_t)) {
+            puts("Error: Invalid list_users chunk from server.");
+            return -1;
+        }
+        uint32_t next_offset_net;
+        memcpy(&next_offset_net, read_buffer, sizeof(uint32_t));
+        offset = ntohl(next_offset_net);
+
+        if (len > sizeof(uint32_t)) {
+            char *p = (char *)(read_buffer + sizeof(uint32_t));
+            char *end = (char *)(read_buffer + len);
+
+            while (p < end && *p) {
+                printf("- %s\n", p);
+                user_count++;
+                p += strlen(p) + 1;
+            }
+        }
+
+
+        has_more_data = (offset != 0);
     }
-    
-    if (send_mgmt_command(client, CMD_LIST_USERS, NULL) < 0) {
-        return -1;
-    }
-    
-    uint8_t status;
-    char response[1024];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
-    }
-    
-    printf("%s\n", response);
+
+    printf("--- End of list (%d users) ---\n", user_count);
     return 0;
 }
 
-// Agregar usuario
-int mgmt_add_user(mgmt_client_t *client, const char *username, const char *password) {
-    if (!client->authenticated) {
-        printf("Not authenticated\n");
+static int h_add(mgmt_client_t *c)
+{
+    char u[INPUT_LINE_BUF];
+    char p[INPUT_LINE_BUF];
+
+    if (read_line("New user: ", u, sizeof u) != 0) {
+        fprintf(stderr, "Error: Username is empty or too long (max %d chars).\n", MAX_USERNAME_LEN);
+        return 0;
+    }
+
+    // Pedimos la contraseña y verificamos si fue truncada
+    if (read_line("New pass: ", p, sizeof p) != 0) {
+        fprintf(stderr, "Error: Password is empty or too long (max %d chars).\n", MAX_PASSWORD_LEN);
+        return 0;
+    }
+    char pl[CREDENTIALS_BUF];
+    snprintf(pl, sizeof pl, "%s:%s", u, p);
+
+    if (send_raw(c, CMD_ADD_USER, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0) {
+        perror("send() failed—could not transmit Add-User command");
         return -1;
     }
-    
-    char user_data[512];
-    snprintf(user_data, sizeof(user_data), "%s:%s", username, password);
-    
-    if (send_mgmt_command(client, CMD_ADD_USER, user_data) < 0) {
+
+    uint8_t st;
+    uint8_t len;
+    if (recv_raw(c, &st, &len) < 0) {
+        perror("recv() failed—no response from management server");
         return -1;
     }
-    
-    uint8_t status;
-    char response[1024];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
-    }
-    
-    if (status == STATUS_OK) {
-        printf("Success: %s\n", response);
-    } else {
-        printf("Error: %s\n", response);
-    }
-    return status == STATUS_OK ? 0 : -1;
+
+    puts(status_to_str(st));
+
+    return 0;
 }
 
-// Eliminar usuario
-int mgmt_delete_user(mgmt_client_t *client, const char *username) {
-    if (!client->authenticated) {
-        printf("Not authenticated\n");
-        return -1;
-    }
-    
-    if (send_mgmt_command(client, CMD_DELETE_USER, username) < 0) {
-        return -1;
-    }
-    
-    uint8_t status;
-    char response[1024];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
-    }
-    
-    if (status == STATUS_OK) {
-        printf("Success: %s\n", response);
-    } else {
-        printf("Error: %s\n", response);
-    }
-    return status == STATUS_OK ? 0 : -1;
+static int h_del(mgmt_client_t *c)
+{
+    char u[INPUT_LINE_BUF];
+    if(read_line("User delete: ", u, sizeof u)<0){
+        return 0;
+    };
+    if (check_len("Username", u, MAX_USERNAME_LEN)) return 0;
+    if (send_raw(c, CMD_DELETE_USER, (uint8_t *)u, (uint8_t)strlen(u)) < 0) return -1;
+    uint8_t st;
+    uint8_t len;
+
+    if (recv_raw(c, &st, &len) < 0) return -1;
+    puts(status_to_str(st));
+    return 0;
 }
 
-// Cambiar contraseña de usuario
-int mgmt_change_password(mgmt_client_t *client, const char *username, const char *new_password) {
-    if (!client->authenticated) {
-        printf("Not authenticated\n");
-        return -1;
-    }
-    char payload[512];
-    snprintf(payload, sizeof(payload), "%s:%s", username, new_password);
-    if (send_mgmt_command(client, CMD_CHANGE_PASSWORD, payload) < 0) {
-        return -1;
-    }
-    uint8_t status;
-    char response[1024];
-    if (recv_mgmt_response(client, &status, response, sizeof(response)) < 0) {
-        return -1;
-    }
-    if (status == STATUS_OK) {
-        printf("Success: %s\n", response);
-    } else {
-        printf("Error: %s\n", response);
-    }
-    return status == STATUS_OK ? 0 : -1;
+static int h_chpwd(mgmt_client_t *c)
+{
+    char u[INPUT_LINE_BUF];
+    char p[INPUT_LINE_BUF];
+    if(read_line("User: ", u, sizeof u)<0){
+        return 0;
+    };
+    if(read_line("New pass: ", p, sizeof p)<0){
+        return 0;
+    };
+    if (check_len("Username", u, MAX_USERNAME_LEN) ||
+        check_len("Password", p, MAX_PASSWORD_LEN)) return 0;
+
+    char * pl = (char *)read_buffer;
+    snprintf(pl, sizeof(read_buffer), "%s:%s", u, p);
+    if (send_raw(c, CMD_CHANGE_PASSWORD, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0) return 0;
+    uint8_t st;
+    uint8_t len;
+    if (recv_raw(c, &st, &len) < 0) return -1;
+    puts(status_to_str(st));
+    return 0;
 }
 
-// Desconectar
-void mgmt_disconnect(mgmt_client_t *client) {
-    if (client->socket_fd >= 0) {
-        close(client->socket_fd);
-        client->socket_fd = -1;
+static int h_bufinfo(mgmt_client_t *c)
+{
+    uint8_t st;
+    uint8_t len;
+    if (send_raw(c, CMD_GET_BUFFER_INFO, NULL, 0) < 0) return -1;
+    if (recv_raw(c, &st, &len) < 0) return -1;
+    if (st != STATUS_OK || len != sizeof(uint32_t))
+    {
+        puts(status_to_str(st));
+        return 0;
     }
-    client->authenticated = 0;
+    printf("Current buffer size: %u bytes\n", ntohl(*(uint32_t *)read_buffer));
+    return 0;
 }
 
-// Menú interactivo
-/*
-void interactive_menu(mgmt_client_t *client) {
-    char input[512];
-    char username[256], password[256];
-    
-    while (1) {
-        printf("\n=== Management Client ===\n");
-        printf("1. Authenticate\n");
-        printf("2. Get Statistics\n");
-        printf("3. List Users\n");
-        printf("4. Add User\n");
-        printf("5. Delete User\n");
-        printf("6. Change User Password\n");
-        printf("7. Disconnect and Exit\n");
-        printf("Choice: ");
-        
-        if (!fgets(input, sizeof(input), stdin)) {
+static int h_setbuf(mgmt_client_t *c)
+{
+    puts("Buffer sizes:");
+    for (size_t i = 0; i < BUF_OPTIONS_COUNT; i++)
+    {
+        printf(" %zu) %u\n", i + 1, BUF_SIZE_OPTIONS[i]);
+    }
+    int idx = ask_choice("Choice: ", 1, BUF_OPTIONS_COUNT);
+    if(idx<0){
+        return 0;
+    }
+    uint32_t net = htonl(BUF_SIZE_OPTIONS[idx - 1]);
+    if (send_raw(c, CMD_SET_BUFFER_SIZE, (uint8_t *)&net, sizeof net) < 0) return -1;
+    uint8_t st;
+    uint8_t len;
+    if (recv_raw(c, &st,  &len) < 0) return -1;
+    puts(status_to_str(st));
+    return 0;
+}
+
+static int h_setauth(mgmt_client_t *c)
+{
+    puts("1) NOAUTH\n2) AUTH");
+    int opt = ask_choice("Choice: ", 1, 2);
+    if(opt<0){
+        return 0;
+    }
+    const char *m = opt == 1 ? "NOAUTH" : "AUTH";
+    if (send_raw(c, CMD_SET_AUTH_METHOD, (uint8_t *)m, (uint8_t)strlen(m)) < 0) return -1;
+    uint8_t st;
+    uint8_t len;
+    if (recv_raw(c, &st, &len) < 0) return -1;
+    puts(status_to_str(st));
+    return 0;
+}
+
+static int h_getauth(mgmt_client_t *c)
+{
+    uint8_t st;
+    uint8_t len;
+    if (send_raw(c, CMD_GET_AUTH_METHOD, NULL, 0) < 0) return -1;
+    if (recv_raw(c, &st,  &len) < 0) return -1;
+    if (st != STATUS_OK || len != 1)
+    {
+        puts(status_to_str(st));
+        return 0;
+    }
+    puts(read_buffer[0] ? "AUTH" : "NOAUTH");
+    return 0;
+}
+
+static int h_logs(mgmt_client_t *c)
+{
+    char u[INPUT_LINE_BUF];
+    if(read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u) < 0) {
+        return 0;
+    }
+    if (check_len("Username", u, MAX_USERNAME_LEN)) return 0;
+
+    uint32_t offset = 0;
+    int has_more_data = 1;
+
+    printf("\n--- Logs for %s ---\n", u);
+
+    while (has_more_data) {
+        uint8_t req_pl[MAX_USERNAME_LEN + 1 + sizeof(uint32_t)];
+        size_t ulen = strlen(u);
+        memcpy(req_pl, u, ulen);
+        req_pl[ulen] = '\0';
+
+        uint32_t net_offset = htonl(offset);
+        memcpy(req_pl + ulen + 1, &net_offset, sizeof(uint32_t));
+
+        size_t req_len = ulen + 1 + sizeof(uint32_t);
+
+        if (send_raw(c, CMD_GET_LOG_BY_USER, req_pl, req_len) < 0) return -1;
+
+        uint8_t st;
+        uint8_t len;
+        if (recv_raw(c, &st, &len) < 0) {
+            perror("recv_raw failed");
+            return -1;
+        }
+
+        if (st != STATUS_OK) {
+            puts(status_to_str(st));
+            return 0;
+        }
+
+        if (len < sizeof(uint32_t)) {
+            puts("Error: Invalid response chunk from server.");
+            return -1;
+        }
+
+        uint32_t next_offset_net;
+        memcpy(&next_offset_net, read_buffer, sizeof(uint32_t));
+        offset = ntohl(next_offset_net);
+
+        if (len > sizeof(uint32_t)) {
+            fwrite(read_buffer + sizeof(uint32_t), 1, len - sizeof(uint32_t), stdout);
+        }
+
+        has_more_data = (offset != 0);
+    }
+
+    printf("--- End of logs ---\n");
+    return 0;
+}
+typedef int (*fn)(mgmt_client_t *);
+typedef struct { const char *txt; fn f; } item;
+
+static const fn MENU_FUNCS[] = {
+        h_stats,
+        h_list,
+        h_add,
+        h_del,
+        h_chpwd,
+        h_bufinfo,
+        h_setbuf,
+        h_setauth,
+        h_getauth,
+        h_logs,
+        NULL  /* Disconnect */
+};
+
+#define MENU_COUNT (sizeof MENU_FUNCS / sizeof MENU_FUNCS[0])
+
+static void draw_menu(void)
+{
+    puts("┌───────────────────────────────────────────────┐");
+    puts("│ 1) Get Statistics            (CMD 0x02)       │");
+    puts("│ 2) List Users                (CMD 0x03)       │");
+    puts("│ 3) Add User                  (CMD 0x04)       │");
+    puts("│ 4) Delete User               (CMD 0x05)       │");
+    puts("│ 5) Change User Password      (CMD 0x06)       │");
+    puts("│ 6) Get Buffer Info           (CMD 0x08)       │");
+    puts("│ 7) Set Buffer Size           (CMD 0x07)       │");
+    puts("│ 8) Change Authentication     (CMD 0x09)       │");
+    puts("│ 9) Show Current Auth Method  (CMD 0x0A)       │");
+    puts("│10) Show User Logs            (CMD 0x0B)       │");
+    puts("│11) Disconnect                                 │");
+    puts("└───────────────────────────────────────────────┘");
+}
+/* -------------------------------------------------------------------------- */
+static void menu_loop(mgmt_client_t *c)
+{
+    while (!interrupted)
+    {
+        while (!c->authenticated && !interrupted)
+        {
+            puts("1) Connect & Authenticate\n2) Exit");
+            int ask = ask_choice("Choice: ", 1, 2);
+            if (ask == 2 || ask < 0 || interrupted) {
+                interrupted = 1;
+                break;
+            }
+
+            if (connect_server( c->server_host , c->server_port , &c->socket_fd) == 0) {
+                auth_server(c);
+            }
+        }
+
+        if (interrupted) break;
+
+        puts("\n=== Management Client ===");
+        draw_menu();
+        int ch = ask_choice("Choice: ", 1, MENU_COUNT);
+        if (ch < 0 || interrupted) {
             break;
         }
-        
-        int choice = atoi(input);
-        
-        switch (choice) {
-            case 1:
-                printf("Username: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0; // Remove newline
-                }
-                printf("Password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0; // Remove newline
-                }
-                mgmt_authenticate(client, username, password);
-                break;
-                
-            case 2:
-                mgmt_get_stats(client);
-                break;
-                
-            case 3:
-                mgmt_list_users(client);
-                break;
-                
-            case 4:
-                printf("New username: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                printf("New password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0;
-                }
-                mgmt_add_user(client, username, password);
-                break;
-                
-            case 5:
-                printf("Username to delete: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                mgmt_delete_user(client, username);
-                break;
-                
-            case 6:
-                printf("Username to change password: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                printf("New password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0;
-                }
-                mgmt_change_password(client, username, password);
-                break;
-                
-            case 7:
-                printf("Disconnecting...\n");
-                return;
-                
-            default:
-                printf("Invalid choice\n");
-                break;
-        }
-    }
-}*/
 
-void interactive_menu(mgmt_client_t *client) {
-    char input[512];
-    char username[256], password[256];
-
-    /* ---------- AUTENTICACIÓN OBLIGATORIA ---------- */
-    while (!client->authenticated) {
-        printf("\nPLEASE AUTHENTICATE:\n");
-        printf("Username: ");
-        if (!fgets(username, sizeof(username), stdin)) {
-            return;
-        }
-        username[strcspn(username, "\n")] = 0;
-
-        printf("Password: ");
-        if (!fgets(password, sizeof(password), stdin)) {
-            return;
-        }
-        password[strcspn(password, "\n")] = 0;
-
-        if (mgmt_authenticate(client, username, password) != 0) {
-            printf("Invalid credentials, try again.\n");
-        }
-    }
-
-    /* ---------- MENÚ DE COMANDOS ---------- */
-    while (1) {
-        printf("\n=== Management Client ===\n");
-        printf("1. Get Statistics\n");
-        printf("2. List Users\n");
-        printf("3. Add User\n");
-        printf("4. Delete User\n");
-        printf("5. Change User Password\n");
-        printf("6. Disconnect and Exit\n");
-        printf("Choice: ");
-
-        if (!fgets(input, sizeof(input), stdin)) {
-            break;
+        fn handler = MENU_FUNCS[ch - 1];
+        if (!handler) {                     //el usuario eligio desconectarse.
+            disconnect(c);
+            continue;
         }
 
-        int choice = atoi(input);
-
-        switch (choice) {
-            case 1:
-                mgmt_get_stats(client);
-                break;
-            case 2:
-                mgmt_list_users(client);
-                break;
-            case 3:
-                printf("New username: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                printf("New password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0;
-                }
-                mgmt_add_user(client, username, password);
-                break;
-            case 4:
-                printf("Username to delete: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                mgmt_delete_user(client, username);
-                break;
-            case 5:
-                printf("Username to change password: ");
-                if (fgets(username, sizeof(username), stdin)) {
-                    username[strcspn(username, "\n")] = 0;
-                }
-                printf("New password: ");
-                if (fgets(password, sizeof(password), stdin)) {
-                    password[strcspn(password, "\n")] = 0;
-                }
-                mgmt_change_password(client, username, password);
-                break;
-            case 6:
-                printf("Disconnecting...\n");
-                return;
-            default:
-                printf("Invalid choice\n");
-                break;
+        if (handler(c) < 0) {
+            printf("Command failed. The connection may have been lost.\n");
+            disconnect(c);
         }
     }
 }
 
 
-
-int main(int argc, char *argv[]) {
-    mgmt_client_t client = {0};
-    
-    // Valores por defecto
-    strcpy(client.server_host, DEFAULT_MGMT_HOST);
-    client.server_port = DEFAULT_MGMT_PORT;
-    client.socket_fd = -1;
-    client.authenticated = 0;
-    
-    // Parsear argumentos opcionales
-    if (argc >= 2) {
-        strcpy(client.server_host, argv[1]);
-    }
-    if (argc >= 3) {
-        client.server_port = atoi(argv[2]);
-    }
-    
-    printf("Management Protocol Client\n");
-    printf("Connecting to %s:%d\n", client.server_host, client.server_port);
-    
-    if (mgmt_connect(&client) < 0) {
-        exit(1);
-    }
-    
-    interactive_menu(&client);
-    
-    mgmt_disconnect(&client);
-    printf("Client disconnected.\n");
-    
+int main(int argc, char *argv[])
+{
+    struct sigaction sa;
+    sa.sa_handler = sigint_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+    mgmt_client_t cli = { .socket_fd = -1, .authenticated = 0 };
+    prompt_server_config(cli.server_host,sizeof cli.server_host,&cli.server_port, true);
+    menu_loop(&cli);
+    disconnect(&cli);
     return 0;
 }

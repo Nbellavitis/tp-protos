@@ -2,18 +2,17 @@
 #define ARGS_H_kFlmYm1tW9p5npzDr2opQJ9jM8
 
 #include <stdbool.h>
+#include "./users.h"
 
-#define DEFAULT_SOCKS5_HOST "127.0.0.1"
-#define DEFAULT_SOCKS5_PORT 1080
-#define DEFAULT_MGMT_HOST "127.0.0.1"
-#define DEFAULT_MGMT_PORT 8080
 #define MAX_USERS 10
 
-struct users
-{
-    char* name;
-    char* pass;
-};
+// Network configuration constants
+#define DEFAULT_SOCKS_PORT      1080
+#define DEFAULT_MGMT_PORT       8080
+#define MAX_PORT_NUMBER         65536
+#define DEFAULT_MGMT_ADDR       "127.0.0.1"
+#define DEFAULT_SOCKS_ADDR "0.0.0.0"
+
 
 struct socks5args
 {

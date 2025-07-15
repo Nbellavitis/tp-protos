@@ -12,7 +12,7 @@ struct stats {
     unsigned bytes_o2c;
 };
 
-extern struct stats g_stats;   //@Todo, esto es porque lo hice gloabal. ver
+extern struct stats g_stats;
 
 /* solo prototypes */
 void stats_connection_opened(void);
@@ -20,7 +20,6 @@ void stats_connection_closed(void);
 void stats_add_client_bytes(unsigned n);
 void stats_add_origin_bytes(unsigned n);
 
-// Getters para las estadísticas
 unsigned stats_get_connections_opened(void);
 unsigned stats_get_connections_closed(void);
 unsigned stats_get_current_connections(void);

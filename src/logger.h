@@ -2,45 +2,53 @@
 #define LOGGER_H
 
 #include <stdio.h>
-
-
-
-
+#include <stdarg.h>
 
 #define LOG_LEVEL_ERROR 0
 #define LOG_LEVEL_WARN  1
 #define LOG_LEVEL_INFO  2
 #define LOG_LEVEL_DEBUG 3
 
-#ifndef LOG_LEVEL
+// Nivel por defecto si no está definido
+#ifdef DEBUG
 #define LOG_LEVEL LOG_LEVEL_DEBUG
 #endif
 
-#define _LOG_PRINT(stream, tag, fmt, ...) \
-        fprintf(stream, "[" tag "] " fmt "\n", ##__VA_ARGS__)
+#ifndef LOG_LEVEL
+#define LOG_LEVEL LOG_LEVEL_INFO
+#endif
+
+static inline void _log_print(FILE *stream, const char *tag, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    fprintf(stream, "[%s] ", tag);
+    vfprintf(stream, fmt, args);
+    fprintf(stream, "\n");
+    va_end(args);
+}
 
 #if LOG_LEVEL >= LOG_LEVEL_ERROR
-#  define LOG_ERROR(fmt, ...) _LOG_PRINT(stderr, "ERROR", fmt, ##__VA_ARGS__)
+#  define LOG_ERROR(...) _log_print(stderr, "ERROR", __VA_ARGS__)
 #else
-#  define LOG_ERROR(fmt, ...) ((void)0)
+#  define LOG_ERROR(...) ((void)0)
 #endif
 
 #if LOG_LEVEL >= LOG_LEVEL_WARN
-#  define LOG_WARN(fmt, ...)  _LOG_PRINT(stderr, "WARN ", fmt, ##__VA_ARGS__)
+#  define LOG_WARN(...)  _log_print(stderr, "WARN", __VA_ARGS__)
 #else
-#  define LOG_WARN(fmt, ...)  ((void)0)
+#  define LOG_WARN(...)  ((void)0)
 #endif
 
 #if LOG_LEVEL >= LOG_LEVEL_INFO
-#  define LOG_INFO(fmt, ...)  _LOG_PRINT(stderr, "INFO ", fmt, ##__VA_ARGS__)
+#  define LOG_INFO(...)  _log_print(stderr, "INFO", __VA_ARGS__)
 #else
-#  define LOG_INFO(fmt, ...)  ((void)0)
+#  define LOG_INFO(...)  ((void)0)
 #endif
 
 #if LOG_LEVEL >= LOG_LEVEL_DEBUG
-#  define LOG_DEBUG(fmt, ...) _LOG_PRINT(stderr, "DEBUG", fmt, ##__VA_ARGS__)
+#  define LOG_DEBUG(...) _log_print(stderr, "DEBUG", __VA_ARGS__)
 #else
-#  define LOG_DEBUG(fmt, ...) ((void)0)
+#  define LOG_DEBUG(...) ((void)0)
 #endif
 
 #endif

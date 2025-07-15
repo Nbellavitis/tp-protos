@@ -101,3 +101,44 @@ buffer_compact(buffer *b) {
         b->write = b->data + n;
     }
 }
+
+
+bool
+buffer_flush(buffer *b, const int fd, ssize_t *bytes_sent) {
+    // Inicializamos el valor de salida opcional.
+    if (bytes_sent != NULL) {
+        *bytes_sent = 0;
+    }
+
+    if (!buffer_can_read(b)) {
+        // No hay nada para leer del buffer, no falla.
+        return true;
+    }
+
+    size_t write_len;
+    const uint8_t *ptr = buffer_read_ptr(b, &write_len); // write_len > 0, pues buffer_can_read(b)
+    const ssize_t sent = send(fd, ptr, write_len, MSG_NOSIGNAL);
+
+    // Guardamos el resultado de send() en el parámetro de salida
+    if (bytes_sent != NULL) {
+        *bytes_sent = sent;
+    }
+
+    if (sent > 0) {
+        buffer_read_adv(b, sent);
+        return true;
+    }
+
+    if (sent == 0) { // recordar que write_len > 0
+        return false;
+    }
+
+    // sent < 0
+    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        // No es un error
+        return true;
+    }
+
+    // Error irrecuperable.
+    return false;
+}

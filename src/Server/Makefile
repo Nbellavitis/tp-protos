@@ -1,40 +1,49 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -g
+# ==================================================================
+#  Makefile — perfil OPT por defecto; BUILD=debug o BUILD=safe
+#  para compilar con sanitizadores y LOG_LEVEL_DEBUG.
+# ==================================================================
+include ../Makefile.inc
+CC ?= gcc
 
-SRC_DIR = .
-OBJ_DIR = ../../obj/server
-BIN_DIR = ../../bin/server
+ifeq ($(filter $(BUILD),debug safe),)   # cualquier valor ≠ debug|safe ⇒ OPT
+  CFLAGS  := $(CFLAGS_OPT)
+  LDFLAGS := $(LDFLAGS_OPT)
+else
+  CFLAGS  := $(CFLAGS_DEBUG)
+  LDFLAGS := $(LDFLAGS_DEBUG)
+endif
 
-# Excluir archivos de test del build principal
+SRC_DIR := .
+OBJ_DIR := ../../obj/server
+BIN_DIR := ../../bin/server
+TARGET  := $(BIN_DIR)/socks5d
+
 SRCS := $(shell find $(SRC_DIR) -name '*.c' ! -path '$(SRC_DIR)/Tests/*')
-OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-
-TARGET = $(BIN_DIR)/programa
+OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ -lpthread -lanl
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BIN_DIR):
-	mkdir -p $@
+	@mkdir -p $@
 
-# Compilar tests solo si se invoca make tests
-test_srcs := $(shell find $(SRC_DIR)/Tests -name '*.c')
-test_objs := $(patsubst $(SRC_DIR)/Tests/%.c, $(OBJ_DIR)/Tests/%.o, $(test_srcs))
+TEST_SRCS := $(shell find $(SRC_DIR)/Tests -name '*.c')
+TEST_OBJS := $(patsubst $(SRC_DIR)/Tests/%.c,$(OBJ_DIR)/Tests/%.o,$(TEST_SRCS))
 
-tests: $(test_objs)
-	@echo "Tests compilados. Ejecuta manualmente los binarios de test si lo deseas."
+tests: $(TEST_OBJS)
 
 $(OBJ_DIR)/Tests/%.o: $(SRC_DIR)/Tests/%.c
-	mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-clean:
-	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-.PHONY: all clean tests
+clean:
+	@rm -rf $(OBJ_DIR) $(BIN_DIR)
+
+.PHONY: all tests clean

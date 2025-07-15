@@ -1,29 +1,26 @@
 #include "copy.h"
 #include "../../logger.h"
 
-
-static bool copy_update_interests(struct selector_key *key) {
-    ClientData *d = (ClientData *)key->data;
+static bool update_interests(const struct selector_key *key) {
+    client_data *d = (client_data *)key->data;
     fd_interest client_interest = OP_NOOP;
     fd_interest origin_interest = OP_NOOP;
 
-    // Calcular interés para el socket del cliente (clientFd)
-    if (buffer_can_write(&d->originBuffer)) {
+    if (buffer_can_write(&d->origin_buffer)) {
         client_interest |= OP_READ;
     }
-    if (buffer_can_read(&d->clientBuffer)) {
+    if (buffer_can_read(&d->client_buffer)) {
         client_interest |= OP_WRITE;
     }
 
-    // Calcular interés para el socket de destino (originFd)
-    if (buffer_can_write(&d->clientBuffer)) {
+    if (buffer_can_write(&d->client_buffer)) {
         origin_interest |= OP_READ;
     }
-    if (buffer_can_read(&d->originBuffer)) {
+    if (buffer_can_read(&d->origin_buffer)) {
         origin_interest |= OP_WRITE;
     }
 
-    if (selector_set_interest(key->s, d->clientFd, client_interest) != SELECTOR_SUCCESS || selector_set_interest(key->s, d->originFd, origin_interest) != SELECTOR_SUCCESS) {
+    if (selector_set_interest(key->s, d->client_fd, client_interest) != SELECTOR_SUCCESS || selector_set_interest(key->s, d->origin_fd, origin_interest) != SELECTOR_SUCCESS) {
         return false;
     }
 
@@ -31,109 +28,64 @@ static bool copy_update_interests(struct selector_key *key) {
 }
 
 
-void socksv5HandleInit(const unsigned state, struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    LOG_DEBUG("COPYING_INIT: Starting data copy between client and origin (state = %d)", state);
-    if (!copy_update_interests(key)) {
-        closeConnection(key);
+void socksv5_handle_init(const unsigned state, struct selector_key *key) {
+    if (!update_interests(key)) {
+        close_connection(key);
     }
 }
 
-// void socksv5HandleInit(const unsigned state, struct selector_key *key) {
-//     ClientData *clientData = (ClientData *)key->data;
-//     LOG_DEBUG("COPYING_INIT: Starting data copy between client and origin (state = %d)", state);
-//
-//     fd_interest client_interest = buffer_can_read(&clientData->clientBuffer) ? OP_WRITE : OP_READ;
-//
-//     fd_interest origin_interest = buffer_can_read(&clientData->originBuffer) ? OP_WRITE : OP_READ;
-//
-//     // Registrar los intereses correctos en el selector.
-//     if (selector_set_interest(key->s, clientData->clientFd, client_interest) != SELECTOR_SUCCESS) {
-//         LOG_ERROR("COPYING_INIT: Error setting initial interest for client");
-//         closeConnection(key);
-//         return;
-//     }
-//     if (selector_set_interest(key->s, clientData->originFd, origin_interest) != SELECTOR_SUCCESS) {
-//         LOG_ERROR("COPYING_INIT: Error setting initial interest for origin");
-//         closeConnection(key);
-//         return;
-//     }
-// }
+unsigned socksv5_handle_read(struct selector_key *key) {
+    client_data *d = (client_data *)key->data;
+    buffer *target_buffer;
+    int source_fd, dest_fd;
 
-unsigned socksv5HandleRead(struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    LOG_DEBUG("COPYING_READ: Reading data from socket %d", key->fd);
-
-    if (key->fd == clientData->clientFd) {
-        // Datos del cliente -> servidor de origen
-        size_t bytes_to_write;
-        uint8_t *write_ptr = buffer_write_ptr(&clientData->originBuffer, &bytes_to_write);
-        ssize_t bytes_read = recv(key->fd, write_ptr, bytes_to_write, 0);
-
-        if (bytes_read <= 0) {
-            LOG_DEBUG("COPYING_READ: Client closed connection");
-            return CLOSED;
-        }
-
-        buffer_write_adv(&clientData->originBuffer, bytes_read);
-        stats_add_client_bytes(bytes_read);
-    } else if (key->fd == clientData->originFd) {
-        // Datos del servidor de origen -> cliente
-        size_t bytes_to_write;
-        uint8_t *write_ptr = buffer_write_ptr(&clientData->clientBuffer, &bytes_to_write);
-        ssize_t bytes_read = recv(clientData->originFd, write_ptr, bytes_to_write, 0);
-
-        if (bytes_read <= 0) {
-            LOG_DEBUG("COPYING_READ: Server closed connection");
-            return CLOSED;
-        }
-
-        buffer_write_adv(&clientData->clientBuffer, bytes_read);
-        stats_add_origin_bytes(bytes_read);
+    if (key->fd == d->client_fd) {
+        source_fd = d->client_fd;
+        dest_fd = d->origin_fd;
+        target_buffer = &d->origin_buffer;
+    } else {
+        source_fd = d->origin_fd;
+        dest_fd = d->client_fd;
+        target_buffer = &d->client_buffer;
     }
 
-    if (!copy_update_interests(key)) {
-        LOG_ERROR("COPYING_READ: Error setting selector");
+    size_t capacity;
+    uint8_t *ptr = buffer_write_ptr(target_buffer, &capacity);
+    ssize_t n = recv(source_fd, ptr, capacity, 0);
+    if (n <= 0) {
+        return CLOSED;
+    }
+    buffer_write_adv(target_buffer, n);
+
+    if (source_fd == d->client_fd) {
+        stats_add_client_bytes(n);
+    } else {
+        stats_add_origin_bytes(n);
+    }
+
+
+    if (!buffer_flush(target_buffer, dest_fd, NULL)) {
         return ERROR;
     }
-    return COPYING;
+
+    return update_interests(key) ? COPYING : ERROR;
 }
 
-unsigned socksv5HandleWrite(struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
+unsigned socksv5_handle_write( struct selector_key *key) {
+    client_data *d = (client_data *)key->data;
 
-    if (key->fd == clientData->clientFd) {
-        // Escribir datos del buffer del cliente al cliente
-        if (buffer_can_read(&clientData->clientBuffer)) {
-            size_t bytes_to_write;
-            uint8_t *read_ptr = buffer_read_ptr(&clientData->clientBuffer, &bytes_to_write);
-            ssize_t bytes_written = send(clientData->clientFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
-
-            if (bytes_written < 0) {
-                return ERROR;
-            }
-            buffer_read_adv(&clientData->clientBuffer, bytes_written);
+    if (key->fd == d->client_fd) {
+        if (!buffer_flush( &d->client_buffer, d->client_fd, NULL)) {
+            return ERROR;
         }
-    } else if (key->fd == clientData->originFd) {
-        // Escribir datos del buffer del origen al servidor de origen
-        if (buffer_can_read(&clientData->originBuffer)) {
-            size_t bytes_to_write;
-            uint8_t *read_ptr = buffer_read_ptr(&clientData->originBuffer, &bytes_to_write);
-            ssize_t bytes_written = send(clientData->originFd, read_ptr, bytes_to_write, MSG_NOSIGNAL);
-
-            if (bytes_written < 0) {
-                return ERROR;
-            }
-            buffer_read_adv(&clientData->originBuffer, bytes_written);
+    } else {
+        if (!buffer_flush(&d->origin_buffer, d->origin_fd, NULL)) {
+            return ERROR;
         }
     }
 
-    copy_update_interests(key);
-    return COPYING;
+    return update_interests(key) ? COPYING : ERROR;
 }
 
-void socksv5HandleClose(const unsigned state, struct selector_key *key) {
-    ClientData *clientData = (ClientData *)key->data;
-    LOG_DEBUG("COPYING_CLOSE: Closing data handling (state = %d, key = %p)", state, key);
-}
+
 

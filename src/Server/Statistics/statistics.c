@@ -1,12 +1,8 @@
-//
-// Created by lulos on 6/27/2025.
-//
-
 #include "statistics.h"
 #include <stdio.h>
 #include "../../logger.h"
 
-struct stats g_stats = {0};  //todo por ahora los hice gloables, es algo malo eso?
+struct stats g_stats = {0};
 
 void stats_connection_opened(void) {
     g_stats.hist_conn++;
@@ -28,7 +24,6 @@ void stats_add_origin_bytes(unsigned n) {
     g_stats.bytes_o2c += n;
 }
 
-// Getters para las estadísticas
 unsigned stats_get_connections_opened(void) {
     return g_stats.hist_conn;
 }
@@ -55,8 +50,7 @@ unsigned stats_get_origin_bytes(void) {
 
 void stats_print()
 {
-
-    LOG_INFO("=== SOCKS5 STATISTICS ===");
+    LOG_INFO("%s" , "=== SOCKS5 STATISTICS ===");
     LOG_INFO("Conexiones históricas : %u", g_stats.hist_conn);
     LOG_INFO("Conexiones actuales   : %u", g_stats.curr_conn);
     LOG_INFO("Pico de conexiones    : %u", g_stats.max_conn);

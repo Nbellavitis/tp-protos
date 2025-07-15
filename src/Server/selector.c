@@ -22,7 +22,14 @@
 
 #define ERROR_DEFAULT_MSG "something failed"
 
+
+
+
+
+
+
 /** retorna una descripción humana del fallo */
+
 const char *
 selector_error(const selector_status status) {
     const char *msg;
@@ -285,6 +292,20 @@ ensure_capacity(fd_selector s, const size_t n) {
 
     return ret;
 }
+static void checkTimeouts(fd_selector s) {
+    struct selector_key key = { .s = s };
+
+    for (int i = 0; i <= s->max_fd; i++) {
+        struct item *item = s->fds + i;
+
+        if (ITEM_USED(item) && item->handler->handle_timeout != NULL) {
+            key.fd = item->fd;
+            key.data = item->data;
+
+            item->handler->handle_timeout(&key);
+        }
+    }
+}
 
 fd_selector
 selector_new(const size_t initial_elements) {
@@ -494,7 +515,11 @@ handle_block_notifications(fd_selector s) {
         if (ITEM_USED(item)) {
             key.fd = item->fd;
             key.data = item->data;
-            item->handler->handle_block(&key);
+            item->handler->handle_block(&key, j->data);
+        }else{
+            if (j->data != NULL) {
+                free(j->data);
+            }
         }
 
         struct blocking_job* aux = j;
@@ -508,7 +533,8 @@ handle_block_notifications(fd_selector s) {
 
 selector_status
 selector_notify_block(fd_selector  s,
-                 const int    fd) {
+                 const int    fd,
+                      void *data) {
     selector_status ret = SELECTOR_SUCCESS;
 
     // TODO(juan): usar un pool
@@ -519,7 +545,7 @@ selector_notify_block(fd_selector  s,
     }
     job->s  = s;
     job->fd = fd;
-
+    job->data = data;
     // encolamos en el selector los resultados
     pthread_mutex_lock(&s->resolution_mutex);
     job->next = s->resolution_jobs;
@@ -574,6 +600,7 @@ selector_select(fd_selector s) {
     if(ret == SELECTOR_SUCCESS) {
         handle_block_notifications(s);
     }
+    checkTimeouts(s);
 finally:
     return ret;
 }

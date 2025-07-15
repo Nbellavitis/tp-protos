@@ -52,5 +52,5 @@ Mkfile.old
 dkms.conf
 .idea/
 /.gdb_history
-./src/bin/
-./src/obj/
+**/bin/
+**/obj/

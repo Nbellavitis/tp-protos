@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <check.h>
 
-// asi se puede probar las funciones internas
 #include "../buffer.c"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
@@ -20,31 +19,25 @@ START_TEST (test_buffer_misc) {
     size_t wbytes = 0, rbytes = 0;
     uint8_t *ptr = buffer_write_ptr(b, &wbytes);
     ck_assert_uint_eq(6, wbytes);
-    // escribo 4 bytes
     uint8_t first_write [] = {
         'H', 'O', 'L', 'A',
     };
     memcpy(ptr, first_write, sizeof(first_write));
     buffer_write_adv(b, sizeof(first_write));
 
-    // quedan 2 libres para escribir
     buffer_write_ptr(b, &wbytes);
     ck_assert_uint_eq(2, wbytes);
 
-    // tengo por leer
     buffer_read_ptr(b, &rbytes);
     ck_assert_uint_eq(4, rbytes);
 
-    // leo 3 del buffer
     ck_assert_uint_eq('H', buffer_read(b));
     ck_assert_uint_eq('O', buffer_read(b));
     ck_assert_uint_eq('L', buffer_read(b));
 
-    // queda 1 por leer
     buffer_read_ptr(b, &rbytes);
     ck_assert_uint_eq(1, rbytes);
 
-    // quiero escribir..tendria que seguir habiendo 2 libres
     ptr = buffer_write_ptr(b, &wbytes);
     ck_assert_uint_eq(2, wbytes);
 
@@ -58,7 +51,6 @@ START_TEST (test_buffer_misc) {
     buffer_write_ptr(b, &wbytes);
     ck_assert_uint_eq(0, wbytes);
 
-    // tiene que haber 2 + 1 para leer
     ptr = buffer_read_ptr(b, &rbytes);
     ck_assert_uint_eq(3, rbytes);
     ck_assert_ptr_ne(ptr, b->data);
