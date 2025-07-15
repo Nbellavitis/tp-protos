@@ -6,12 +6,51 @@ Este proyecto implementa un servidor SOCKS5 flexible y dos clientes:
 
 ---
 ## ¿Como compilar?
-make clean para limpiar los binario y ejecutables.
+```sh
+make clean   # Limpia binarios previos
+make all     # sirve para compilar una versión más rápida del código ignorando flags de chequeo de memoria que puede ralentizar el código
+make all BUILD=debug # sirve para hacer una validación del código y entender bien qué está pasando ante cualquier fallo del programa
+```
 
-make all para compilar todo.
+## Ubicación de materiales y artefactos
+
+- **Servidor:**  
+  Ejecutable en `bin/server/socks5d`
+- **Clientes:**  
+  Ejecutables en `bin/client/` (`socks5_client`, `mgmt_client`).
+- **Scripts de stress y pruebas:**  
+  En la raíz del proyecto (`test.sh`, `test2.sh`, `test3.sh`).
+- **Documentación y reportes:**  
+  En la raíz (`README.md` e informe).
+
+---
+
+
+Los ejecutables se generan en:
+- `bin/server/` para el servidor
+- `bin/client/` para los clientes
+
+---
+
+
+
+## Ejemplo de estructura de carpetas tras compilar
+
+```
+tp-protos/
+├── bin/
+│   ├── server/
+│   │   └── socks5d
+│   └── client/
+│       ├── socks5_client
+│       └── mgmt_client
+├── README.md
+└── ...
+```
+
 
 ## ¿Como correr el proxy sockv5?
-./bin/server/programa
+./bin/server/socks5d
 
 
 ## socks5_client
@@ -33,7 +72,7 @@ Un cliente interactivo en C que permite:
 
 ### Ejecución
 ```sh
-./bin/client/socks5_client [proxy_host] [proxy_port] [username] [password]
+./bin/client/socks5_client [proxy_host] [proxy_port] 
 ```
 - Si no se pasan argumentos, usa los valores por defecto.
 
@@ -41,16 +80,6 @@ Un cliente interactivo en C que permite:
 ```sh
 ./bin/client/socks5_client 127.0.0.1 1080
 ```
-- Menú interactivo:
-  1. Autenticarse (opcional)
-  2. Test HTTP (a httpbin.org)
-  3. Request HTTP personalizado (host, puerto, path)
-  4. Salir
-
-- Puedes probar:
-  - Dominios: `www.google.com`
-  - IPv4: `8.8.8.8`
-  - IPv6: `2001:4860:4860::8888`
 
 ---
 
@@ -61,16 +90,9 @@ Un cliente de administración para el protocolo de management del servidor. Perm
 - Autenticarse como administrador.
 - Consultar estadísticas del servidor (conexiones, bytes transferidos, etc.).
 - Listar, agregar, eliminar y cambiar contraseñas de usuarios.
-
-### ¿Cómo funciona?
-- Al iniciar, solicita autenticación obligatoria.
-- Luego muestra un menú de comandos:
-  1. Obtener estadísticas
-  2. Listar usuarios
-  3. Agregar usuario
-  4. Eliminar usuario
-  5. Cambiar contraseña de usuario
-  6. Salir
+- Consultar o modificar el tamaño del buffer
+- Consultar o modificar el metodo de autenticacion actual
+- Ver los logs de un usuario en especifico
 
 ### Ejecución
 ```sh
@@ -110,47 +132,4 @@ Un cliente de administración para el protocolo de management del servidor. Perm
 - El servidor debe estar corriendo y accesible en la IP/puerto configurados.
 
 ---
-
-## Ubicación de materiales y artefactos
-
-- **Servidor:**  
-  Ejecutable en `bin/server/socks5d`
-- **Clientes:**  
-  Ejecutables en `bin/client/` (`socks5_client`, `mgmt_client`).
-- **Scripts de stress y pruebas:**  
-  En la raíz del proyecto (`test.sh`, `test2.sh`, `test3.sh`).
-- **Documentación y reportes:**  
-  En la raíz (`README.md` e informe).
-
----
-
-## Cómo compilar y generar ejecutables
-
-```sh
-make clean   # Limpia binarios previos
-make all     # sirve para compilar una versión más rápida del código ignorando flags de chequeo de memoria que puede ralentizar el código
-make all BUILD=debug # sirve para hacer una validación del código y entender bien qué está pasando ante cualquier fallo del programa
-```
-
-Los ejecutables se generan en:
-- `bin/server/` para el servidor
-- `bin/client/` para los clientes
-
----
-
-
-
-## Ejemplo de estructura de carpetas tras compilar
-
-```
-tp-protos/
-├── bin/
-│   ├── server/
-│   │   └── socks5d
-│   └── client/
-│       ├── socks5_client
-│       └── mgmt_client
-├── README.md
-└── ...
-```
 
