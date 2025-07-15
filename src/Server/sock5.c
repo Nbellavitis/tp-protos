@@ -40,7 +40,7 @@ static const struct state_definition client_actions[] = {
     {.state = ADDR_RESOLVE, .on_arrival = address_resolve_init, .on_write_ready = address_resolve_write, .on_block_ready = address_resolve_done},
     {.state = CONNECTING,  .on_write_ready = request_connecting},
     {.state = REQ_WRITE, .on_arrival = request_write_init, .on_write_ready = request_write},
-    {.state = COPYING,   .on_arrival = socksv5_handle_init,.on_read_ready = socksv5_handle_read,.on_write_ready = socksv5_handle_write,.on_departure = socksv5_handle_close},
+    {.state = COPYING,   .on_arrival = socksv5_handle_init,.on_read_ready = socksv5_handle_read,.on_write_ready = socksv5_handle_write},
     {.state = CLOSED, },
     {.state=ERROR, }
 };
@@ -131,7 +131,6 @@ void socksv5_passive_accept(struct selector_key* key){
 static void socksv5_read(struct selector_key *key) {
     client_data *data = (client_data *)key->data;
 
-    LOG_DEBUG("SOCKS5_READ: Reading data from socket %d", key->fd);
     data->last_activity = time(NULL);
     const enum socks5State state = stm_handler_read(&data->stm, key);
     if (state == ERROR || state == CLOSED) {
@@ -141,16 +140,13 @@ static void socksv5_read(struct selector_key *key) {
 
 static void socksv5_write(struct selector_key *key) {
     if (key == NULL) {
-        LOG_ERROR("%s" ,"socksv5_write: key is NULL");
         return;
     }
     if (key->data == NULL) {
-        LOG_ERROR("%s" ,"socksv5_write: key->data is NULL");
         return;
     }
     client_data *data = (client_data *)key->data;
     const enum socks5State state = stm_handler_write(&data->stm, key);
-    LOG_DEBUG("socksv5_write: stm_handler_write returned: %d", state);
     if (state == ERROR || state == CLOSED) {
         close_connection(key);
     }
@@ -179,7 +175,6 @@ static void socksv5_block(struct selector_key *key, void *data) {
     }
     client_data *c_data = (client_data *)key->data;
     const enum socks5State state = stm_handler_block(&c_data->stm, key,data);
-    LOG_DEBUG("socksv5_block: stm_handler_block returned: %d", state);
     if (state == ERROR || state == CLOSED) {
         close_connection(key);
         return;

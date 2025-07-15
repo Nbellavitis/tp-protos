@@ -29,7 +29,6 @@ static bool update_interests(const struct selector_key *key) {
 
 
 void socksv5_handle_init(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("COPYING_INIT: Starting data copy between client and origin (state = %d)", state);
     if (!update_interests(key)) {
         close_connection(key);
     }
@@ -89,7 +88,4 @@ unsigned socksv5_handle_write( struct selector_key *key) {
 }
 
 
-void socksv5_handle_close(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("%s" , "COPYING_CLOSE: Closing data handling");
-}
 

@@ -113,7 +113,6 @@ void management_passive_accept(struct selector_key* key) {
 static void management_read(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
 
-    LOG_DEBUG("Management read on socket %d", key->fd);
 
     const enum management_state state = stm_handler_read(&mgmt_data->stm, key);
     if (state == MGMT_ERROR || state == MGMT_CLOSED) {
@@ -125,7 +124,6 @@ static void management_read(struct selector_key *key) {
 static void management_write(struct selector_key *key) {
     ManagementData *mgmt_data = (ManagementData *)key->data;
 
-    LOG_DEBUG("Management write on socket %d", key->fd);
 
     const enum management_state state = stm_handler_write(&mgmt_data->stm, key);
     if (state == MGMT_ERROR || state == MGMT_CLOSED) {

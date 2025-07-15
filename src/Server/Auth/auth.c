@@ -19,7 +19,6 @@ user_t *validate_user(const char *username, const char *password) {
 }
 
 void authentication_read_init(const unsigned state,  struct selector_key *key){
-    LOG_DEBUG("Authentication phase initialized (state: %d)", state);
     struct client_data *data = (struct client_data *)key->data;
     init_auth_parser(&data->client.auth_parser);
     if (selector_set_interest_key(key, OP_READ) != SELECTOR_SUCCESS) {
@@ -90,7 +89,6 @@ unsigned authentication_read(struct selector_key *key) {
 }
 
 void authentication_write_init(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("AUTHENTICATION_WRITE_INIT: Setting interest to OP_WRITE");
     if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
         close_connection(key);
     }

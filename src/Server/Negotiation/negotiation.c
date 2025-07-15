@@ -4,7 +4,6 @@
 #include "../../logger.h"
 #define VERSION_5 0x05
 void negotiation_read_init(unsigned state, struct selector_key *key) {
-    LOG_DEBUG("NEGOTIATION_INIT: Starting negotiation (state = %d)", state);
     struct client_data *data = (struct client_data *)key->data;
     init_negotiation_parser(&data->client.neg_parser);
 }
@@ -24,7 +23,6 @@ unsigned negotiation_read(struct selector_key *key) {
 
     buffer_write_adv(&data->client_buffer, read_count);
     negotiation_parse_result result = negotiation_parse(p, &data->client_buffer);
-    LOG_DEBUG("NEGOTIATION_READ: Negotiation result: %d", result);
 
     if (result == NEGOTIATION_PARSE_INCOMPLETE) {
         return NEGOTIATION_READ;
@@ -43,14 +41,12 @@ unsigned negotiation_read(struct selector_key *key) {
 }
 
 void negotiation_write_init(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("NEGOTIATION_WRITE_INIT: Setting interest to OP_WRITE");
     if (selector_set_interest_key(key, OP_WRITE) != SELECTOR_SUCCESS) {
         close_connection(key);
     }
 }
 
 unsigned negotiation_write(struct selector_key *key) {
-    LOG_DEBUG("%s" ,"NEGOTIATION_WRITE: Writing negotiation response");
     client_data *data = key->data;
 
     ssize_t bytes_written;

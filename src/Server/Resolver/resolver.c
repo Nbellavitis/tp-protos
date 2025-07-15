@@ -128,7 +128,6 @@ static void capture_target_info(client_data *data) {
                 parser->ipv4_addr[2], parser->ipv4_addr[3]);
 
     } else if (parser->address_type == ATYP_IPV6) {
-        LOG_DEBUG("%s", "REQ_READ: Target IPv6");
         inet_ntop(AF_INET6, parser->ipv6_addr, data->target_host,
                  sizeof(data->target_host));
     }
@@ -218,7 +217,6 @@ unsigned request_write(struct selector_key *key) {
 }
 
 void address_resolve_init(const unsigned state, struct selector_key *key) {
-    LOG_DEBUG("ADDR_RESOLVE_INIT: Starting address resolution (state = %d)", state);
 
     client_data *data = (client_data *)key->data;
     resolver_parser *parser = &data->client.req_parser;

@@ -106,12 +106,10 @@ request_parse resolver_parse(resolver_parser *p, struct buffer *buffer) {
 
             case RESOLVER_STATE_PORT:
                 if (p->bytes_read == 0) {
-                    LOG_DEBUG("Byte received: 0x%02x in state", byte);
                     p->port = ((uint16_t)byte) << PORT_HIGH_BYTE_SHIFT;
                     p->bytes_read = DOMAIN_LENGTH_OFFSET;
                 } else {
                     p->port |= byte;
-                    LOG_DEBUG("Byte received: 0x%02x in state", byte);
                     p->done = true;
                     return REQUEST_PARSE_OK;
                 }
