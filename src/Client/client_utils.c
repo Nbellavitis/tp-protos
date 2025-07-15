@@ -110,26 +110,18 @@ void prompt_server_config(char *host, size_t host_sz, int *port, bool mgmt) {
     char *str = mgmt ? mgmnt_server_ip : socks_server_ip;
     char buf[BUFF_SIZE];
 
-    // Host/IP configuration
-    for (;;) {
-        if (read_line(str, buf, sizeof buf) < 0 || buf[0] == '\0') {
-            strncpy(host, mgmt ? DEFAULT_MGMT_HOST : DEFAULT_SOCKS5_HOST, host_sz);
-            break;
-        }
-
-        struct in_addr tmp4;
-        struct in6_addr tmp6;
-        if (inet_pton(AF_INET, buf, &tmp4) == 1) {
-            strncpy(host, buf, host_sz);
-            break;
-        } else if (inet_pton(AF_INET6, buf, &tmp6) == 1) {
-            strncpy(host, buf, host_sz);
-            break;
-        }
-        puts("Invalid IP address. Must be IPv4 or IPv6.");
+    // Host/IP/Dominio configuration (simplificado)
+    if (read_line(str, buf, sizeof buf) < 0 || buf[0] == '\0') {
+        // Si el usuario no ingresa nada, usar el default
+        strncpy(host, mgmt ? DEFAULT_MGMT_HOST : DEFAULT_SOCKS5_HOST, host_sz -1);
+    } else {
+        // Si ingresa algo, simplemente lo copiamos.
+        // getaddrinfo se encargará de resolverlo después.
+        strncpy(host, buf, host_sz - 1);
     }
+    host[host_sz - 1] = '\0'; // Asegurar terminación NUL
 
-    // Port configuration
+    // Port configuration (sin cambios, ya estaba bien)
     for (;;) {
         char prompt[INPUT_SMALL_BUF];
         int default_port = mgmt ? DEFAULT_MGMT_PORT : DEFAULT_SOCKS5_PORT;
