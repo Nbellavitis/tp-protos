@@ -387,21 +387,22 @@ static int h_logs(mgmt_client_t *c)
 /* -------------------------------------------------------------------------- */
 typedef int (*fn)(mgmt_client_t *);
 typedef struct { const char *txt; fn f; } item;
-static const item MENU[] =
-        {
-                { "Get Statistics",            h_stats  },
-                { "List Users",                h_list   },
-                { "Add User",                  h_add    },
-                { "Delete User",               h_del    },
-                { "Change User Password",      h_chpwd  },
-                { "Get Buffer Info",           h_bufinfo},
-                { "Set Buffer Size",           h_setbuf },
-                { "Change Authentication",     h_setauth},
-                { "Show Current Auth Method",  h_getauth},
-                { "Show User Logs",            h_logs   },
-                { "Disconnect",                NULL     }
-        };
-#define MENU_COUNT (sizeof MENU / sizeof MENU[0])
+
+static const fn MENU_FUNCS[] = {
+        h_stats,
+        h_list,
+        h_add,
+        h_del,
+        h_chpwd,
+        h_bufinfo,
+        h_setbuf,
+        h_setauth,
+        h_getauth,
+        h_logs,
+        NULL  /* Disconnect */
+};
+
+#define MENU_COUNT (sizeof MENU_FUNCS / sizeof MENU_FUNCS[0])
 
 static void draw_menu(void)
 {
@@ -438,11 +439,11 @@ static void menu_loop(mgmt_client_t *c)
         if(ch< 0 ){
             continue;
         }
-        if ( !MENU[ch - 1].f)
+        if ( !MENU_FUNCS[ch - 1])
         {
             return;
         }
-        MENU[ch - 1].f(c);
+        MENU_FUNCS[ch - 1](c);
     }
 }
 /* -------------------------------------------------------------------------- */
