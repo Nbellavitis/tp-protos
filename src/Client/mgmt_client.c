@@ -5,8 +5,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <bits/types/sig_atomic_t.h>
-#include <signal.h>
 #include "../management_constants.h"
 #define DEFAULT_MGMT_HOST          "127.0.0.1"
 #define DEFAULT_MGMT_PORT          8080
