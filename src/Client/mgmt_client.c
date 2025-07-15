@@ -124,7 +124,7 @@ static int connect_server(mgmt_client_t *c)
     c->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (c->socket_fd < 0)
     {
-        perror("socket() failed — cannot create TCP socket");
+        perror("socket()failed—cannot create TCP socket");
         return -1;
     }
     struct sockaddr_in sa =
@@ -134,13 +134,13 @@ static int connect_server(mgmt_client_t *c)
             };
     if (inet_pton(AF_INET, c->server_host, &sa.sin_addr) <= 0)
     {
-        perror("inet_pton() failed — invalid management server address");
+        perror("inet_pton()failed—invalid management server address");
         disconnect(c);
         return -1;
     }
     if (connect(c->socket_fd, (struct sockaddr *)&sa, sizeof sa) < 0)
     {
-        perror("connect() failed — unable to reach management server");
+        perror("connect()failed—unable to reach management server");
         disconnect(c);
         return -1;
     }
@@ -161,7 +161,7 @@ static int auth_server(mgmt_client_t *c)
     snprintf(cred, sizeof cred, "%s:%s", u, p);
     if (send_raw(c, CMD_AUTH, (uint8_t *)cred, (uint8_t)strlen(cred)) < 0)
     {
-        perror("send() failed — could not transmit authentication message");
+        perror("send()failed—could not transmit authentication message");
         return -1;
     }
     uint8_t st;
@@ -169,7 +169,7 @@ static int auth_server(mgmt_client_t *c)
     uint8_t dummy[1];
     if (recv_raw(c, &st, dummy, &len) < 0)
     {
-        perror("recv() failed — no response from management server");
+        perror("recv()failed—no response from management server");
         return -1;
     }
     puts(status_to_str(st));
@@ -235,7 +235,7 @@ static int h_add(mgmt_client_t *c)
     snprintf(pl, sizeof pl, "%s:%s", u, p);
     if (send_raw(c, CMD_ADD_USER, (uint8_t *)pl, (uint8_t)strlen(pl)) < 0)
     {
-        perror("send() failed — could not transmit Add‑User command");
+        perror("send()failed—could not transmit Add‑User command");
         return -1;
     }
     uint8_t st;

@@ -26,7 +26,7 @@
 
 
 // Management protocol constants
-#define MAX_USERNAME_LEN        63
+#define MAX_USERNAME_LEN        10
 #define MAX_PASSWORD_LEN        63
 #define MAX_MGMT_PAYLOAD_LEN    255
 

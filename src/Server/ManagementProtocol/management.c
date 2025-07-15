@@ -55,7 +55,6 @@ static void cleanup_management_connection(struct selector_key *key) {
         }
         free(mgmt_data);
         key->data = NULL; // Buena práctica para evitar usar punteros inválidos
-        mgmt_data->closed = true; // Prevenir doble liberación
     }
 }
 
