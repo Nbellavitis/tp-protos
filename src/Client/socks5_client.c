@@ -9,8 +9,6 @@
 #include <stdint.h>
 #include <signal.h>
 
-#define DEFAULT_SOCKS5_HOST "127.0.0.1"
-#define DEFAULT_SOCKS5_PORT 1080
 
 volatile sig_atomic_t interrupted = 0;
 

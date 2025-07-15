@@ -6,13 +6,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "../management_constants.h"
-#include <sys/types.h>
-#include <netdb.h>
+#include "client_utils.h"
 
 
-#define DEFAULT_MGMT_HOST          "127.0.0.1"
-#define DEFAULT_MGMT_PORT          8080
-#define INPUT_SMALL_BUF            32
 #define INPUT_LINE_BUF             (MAX_USERNAME_LEN + 1)
 #define CREDENTIALS_BUF            (MAX_USERNAME_LEN + 1 + MAX_PASSWORD_LEN + 1)
 #define HEADER_LEN                 3                              /* VER+CMD+LEN */
@@ -24,7 +20,7 @@
 #define MAX_PORT_NUMBER 65535
 
 
-#include <errno.h>
+
 static const uint32_t BUF_SIZE_OPTIONS[] =
         {
                 4 * 1024,
@@ -34,6 +30,7 @@ static const uint32_t BUF_SIZE_OPTIONS[] =
                 64 * 1024,
                 128 * 1024
         };
+
 #define BUF_OPTIONS_COUNT  (sizeof BUF_SIZE_OPTIONS / sizeof BUF_SIZE_OPTIONS[0])
 
 static uint8_t read_buffer[FULL_PAYLOAD_BUF+1];
@@ -47,34 +44,6 @@ typedef struct
 } mgmt_client_t;
 
 
-static int read_line(const char *prompt, char *buf, size_t n)
-{
-    printf("%s", prompt);
-    if (!fgets(buf, (int)n, stdin))
-    {
-        clearerr(stdin);
-        puts("\n");
-        return -1;
-    }
-    buf[strcspn(buf, "\n")] = 0;
-    return 0;
-}
-
-static int ask_choice(const char *prompt, int min, int max)
-{
-    char line[INPUT_SMALL_BUF];
-    int  v;
-    for(;;)
-    {
-        if(read_line(prompt, line, sizeof line) < 0) {
-            return -1;
-        };
-        v = atoi(line);
-        if (v >= min && v <= max) return v;
-        printf("Value %d‑%d\n", min, max);
-    }
-    return -1;
-}
 
 static int check_len(const char *label, const char *s, size_t max)
 {
@@ -561,61 +530,12 @@ static void menu_loop(mgmt_client_t *c)
     }
 }
 
-static void prompt_server_config(char *host, size_t host_sz, int *port)
-{
-    char buf[INPUT_SMALL_BUF];
 
-    for (;;) {
-        if (read_line("Management server IP [" DEFAULT_MGMT_HOST "]: ",
-                      buf, sizeof buf) < 0 ||
-            buf[0] == '\0')
-        {
-            // EOF or blank ⇒ use default
-            strncpy(host, DEFAULT_MGMT_HOST, host_sz);
-            break;
-        }
-        struct in_addr  tmp4;
-        struct in6_addr tmp6;
-        if (inet_pton(AF_INET,  buf, &tmp4) == 1 ||
-            inet_pton(AF_INET6, buf, &tmp6) == 1)
-        {
-            strncpy(host, buf, host_sz);
-            break;
-        }
-        puts("IP inválida. Debe ser IPv4 o IPv6.");
-    }
-
-    // --- port loop ---
-    for (;;) {
-        char prompt[INPUT_SMALL_BUF];
-        snprintf(prompt, sizeof prompt,
-                 "Management server port [%d]: ", DEFAULT_MGMT_PORT);
-
-        if (read_line(prompt, buf, sizeof buf) < 0 ||
-            buf[0] == '\0')
-        {
-            *port = DEFAULT_MGMT_PORT;
-            break;
-        }
-        errno = 0;
-        char *end;
-        long v = strtol(buf, &end, 10);
-        if (errno == 0 && *end == '\0'
-            && v >= 1 && v <= MAX_PORT_NUMBER)
-        {
-            *port = (int)v;
-            break;
-        }
-        fprintf(stderr,
-                "Puerto inválido. Entre 1 y %d.\n",
-                MAX_PORT_NUMBER);
-    }
-}
 /* -------------------------------------------------------------------------- */
 int main(int argc, char *argv[])
 {
     mgmt_client_t cli = { .socket_fd = -1, .authenticated = 0 };
-    prompt_server_config(cli.server_host,sizeof cli.server_host,&cli.server_port);
+    prompt_server_config(cli.server_host,sizeof cli.server_host,&cli.server_port, true);
     menu_loop(&cli);
     disconnect(&cli);
     return 0;
