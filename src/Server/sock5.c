@@ -52,7 +52,7 @@ void socksv5_passive_accept(struct selector_key* key){
     socklen_t client_address_len = sizeof(client_address);
     int new_client_socket = accept(key->fd, (struct sockaddr*)&client_address, &client_address_len);
     if (new_client_socket < 0) {
-        perror("Error accepting new client connection");
+        LOG_ERROR("Error accepting new client connection");
         return;
     }
     if (new_client_socket >= FD_SETSIZE) {
@@ -62,7 +62,7 @@ void socksv5_passive_accept(struct selector_key* key){
     }
     client_data * client_data = calloc(1,sizeof(struct client_data));
     if (client_data == NULL) {
-        perror("Error allocating memory for client data");
+        LOG_ERROR("Error allocating memory for client data");
         close(new_client_socket);
         return;
     }

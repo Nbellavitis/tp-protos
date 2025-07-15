@@ -257,7 +257,7 @@ void address_resolve_init(const unsigned state, struct selector_key *key) {
     sev.sigev_notify_function = dns_resolution_done;
     sev.sigev_value.sival_ptr = dns_req;
 
-    if (getaddrinfo_a(GAI_NOWAIT, reqs, GETADDRINFO_A_COUNT, &sev) != 0) {
+    if (getaddrinfo_a(GAI_NOWAIT, reqs, GETADDRINFO_ELEMENTS, &sev) != 0) {
         LOG_ERROR("%s","ADDR_RESOLVE_INIT: Error starting DNS resolution");
         data->dns_resolution_state = DNS_STATE_ERROR;
         if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS) {

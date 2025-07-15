@@ -26,7 +26,7 @@
 #define DNS_STATE_COMPLETED         2
 #define DNS_STATE_ERROR            -1
 
-#define GETADDRINFO_A_COUNT         1
+#define GETADDRINFO_ELEMENTS        1
 
 #define PORT_HIGH_BYTE_SHIFT        8
 #define BYTE_MASK                   0xFF

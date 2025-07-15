@@ -292,22 +292,43 @@ void interactive_menu(socks5_client_t *client) {
     char target_host[TARGET_HOST_BUFFER_SIZE];
     char path[PATH_BUFFER_SIZE];
     int target_port;
-    
-    while (1) {
+
+    while (!interrupted) {
         printf("\n=== SOCKS5 Client ===\n");
-        if (!client->authenticated) {
+
+        if (client->authenticated) {
+            printf("Status: Authenticated as %s\n", client->username);
+            printf("1. Deauthenticate (log out)\n");
+            printf("2. Test HTTP connection (basic test)\n");
+            printf("3. Custom HTTP request\n");
+            printf("4. Disconnect and Exit\n");
+        } else {
             printf("Status: Not authenticated\n");
             printf("1. Authenticate\n");
             printf("2. Test HTTP connection (basic test)\n");
             printf("3. Custom HTTP request\n");
             printf("4. Disconnect and Exit\n");
-            printf("Choice: ");
-            if (!fgets(input, sizeof(input), stdin)) {
-                break;
+        }
+
+        printf("Choice: ");
+        if (!fgets(input, sizeof(input), stdin)) {
+            if (interrupted) {
+                printf("\nSignal received, exiting gracefully...\n");
             }
-            int choice = atoi(input);
-            switch (choice) {
-                case MENU_AUTHENTICATE:
+            break;
+        }
+
+        int choice = atoi(input);
+        bool is_authenticated = client->authenticated;
+
+        switch (choice) {
+            case MENU_AUTHENTICATE:
+                if (is_authenticated) {
+                    client->authenticated = 0;
+                    memset(client->username, 0, sizeof(client->username));
+                    memset(client->password, 0, sizeof(client->password));
+                    printf("Logged out. Now not authenticated.\n");
+                } else {
                     printf("Username: ");
                     if (fgets(client->username, sizeof(client->username), stdin)) {
                         client->username[strcspn(client->username, "\n")] = 0;
@@ -317,147 +338,87 @@ void interactive_menu(socks5_client_t *client) {
                         client->password[strcspn(client->password, "\n")] = 0;
                     }
                     if (socks5_connect_proxy(client) == 0) {
-                        int method = socks5_negotiate(client, 1); // SOLO autenticación
+                        int method = socks5_negotiate(client, 1); // Ofrecer autenticación
                         if (method == USERPASS) {
                             client->authenticated = 1;
                             printf("Authentication successful!\n");
-                        } else if (method == NOAUTH) {
-                            client->authenticated = 0;
-                            printf("No authentication required by server.\n");
                         } else {
-                            printf("Authentication failed!\n");
+                            printf("Authentication failed or not required!\n");
                             client->authenticated = 0;
                         }
                     } else {
                         printf("Failed to connect to proxy.\n");
-                        client->authenticated = 0;
                     }
                     socks5_disconnect(client);
-                    break;
-                case MENU_BASIC_TEST:
-                    if (socks5_connect_proxy(client) == 0) {
-                        int method = socks5_negotiate(client, 0); // SOLO sin autenticación
-                        if (method == NOAUTH) {
-                            socks5_http_test(client, "httpbin.org", DEFAULT_HTTP_PORT, "/ip");
-                        } else {
-                            printf("Failed to connect or negotiate\n");
-                        }
-                    } else {
-                        printf("Failed to connect to proxy.\n");
-                    }
-                    socks5_disconnect(client);
-                    break;
-                case MENU_CUSTOM_REQUEST:
-                    printf("Target host: ");
-                    if (fgets(target_host, sizeof(target_host), stdin)) {
-                        target_host[strcspn(target_host, "\n")] = 0;
-                    }
-                    printf("Target port [80]: ");
-                    if (fgets(input, sizeof(input), stdin)) {
-                        target_port = atoi(input);
-                        if (target_port == 0) target_port = DEFAULT_HTTP_PORT;
-                    }
-                    printf("Path [/]: ");
-                    if (fgets(path, sizeof(path), stdin)) {
-                        path[strcspn(path, "\n")] = 0;
-                        if (strlen(path) == 0) strcpy(path, "/");
-                    }
-                    printf("\n[INFO] Intentando conectar a %s:%d a través del proxy...\n", target_host, target_port);
-                    printf("[INFO] Si el destino no responde, la conexión puede demorar varios segundos (timeout de red). La aplicación NO está colgada.\n");
-                    if (socks5_connect_proxy(client) == 0) {
-                        int method = socks5_negotiate(client, 0); // SOLO sin autenticación
-                        if (method == NOAUTH) {
-                            socks5_http_test(client, target_host, target_port, path);
-                        } else {
-                            printf("Failed to connect or negotiate\n");
-                        }
-                    } else {
-                        printf("Failed to connect to proxy.\n");
-                    }
-                    socks5_disconnect(client);
-                    break;
-                case MENU_EXIT:
-                    printf("Exiting...\n");
-                    return;
-                default:
-                    printf("Invalid choice\n");
-                    break;
-            }
-        } else {
-            printf("Status: Authenticated as %s\n", client->username);
-            printf("1. Deauthenticate (log out)\n");
-            printf("2. Test HTTP connection (basic test)\n");
-            printf("3. Custom HTTP request\n");
-            printf("4. Disconnect and Exit\n");
-            printf("Choice: ");
-            if (!fgets(input, sizeof(input), stdin)) {
+                }
                 break;
-            }
-            int choice = atoi(input);
-            switch (choice) {
-                case MENU_AUTHENTICATE:
-                    client->authenticated = 0;
-                    memset(client->username, 0, sizeof(client->username));
-                    memset(client->password, 0, sizeof(client->password));
-                    printf("Logged out. Now not authenticated.\n");
-                    break;
-                case MENU_BASIC_TEST:
-                    if (socks5_connect_proxy(client) == 0) {
-                        int method = socks5_negotiate(client, 1); // autenticado
-                        if (method == USERPASS) {
-                            socks5_http_test(client, "httpbin.org", DEFAULT_HTTP_PORT, "/ip");
-                        } else {
-                            printf("Failed to connect or negotiate\n");
-                        }
+
+            case MENU_BASIC_TEST:
+                if (socks5_connect_proxy(client) == 0) {
+                    int method = socks5_negotiate(client, is_authenticated);
+                    if ((is_authenticated && method == USERPASS) || (!is_authenticated && method == NOAUTH)) {
+                        socks5_http_test(client, "httpbin.org", DEFAULT_HTTP_PORT, "/ip");
                     } else {
-                        printf("Failed to connect to proxy.\n");
+                        printf("Failed to negotiate with the required auth method.\n");
                     }
-                    socks5_disconnect(client);
-                    break;
-                case MENU_CUSTOM_REQUEST:
-                    printf("Target host: ");
-                    if (fgets(target_host, sizeof(target_host), stdin)) {
-                        target_host[strcspn(target_host, "\n")] = 0;
-                    }
-                    printf("Target port [80]: ");
-                    if (fgets(input, sizeof(input), stdin)) {
-                        target_port = atoi(input);
-                        if (target_port == 0) target_port = DEFAULT_HTTP_PORT;
-                    }
-                    printf("Path [/]: ");
-                    if (fgets(path, sizeof(path), stdin)) {
-                        path[strcspn(path, "\n")] = 0;
-                        if (strlen(path) == 0) strcpy(path, "/");
-                    }
-                    printf("\n[INFO] Intentando conectar a %s:%d a través del proxy...\n", target_host, target_port);
-                    printf("[INFO] Si el destino no responde, la conexión puede demorar varios segundos (timeout de red). La aplicación NO está colgada.\n");
-                    if (socks5_connect_proxy(client) == 0) {
-                        int method = socks5_negotiate(client, 1); // autenticado
-                        if (method == USERPASS) {
-                            socks5_http_test(client, target_host, target_port, path);
-                        } else {
-                            printf("Failed to connect or negotiate\n");
-                        }
+                } else {
+                    printf("Failed to connect to proxy.\n");
+                }
+                socks5_disconnect(client);
+                break;
+
+            case MENU_CUSTOM_REQUEST:
+                printf("Target host: ");
+                if (fgets(target_host, sizeof(target_host), stdin)) {
+                    target_host[strcspn(target_host, "\n")] = 0;
+                }
+                printf("Target port [80]: ");
+                if (fgets(input, sizeof(input), stdin)) {
+                    target_port = atoi(input);
+                    if (target_port == 0) target_port = DEFAULT_HTTP_PORT;
+                }
+                printf("Path [/]: ");
+                if (fgets(path, sizeof(path), stdin)) {
+                    path[strcspn(path, "\n")] = 0;
+                    if (strlen(path) == 0) strcpy(path, "/");
+                }
+                if (socks5_connect_proxy(client) == 0) {
+                    int method = socks5_negotiate(client, is_authenticated);
+                    if ((is_authenticated && method == USERPASS) || (!is_authenticated && method == NOAUTH)) {
+                        socks5_http_test(client, target_host, target_port, path);
                     } else {
-                        printf("Failed to connect to proxy.\n");
+                        printf("Failed to negotiate with the required auth method.\n");
                     }
-                    socks5_disconnect(client);
-                    break;
-                case MENU_EXIT:
-                    printf("Exiting...\n");
-                    return;
-                default:
-                    printf("Invalid choice\n");
-                    break;
-            }
+                } else {
+                    printf("Failed to connect to proxy.\n");
+                }
+                socks5_disconnect(client);
+                break;
+
+            case MENU_EXIT:
+                printf("Exiting...\n");
+                interrupted = 1;
+                break;
+
+            default:
+                printf("Invalid choice\n");
+                break;
+        }
+
+        if (choice == MENU_EXIT) {
+            break;
         }
     }
 }
 
 int main(int argc, char *argv[]) {
-   
-    
-    signal(SIGINT, signal_handler);
+
+
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
     
     socks5_client_t client = {0};
 
@@ -476,9 +437,9 @@ int main(int argc, char *argv[]) {
     printf("SOCKS5 Client\n");
     printf("Proxy: %s:%d\n", client.proxy_host, client.proxy_port);
     printf("\nWelcome!\n");
-    printf("- Puedes autenticarte opcionalmente, o usar el proxy sin autenticación\n");
-    printf("- Realiza requests HTTP a través del proxy\n");
-    printf("- Usa Ctrl+C para salir en cualquier momento\n\n");
+    printf("You can connect to a SOCKS5 proxy server and perform HTTP requests through it.\n");
+    printf("You can also authenticate with a username and password.\n");
+    printf("Press Ctrl+C to exit at any time.\n");
     
     
     interactive_menu(&client);
@@ -488,7 +449,7 @@ int main(int argc, char *argv[]) {
    
     
     if (interrupted) {
-        printf("[CLIENT_DEBUG] main: El programa fue interrumpido por Ctrl+C\n");
+        printf("[CLIENT_DEBUG] main: Received interrupt signal, exiting...\n");
     }
     
     return 0;
