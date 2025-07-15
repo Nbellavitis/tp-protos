@@ -106,7 +106,11 @@ void cmd_add_user(ManagementData *md)
 
     *c = '\0';
     if (strlen(md->parser.payload) > MAX_USERNAME_LEN) {
-        send_status_only(md, STATUS_ERROR);
+        send_status_only(md, STATUS_INVALID_FORMAT);
+        return;
+    }
+    if (strlen(c + 1) > MAX_PASSWORD_LEN) {
+        send_status_only(md, STATUS_INVALID_FORMAT);
         return;
     }
     add_user_result_t r = add_user(md->parser.payload, c+1);
