@@ -54,3 +54,4 @@ dkms.conf
 /.gdb_history
 **/bin/
 **/obj/
+*.log
