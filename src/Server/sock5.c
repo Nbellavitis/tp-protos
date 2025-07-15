@@ -270,11 +270,11 @@ void log_store_for_user(const client_data *cd)
 
     rec->client_port = (uint16_t)cd->client_port;
 
-    strncpy(rec->dst_host, cd->target_host, MAX_LOG_HOSTNAME_LEN - 1);
+    strncpy(rec->dst_host, cd->target_host[0] ? cd->target_host:"unknown\t" , MAX_LOG_HOSTNAME_LEN - 1);
     rec->dst_host[MAX_LOG_HOSTNAME_LEN - 1] = '\0';
 
     rec->dst_port = (uint16_t)cd->target_port;
-    rec->status   = cd->socks_status;
+    rec->status   = cd-> auth_failed ? 1:cd->socks_status;
 }
 
 
