@@ -64,22 +64,43 @@ static void cmd_stats(ManagementData *md)
 
 static void cmd_list_users(ManagementData *md)
 {
-    struct users *u = get_authorized_users();
+
+    uint32_t offset = 0;
+    if (md->parser.payload_len == sizeof(uint32_t)) {
+        uint32_t net_offset;
+        memcpy(&net_offset, md->parser.payload, sizeof(uint32_t));
+        offset = ntohl(net_offset);
+    }
+
+
+    user_t *u = get_authorized_users();
     uint8_t n = (uint8_t)get_num_authorized_users();
 
+
     uint8_t pl[MAX_MGMT_PAYLOAD_LEN];
-    pl[0] = n;
-    size_t off = 1;
+    size_t plen = sizeof(uint32_t);
 
-    for (uint8_t i = 0; i < n && off < MAX_MGMT_PAYLOAD_LEN; i++) {
-        size_t l = strlen(u[i].name) + 1;           /* incluye NUL */
-        if (off + l > MAX_MGMT_PAYLOAD_LEN) break;
-        memcpy(pl + off, u[i].name, l);
-        off += l;
+
+    uint8_t i = offset;
+    for (; i < n && plen < MAX_MGMT_PAYLOAD_LEN; i++) {
+        size_t name_len = strlen(u[i].name) + 1;
+
+        if (plen + name_len > MAX_MGMT_PAYLOAD_LEN) {
+            break;
+        }
+
+        memcpy(pl + plen, u[i].name, name_len);
+        plen += name_len;
     }
-    send_management_response_raw(&md->response_buffer, STATUS_OK, pl, (uint8_t)off);
-}
 
+
+    uint32_t next_offset = (i < n) ? i : 0;
+    uint32_t net_next_offset = htonl(next_offset);
+    memcpy(pl, &net_next_offset, sizeof(uint32_t));
+
+
+    send_management_response_raw(&md->response_buffer, STATUS_OK, pl, (uint8_t)plen);
+}
 
 void cmd_add_user(ManagementData *md)
 {
@@ -209,10 +230,9 @@ static void cmd_get_auth_method(ManagementData *md)
 
 
 
-//@TODO: por como esta definido el protocolo hay veces que se trunca la respuesta!!!!. El maximo del payload es 256 y el maximo de host lenght es eso tambien! hay que agrandar el payload y cambiar un poco esta funcion.
 static void cmd_get_log_by_user(ManagementData *md)
 {
-    /* 0)  Autenticación obligatoria */
+
     if (!md->authenticated) {
         send_management_response(&md->response_buffer,
                                  STATUS_AUTH_REQUIRED,
@@ -220,15 +240,31 @@ static void cmd_get_log_by_user(ManagementData *md)
         return;
     }
 
-    /* 1)  Usuario en payload */
     char uname[MAX_USERNAME_LEN + 1];
-    size_t ulen = md->parser.payload_len > MAX_USERNAME_LEN
-                  ? MAX_USERNAME_LEN
-                  : md->parser.payload_len;
-    memcpy(uname, md->parser.payload, ulen);
+    uint32_t offset = 0;
+    size_t ulen = 0;
+
+    // El payload ahora es: [username]\0[4-byte offset]
+
+    char *nul_char = memchr(md->parser.payload, '\0', md->parser.payload_len);
+    if (nul_char == NULL || (nul_char - md->parser.payload + 1 + sizeof(uint32_t)) > md->parser.payload_len) {
+
+        ulen = md->parser.payload_len > MAX_USERNAME_LEN ? MAX_USERNAME_LEN : md->parser.payload_len;
+        memcpy(uname, md->parser.payload, ulen);
+    } else {
+
+        ulen = nul_char - md->parser.payload;
+        if (ulen > MAX_USERNAME_LEN) ulen = MAX_USERNAME_LEN;
+        memcpy(uname, md->parser.payload, ulen);
+
+        uint32_t net_offset;
+        memcpy(&net_offset, nul_char + 1, sizeof(uint32_t));
+        offset = ntohl(net_offset);
+    }
     uname[ulen] = '\0';
 
-    /* 2)  Buscar el bucket */
+
+
     user_t *u = NULL;
     if (strcmp(uname, "anonymous") == 0) {
         u = get_anon_user();
@@ -242,48 +278,45 @@ static void cmd_get_log_by_user(ManagementData *md)
             }
         }
     }
-    if (!u) {     /* usuario inexistente */
-        send_management_response(&md->response_buffer,
-                                 STATUS_NOT_FOUND,
-                                 "User not found");
+    if (!u) {
+        send_management_response(&md->response_buffer, STATUS_NOT_FOUND, "User not found");
         return;
     }
 
-    /* 3)  Armar payload truncado (≤255 B) */
-    char  payload[MGMT_PAYLOAD_SIZE];       /* MAX_MGMT_PAYLOAD_LEN bytes + '\0' */
-    size_t plen = 0;
 
-    char   ts[TIMESTAMP_BUFFER_SIZE], line[LOG_LINE_SIZE];
+    uint8_t payload[MAX_MGMT_PAYLOAD_LEN];
+    // Reservamos los primeros 4 bytes para el 'next_offset'
+    size_t plen = sizeof(uint32_t);
+
+    char ts[TIMESTAMP_BUFFER_SIZE];
     struct tm tm_;
 
-    for (size_t i = 0; i < u->used && plen < MAX_MGMT_PAYLOAD_LEN; i++) {
+
+    uint32_t i = offset;
+    for (; i < u->used && plen < MAX_MGMT_PAYLOAD_LEN; i++) {
         gmtime_r(&u->history[i].ts, &tm_);
         strftime(ts, sizeof ts, "%Y-%m-%dT%H:%M:%SZ", &tm_);
 
-        /* espacio disponible, dejando 1 para '\0' */
         size_t room = MAX_MGMT_PAYLOAD_LEN - plen;
-        int n = snprintf(payload + plen, room + 1,
+        int n = snprintf((char*)payload + plen, room,
                          "%s\t%s\t%u\t%s\t%u\t0x%02X\n",
-                         ts,
-                         u->history[i].client_ip,
-                         u->history[i].client_port,
-                         u->history[i].dst_host,
-                         u->history[i].dst_port,
-                         u->history[i].status);
+                         ts, u->history[i].client_ip, u->history[i].client_port,
+                         u->history[i].dst_host, u->history[i].dst_port, u->history[i].status);
 
-        if (n < 0) continue;          /* error improbable */
-        if ((size_t)n >= room) {      /* se truncó la línea */
-            plen = MAX_MGMT_PAYLOAD_LEN;               /* llenamos el cupo y salimos */
+        if (n < 0) continue;
+        if ((size_t)n >= room) {
+            // No cabe la línea completa, terminamos este chunk aquí
             break;
         }
-        plen += (size_t)n;            /* línea completa añadida */
+        plen += (size_t)n;
     }
-    payload[plen] = '\0';             /* asegurar terminación */
 
-    /* 4)  Responder STATUS_OK con el payload (truncado o no) */
-    send_management_response(&md->response_buffer, STATUS_OK, payload);
+    uint32_t next_offset = (i < u->used) ? i : 0;
+    uint32_t net_next_offset = htonl(next_offset);
+    memcpy(payload, &net_next_offset, sizeof(uint32_t));
+
+    send_management_response_raw(&md->response_buffer, STATUS_OK, payload, plen);
 }
-
 
 
 static const mgmt_cmd_fn mgmt_cmd_table[] = {

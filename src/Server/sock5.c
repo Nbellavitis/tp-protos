@@ -258,40 +258,38 @@ void close_connection(struct selector_key *key) {
 
 
 
+
+
 void log_store_for_user(const client_data *cd)
 {
     if (!cd) return;
-
-    // Evitamos use-after-free
-    if (killed) return;
+    if (killed) return; // Evitamos use-after-free
 
     user_t *u = cd->user ? cd->user : get_anon_user();
     if (!u) return;
 
     if (u->cap == u->used) {
-        LOG_DEBUG("Doing a realloc of the USER %s history", u->name);
         size_t new_cap = u->cap + USER_HISTORY_LOG_BLOCK;
-        access_rec_t *tmp = realloc(u->history,
-                                    new_cap * sizeof(access_rec_t));
+        access_rec_t *tmp = realloc(u->history, new_cap * sizeof(access_rec_t));
         if (!tmp) {
-            LOG_ERROR("access_log: realloc failed (user=%s)",
-                      u->name ? u->name : "anonymous");
-            return;   /* se descarta el registro si no hay memoria */
+            LOG_ERROR("access_log: realloc failed (user=%s)", u->name ? u->name : "anonymous");
+            return;
         }
         u->history = tmp;
         u->cap     = new_cap;
     }
 
     access_rec_t *rec = &u->history[u->used++];
-    rec->ts          = time(NULL);
+    rec->ts = time(NULL);
 
-    strncpy(rec->client_ip, cd->client_ip, sizeof(rec->client_ip));
-    rec->client_ip[sizeof(rec->client_ip)-1] = '\0';
+    strncpy(rec->client_ip, cd->client_ip, INET6_ADDRSTRLEN - 1);
+    rec->client_ip[INET6_ADDRSTRLEN - 1] = '\0';
 
+    // 2. Copiar el puerto del cliente
     rec->client_port = (uint16_t)cd->client_port;
 
-    strncpy(rec->dst_host, cd->target_host, sizeof(rec->dst_host));
-    rec->dst_host[sizeof(rec->dst_host)-1] = '\0';
+    strncpy(rec->dst_host, cd->target_host, MAX_LOG_HOSTNAME_LEN - 1);
+    rec->dst_host[MAX_LOG_HOSTNAME_LEN - 1] = '\0';
 
     rec->dst_port = (uint16_t)cd->target_port;
     rec->status   = cd->socks_status;

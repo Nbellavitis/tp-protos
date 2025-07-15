@@ -15,6 +15,9 @@
 #define ANON_USER_NAME "anonymous"
 #define USER_HISTORY_LOG_BLOCK 10
 
+#define MAX_HOST_LEN 256
+#define MAX_LOG_HOSTNAME_LEN 70
+
 typedef struct  {
     time_t   ts;                           /* momento en epoch UTC          */
     char     client_ip[INET6_ADDRSTRLEN];  /* origen                        */

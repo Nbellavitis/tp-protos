@@ -75,21 +75,19 @@ request_parse resolver_parse(resolver_parser *p, struct buffer *buffer) {
                     case ATYP_DOMAIN:
                         if (p->bytes_read == 0) {
                             p->domain_length = byte;
-                            // Validar que domain_length no sea cero
-                            if (p->domain_length == 0) {
+                            // Si el cliente pide un dominio de longitud 0 o más grande que nuestro buffer,
+                            // es un error de protocolo inmediato.
+                            if (p->domain_length == 0 || p->domain_length >= MAX_DOMAIN_LEN) {
                                 p->error = true;
                                 return REQUEST_PARSE_ERROR;
                             }
-                            p->bytes_read = DOMAIN_LENGTH_OFFSET;  // Lee un byte que va a ser la longitud del dominio
+                            p->bytes_read = DOMAIN_LENGTH_OFFSET;
                         } else {
-                            // Verificar bounds antes de escribir
-                            if (p->bytes_read - 1 >= MAX_SOCKS5_DOMAIN_LEN) {
-                                p->error = true;
-                                return REQUEST_PARSE_ERROR;
-                            }
                             p->domain[p->bytes_read - DOMAIN_LENGTH_OFFSET] = byte;
                             p->bytes_read++;
-                            if (p->bytes_read > p->domain_length) {
+
+
+                            if ((p->bytes_read - DOMAIN_LENGTH_OFFSET) == p->domain_length) {
                                 p->state = RESOLVER_STATE_PORT;
                                 p->bytes_read = 0;
                             }
@@ -162,7 +160,7 @@ bool prepare_request_response(struct buffer *origin_buffer, uint8_t version, uin
     // BND.ADDR
     switch (atyp) {
         case ATYP_IPV4:
-            // Verificar espacio para 4 bytes de IPv4
+
             if (!buffer_can_write(origin_buffer)) {
                 return false;
             }
@@ -174,7 +172,7 @@ bool prepare_request_response(struct buffer *origin_buffer, uint8_t version, uin
             }
             break;
         case ATYP_IPV6:
-            // Verificar espacio para 16 bytes de IPv6
+
             if (!buffer_can_write(origin_buffer)) {
                 return false;
             }
@@ -187,13 +185,12 @@ bool prepare_request_response(struct buffer *origin_buffer, uint8_t version, uin
             break;
         case ATYP_DOMAIN: {
             uint8_t domain_len = strlen((char*)bnd_addr);
-            // Verificar espacio para longitud
+
             if (!buffer_can_write(origin_buffer)) {
                 return false;
             }
             buffer_write(origin_buffer, domain_len);
 
-            // Verificar espacio para dominio
             for (int i = 0; i < domain_len; i++) {
                 if (!buffer_can_write(origin_buffer)) {
                     return false;
@@ -204,7 +201,6 @@ bool prepare_request_response(struct buffer *origin_buffer, uint8_t version, uin
         }
     }
 
-    // Verificar espacio para puerto (2 bytes)
     if (!buffer_can_write(origin_buffer)) {
         return false;
     }

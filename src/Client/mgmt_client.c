@@ -233,23 +233,56 @@ static int h_stats(mgmt_client_t *c)
 
 static int h_list(mgmt_client_t *c)
 {
-    uint8_t st;
-    uint8_t len;
-    if (send_raw(c, CMD_LIST_USERS, NULL, 0) < 0) return -1;
-    if (recv_raw(c, &st, &len) < 0) return -1;
-    if (st != STATUS_OK)
-    {
-        puts(status_to_str(st));
-        return -1;
+    uint32_t offset = 0;
+    int has_more_data = 1;
+    int user_count = 0;
+
+    printf("Users:\n");
+
+    while (has_more_data) {
+        uint32_t net_offset = htonl(offset);
+        if (send_raw(c, CMD_LIST_USERS, (uint8_t *)&net_offset, sizeof(net_offset)) < 0) {
+            perror("send_raw failed");
+            return -1;
+        }
+
+
+        uint8_t st;
+        uint8_t len;
+        if (recv_raw(c, &st, &len) < 0) {
+            perror("recv_raw failed");
+            return -1;
+        }
+
+        if (st != STATUS_OK) {
+            puts(status_to_str(st));
+            return -1;
+        }
+
+        if (len < sizeof(uint32_t)) {
+            puts("Error: Invalid list_users chunk from server.");
+            return -1;
+        }
+        uint32_t next_offset_net;
+        memcpy(&next_offset_net, read_buffer, sizeof(uint32_t));
+        offset = ntohl(next_offset_net);
+
+        if (len > sizeof(uint32_t)) {
+            char *p = (char *)(read_buffer + sizeof(uint32_t));
+            char *end = (char *)(read_buffer + len);
+
+            while (p < end && *p) {
+                printf("- %s\n", p);
+                user_count++;
+                p += strlen(p) + 1;
+            }
+        }
+
+
+        has_more_data = (offset != 0);
     }
-    uint8_t n = read_buffer[0];
-    char   *p = (char *)(read_buffer + 1);
-    printf("Users (%u):\n", n);
-    for (uint8_t i = 0; i < n; i++)
-    {
-        printf("- %s\n", p);
-        p += strlen(p) + 1;
-    }
+
+    printf("--- End of list (%d users) ---\n", user_count);
     return 0;
 }
 
@@ -388,21 +421,64 @@ static int h_getauth(mgmt_client_t *c)
 static int h_logs(mgmt_client_t *c)
 {
     char u[INPUT_LINE_BUF];
-    if(read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u) < 0){
-        return -1;
-    };
-    if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
-    if (send_raw(c, CMD_GET_LOG_BY_USER, (uint8_t *)u, (uint8_t)strlen(u)) < 0) return -1;
-    uint8_t st;
-    uint8_t len;
-    if (recv_raw(c, &st,  &len) < 0) return -1;
-    if (st != STATUS_OK)
-    {
-        puts(status_to_str(st));
+    if(read_line("User (\"anonymous\" for NOAUTH): ", u, sizeof u) < 0) {
         return -1;
     }
-    read_buffer[len] = '\0';
-    printf("\n%s\n", read_buffer);
+    if (check_len("Username", u, MAX_USERNAME_LEN)) return -1;
+
+    uint32_t offset = 0;
+    int has_more_data = 1;
+
+    printf("\n--- Logs for %s ---\n", u);
+
+    while (has_more_data) {
+        /* 1. Armar payload de la solicitud: [username]\0[offset] */
+        uint8_t req_pl[MAX_USERNAME_LEN + 1 + sizeof(uint32_t)];
+        size_t ulen = strlen(u);
+        memcpy(req_pl, u, ulen);
+        req_pl[ulen] = '\0'; // Añadir el NUL terminator
+
+        uint32_t net_offset = htonl(offset);
+        memcpy(req_pl + ulen + 1, &net_offset, sizeof(uint32_t));
+
+        size_t req_len = ulen + 1 + sizeof(uint32_t);
+
+        if (send_raw(c, CMD_GET_LOG_BY_USER, req_pl, req_len) < 0) return -1;
+
+        /* 2. Recibir la respuesta del chunk */
+        uint8_t st;
+        uint8_t len;
+        // LLAMADA CORREGIDA A recv_raw:
+        if (recv_raw(c, &st, &len) < 0) { // Se debe pasar &st y &len. read_buffer es global.
+            perror("recv_raw failed");
+            return -1;
+        }
+
+        if (st != STATUS_OK) {
+            puts(status_to_str(st));
+            return -1;
+        }
+
+        if (len < sizeof(uint32_t)) {
+            puts("Error: Invalid response chunk from server.");
+            return -1;
+        }
+
+        /* 3. Extraer el 'next_offset' y los datos del log */
+        uint32_t next_offset_net;
+        memcpy(&next_offset_net, read_buffer, sizeof(uint32_t)); // Leer del buffer global
+        offset = ntohl(next_offset_net);
+
+        // Imprimir el contenido del log (el resto del payload)
+        if (len > sizeof(uint32_t)) {
+            fwrite(read_buffer + sizeof(uint32_t), 1, len - sizeof(uint32_t), stdout);
+        }
+
+        /* 4. Decidir si se necesita pedir otro chunk */
+        has_more_data = (offset != 0);
+    }
+
+    printf("--- End of logs ---\n");
     return 0;
 }
 /* -------------------------------------------------------------------------- */
@@ -444,27 +520,44 @@ static void draw_menu(void)
 /* -------------------------------------------------------------------------- */
 static void menu_loop(mgmt_client_t *c)
 {
-    while (!c->authenticated)
-    {
-        puts("1) Connect & Authenticate\n2) Exit");
-        int ask = ask_choice("Choice: ", 1, 2);
-        if (ask == 2 || ask < 0) return;
-
-        if (connect_server(c) == 0) auth_server(c);
-    }
     while (1)
     {
+
+        while (!c->authenticated)
+        {
+            puts("1) Connect & Authenticate\n2) Exit");
+            int ask = ask_choice("Choice: ", 1, 2);
+            if (ask == 2 || ask < 0) return;
+
+            if (connect_server(c) == 0) {
+                auth_server(c);
+            }
+
+        }
+
+
         puts("\n=== Management Client ===");
         draw_menu();
         int ch = ask_choice("Choice: ", 1, MENU_COUNT);
-        if(ch< 0 ){
-            continue;
-        }
-        if ( !MENU_FUNCS[ch - 1])
-        {
+        if (ch < 0) {
+            disconnect(c);
             return;
         }
-        MENU_FUNCS[ch - 1](c);
+
+        fn handler = MENU_FUNCS[ch - 1];
+        if (!handler) {
+            disconnect(c);
+
+            continue;
+        }
+
+
+        if (handler(c) < 0) {
+
+            printf("Command failed. The connection may have been lost.\n");
+            disconnect(c);
+
+        }
     }
 }
 
