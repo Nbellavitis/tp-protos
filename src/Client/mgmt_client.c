@@ -149,11 +149,11 @@ static int h_stats(mgmt_client_t *c)
         return -1;
     }
     uint32_t *v = (uint32_t *)read_buffer;
-    printf("Opened : %u\n", ntohl(v[0]));
-    printf("Closed : %u\n", ntohl(v[1]));
-    printf("Current: %u\n", ntohl(v[2]));
-    printf("Client : %u\n", ntohl(v[3]));
-    printf("Origin : %u\n", ntohl(v[4]));
+    printf("Historical opened connections: %u\n", ntohl(v[0]));
+    printf("Historical closed connections: %u\n", ntohl(v[1]));
+    printf("Current connections: %u\n", ntohl(v[2]));
+    printf("Bytes from client to server: %u\n", ntohl(v[3]));
+    printf("Bytes from server to client: %u\n", ntohl(v[4]));
     return 0;
 }
 
