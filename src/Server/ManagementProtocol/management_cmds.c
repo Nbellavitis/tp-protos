@@ -15,7 +15,7 @@
 #include <sys/socket.h>
 #include <bits/types/struct_tm.h>
 #include <time.h>
-
+#include "../Negotiation/negotiation_parser.h"
 
 static void cmd_stats(ManagementData *);
 static void cmd_list_users(ManagementData *);

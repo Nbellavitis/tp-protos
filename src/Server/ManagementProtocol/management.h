@@ -11,7 +11,7 @@
 #include "../args.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include "../main.h"
+#include "../users.h"
 #include "../users.h"
 #include "../protocol_constants.h"
 #include "../../management_constants.h"
