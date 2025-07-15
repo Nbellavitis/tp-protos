@@ -7,6 +7,8 @@
 #include <arpa/inet.h>
 #include "../Server/ManagementProtocol/management.h"
 
+#define RECV_ERROR -2
+
 #define DEFAULT_MGMT_HOST          "127.0.0.1"
 #define DEFAULT_MGMT_PORT          8080
 #define INPUT_SMALL_BUF            32
@@ -133,16 +135,24 @@ static int send_raw(mgmt_client_t *c, uint8_t cmd,
            HEADER_LEN + len ? 0 : -1;
 }
 
+static int clear_buffer(mgmt_client_t *c){
 
+}
 
 static int recv_raw(mgmt_client_t *c, uint8_t *st,
-                    uint8_t *pl, uint16_t *len)
+                    uint8_t *pl, uint16_t *len,
+                    size_t    pl_capacity)
 {
     uint8_t hdr[HEADER_LEN];
     if (read(c->socket_fd, hdr, HEADER_LEN) != HEADER_LEN) return -1;
     if (hdr[0] != MANAGEMENT_VERSION) return -1;
     *st  = hdr[1];
     *len = ((uint16_t)hdr[2] << 8) | hdr[3];
+
+    if (*len > pl_capacity || *len > MAX_MGMT_PAYLOAD_LEN) {
+        return -1;
+    }
+
     if (*len && read(c->socket_fd, pl, *len) != *len) return -1;
     return 0;
 }
@@ -204,10 +214,9 @@ static int auth_server(mgmt_client_t *c)
     uint8_t st;
     uint16_t len;
     uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0)
+    if (recv_raw(c, &st, dummy, &len, 1) < 0)
     {
-        perror("recv()failed—no response from management server");
-        return -1;
+        return RECV_ERROR;
     }
     puts(status_to_str(st));
     c->authenticated = (st == STATUS_OK);
@@ -221,7 +230,7 @@ static int h_stats(mgmt_client_t *c)
     uint16_t len;
     uint8_t pl[STATS_PAYLOAD_BYTES];
     if (send_raw(c, CMD_STATS, NULL, 0) < 0) return -1;
-    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (recv_raw(c, &st, pl, &len, STATS_PAYLOAD_BYTES) < 0) return RECV_ERROR;
     if (st != STATUS_OK || len != STATS_PAYLOAD_BYTES)
     {
         puts(status_to_str(st));
@@ -242,7 +251,7 @@ static int h_list(mgmt_client_t *c)
     uint16_t len;
     uint8_t pl[FULL_PAYLOAD_BUF];
     if (send_raw(c, CMD_LIST_USERS, NULL, 0) < 0) return -1;
-    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (recv_raw(c, &st, pl, &len, FULL_PAYLOAD_BUF) < 0) return RECV_ERROR;
     if (st != STATUS_OK)
     {
         puts(status_to_str(st));
@@ -278,7 +287,7 @@ static int h_add(mgmt_client_t *c)
     uint8_t st;
     uint16_t len;
     uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+    if (recv_raw(c, &st, dummy, &len, 1) < 0) return RECV_ERROR;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -292,7 +301,7 @@ static int h_del(mgmt_client_t *c)
     uint8_t st;
     uint16_t len;
     uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+    if (recv_raw(c, &st, dummy, &len,1) < 0) return RECV_ERROR;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -312,7 +321,7 @@ static int h_chpwd(mgmt_client_t *c)
     uint8_t st;
     uint16_t len;
     uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+    if (recv_raw(c, &st, dummy, &len,1) < 0) return RECV_ERROR;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -323,7 +332,7 @@ static int h_bufinfo(mgmt_client_t *c)
     uint16_t len;
     uint8_t pl[sizeof(uint32_t)];
     if (send_raw(c, CMD_GET_BUFFER_INFO, NULL, 0) < 0) return -1;
-    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (recv_raw(c, &st, pl, &len,1) < 0) return RECV_ERROR;
     if (st != STATUS_OK || len != sizeof(uint32_t))
     {
         puts(status_to_str(st));
@@ -346,7 +355,7 @@ static int h_setbuf(mgmt_client_t *c)
     uint8_t st;
     uint16_t len;
     uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+    if (recv_raw(c, &st, dummy, &len,1) < 0) return RECV_ERROR;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -360,7 +369,7 @@ static int h_setauth(mgmt_client_t *c)
     uint8_t st;
     uint16_t len;
     uint8_t dummy[1];
-    if (recv_raw(c, &st, dummy, &len) < 0) return -1;
+    if (recv_raw(c, &st, dummy, &len,1) < 0) return RECV_ERROR;
     puts(status_to_str(st));
     return st == STATUS_OK ? 0 : -1;
 }
@@ -371,7 +380,7 @@ static int h_getauth(mgmt_client_t *c)
     uint16_t len;
     uint8_t pl[1];
     if (send_raw(c, CMD_GET_AUTH_METHOD, NULL, 0) < 0) return -1;
-    if (recv_raw(c, &st, pl, &len) < 0) return -1;
+    if (recv_raw(c, &st, pl, &len,1) < 0) return RECV_ERROR;
     if (st != STATUS_OK || len != 1)
     {
         puts(status_to_str(st));
@@ -390,7 +399,7 @@ static int h_logs(mgmt_client_t *c)
     uint8_t st;
     uint16_t len;
     char resp[FULL_PAYLOAD_BUF];
-    if (recv_raw(c, &st, (uint8_t *)resp, &len) < 0) return -1;
+    if (recv_raw(c, &st, (uint8_t *)resp, &len,FULL_PAYLOAD_BUF) < 0) return RECV_ERROR;
     if (st != STATUS_OK)
     {
         puts(status_to_str(st));
@@ -456,6 +465,7 @@ static void menu_loop(mgmt_client_t *c)
             break;
         }
         MENU[ch - 1].f(c);
+
     }
 }
 /* -------------------------------------------------------------------------- */

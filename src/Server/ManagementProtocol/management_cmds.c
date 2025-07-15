@@ -245,11 +245,11 @@ static void cmd_get_log_by_user(ManagementData *md)
     if (!u) {     /* usuario inexistente */
         send_management_response(&md->response_buffer,
                                  STATUS_NOT_FOUND,
-                                 "User not found");
+                                 "");
         return;
     }
 
-    /* 3)  Armar payload truncado (≤255 B) */
+    /* 3)  Armar payload truncado */
     char  payload[MGMT_PAYLOAD_SIZE];       /* MAX_MGMT_PAYLOAD_LEN bytes + '\0' */
     size_t plen = 0;
 
