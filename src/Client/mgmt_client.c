@@ -7,8 +7,7 @@
 #include <arpa/inet.h>
 #include <bits/types/sig_atomic_t.h>
 #include <signal.h>
-#include "../Server/ManagementProtocol/management.h"
-
+#include "../management_constants.h"
 #define DEFAULT_MGMT_HOST          "127.0.0.1"
 #define DEFAULT_MGMT_PORT          8080
 #define INPUT_SMALL_BUF            32
