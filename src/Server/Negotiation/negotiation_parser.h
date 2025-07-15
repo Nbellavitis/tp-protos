@@ -5,7 +5,6 @@
 #ifndef NEGOTITATIONPARSER_H
 #define NEGOTITATIONPARSER_H
 #include <stdint.h>
-#include "../parser.h"
 #include "../buffer.h"
 #include <stdio.h>
 #include "../selector.h"
@@ -23,13 +22,11 @@ typedef enum {
 
 typedef struct negotiation_parser {
     struct parser *parser;
-    struct parser_definition def;
     uint8_t version;
     uint8_t nmethods;
     uint8_t methods[MAX_AUTH_METHODS];
     uint8_t method_chosen;
     uint8_t i;             // cuántos métodos ya leyó
-    bool done;
     bool error;
 } negotiation_parser;
 void  init_negotiation_parser(negotiation_parser *parser);
