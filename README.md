@@ -96,15 +96,13 @@ Un cliente de administración para el protocolo de management del servidor. Perm
 - El usuario administrador por defecto es:
   - **Usuario:** admin
   - **Contraseña:** admin123
--
 
 - Puedes configurar el usuario y contraseña de admin mediante variables de entorno antes de ejecutar el servidor :
   ```sh
-  export ADMIN_USERNAME=admin
-  export ADMIN_PASSWORD=admin123
+  export ADMIN_USERNAME=tuadmin
+  export ADMIN_PASSWORD=tuclave
   ./bin/server/socks5d ...
   ```
--
 ---
 
 ## Requisitos
