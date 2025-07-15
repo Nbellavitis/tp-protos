@@ -54,6 +54,7 @@ static void cleanup_management_connection(struct selector_key *key) {
 void mgtm_init_admin() {
     const char *env_user = getenv(ADMIN_USER_ENV_VAR);
     const char *env_pass = getenv(ADMIN_PASSWORD_ENV_VAR);
+   
 
     ADMIN_USERNAME = (env_user != NULL) ? env_user : ADMIN_DEFAULT_USER;
     ADMIN_PASSWORD = (env_pass != NULL) ? env_pass : ADMIN_DEFAULT_PASSWORD;
