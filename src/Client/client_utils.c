@@ -3,8 +3,8 @@
 #include <signal.h>
 #include <netdb.h>
 
-char *mgmnt_server_ip = "Management server IP [" DEFAULT_MGMT_HOST "]: ";
-char *socks_server_ip = "Socks5 server IP [" DEFAULT_SOCKS5_HOST "]: ";
+char *mgmnt_server_ip = "Management server IP/domain [" DEFAULT_MGMT_HOST "]: ";
+char *socks_server_ip = "Socks5 server IP/domain [" DEFAULT_SOCKS5_HOST "]: ";
 
 #define BUFF_SIZE 256
 #define INPUT_SMALL_BUF 32
