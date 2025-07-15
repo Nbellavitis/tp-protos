@@ -8,6 +8,7 @@
 #include <netdb.h>
 #include <stdint.h>
 #include <signal.h>
+#include "client_utils.h"
 
 
 volatile sig_atomic_t interrupted = 0;
@@ -79,32 +80,7 @@ typedef struct {
 int socks5_authenticate(socks5_client_t *client);
 
 int socks5_connect_proxy(socks5_client_t *client) {
-
-    client->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (client->socket_fd < 0) {
-        perror("Error creating socket");
-        return -1;
-    }
-    
-    
-    struct sockaddr_in proxy_addr;
-    memset(&proxy_addr, 0, sizeof(proxy_addr));
-    proxy_addr.sin_family = AF_INET;
-    proxy_addr.sin_port = htons(client->proxy_port);
-    
-    if (inet_pton(AF_INET, client->proxy_host, &proxy_addr.sin_addr) <= 0) {
-        perror("Invalid proxy address");
-        close(client->socket_fd);
-        return -1;
-    }
-    
-    if (connect(client->socket_fd, (struct sockaddr*)&proxy_addr, sizeof(proxy_addr)) < 0) {
-        perror("Error connecting to proxy");
-        close(client->socket_fd);
-        return -1;
-    }
-    
-    return 0;
+    return connect_server( client->proxy_host , client->proxy_port, &client->socket_fd);
 }
 
 int socks5_negotiate(socks5_client_t *client, int offer_auth) {
@@ -484,24 +460,18 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, signal_handler);
     
     socks5_client_t client = {0};
-    
-    strcpy(client.proxy_host, DEFAULT_SOCKS5_HOST);
-    client.proxy_port = DEFAULT_SOCKS5_PORT;
+
+
+
+//    strcpy(client.proxy_host, DEFAULT_SOCKS5_HOST);
+//    client.proxy_port = DEFAULT_SOCKS5_PORT;
+
+    prompt_server_config(client.proxy_host, sizeof(client.proxy_host),  &client.proxy_port, false);
+
     client.socket_fd = -1;
     client.authenticated = 0;
     
-    if (argc >= MIN_ARGS_PROXY_HOST) {
-        strcpy(client.proxy_host, argv[1]);
-    }
-    if (argc >= MIN_ARGS_PROXY_PORT) {
-        client.proxy_port = atoi(argv[2]);
-    }
-    if (argc >= MIN_ARGS_USERNAME) {
-        strcpy(client.username, argv[3]);
-    }
-    if (argc >= MIN_ARGS_PASSWORD) {
-        strcpy(client.password, argv[4]);
-    }
+
     
     printf("SOCKS5 Client\n");
     printf("Proxy: %s:%d\n", client.proxy_host, client.proxy_port);

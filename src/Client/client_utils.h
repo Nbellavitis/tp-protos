@@ -34,5 +34,6 @@
 void prompt_server_config(char *host, size_t host_sz, int *port, bool mgmt);
 int read_line(const char *prompt, char *buf, size_t n);
 int ask_choice(const char *prompt, int min, int max);
+int connect_server(const char *server_host, int server_port, int *socket_fd);
 
 #endif //NEGOTIATION_C_CLIENT_UTILS_H

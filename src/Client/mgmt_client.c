@@ -103,49 +103,6 @@ static void disconnect(mgmt_client_t *c)
     c->authenticated = 0;
 }
 
-static int connect_server(mgmt_client_t *c)
-{
-    char portstr[6];
-    snprintf(portstr, sizeof portstr, "%d", c->server_port);
-
-    struct addrinfo hints = {
-            .ai_family   = AF_UNSPEC,
-            .ai_socktype = SOCK_STREAM,
-    }, *res, *rp;
-
-    int err = getaddrinfo(c->server_host, portstr, &hints, &res);
-    if (err != 0) {
-        fprintf(stderr, "Invalid address '%s': %s\n",
-                c->server_host, gai_strerror(err));
-        return -1;
-    }
-
-    for (rp = res; rp; rp = rp->ai_next) {
-        c->socket_fd = socket(rp->ai_family,
-                              rp->ai_socktype,
-                              rp->ai_protocol);
-        if (c->socket_fd < 0) continue;
-
-        if (connect(c->socket_fd,
-                    rp->ai_addr,
-                    rp->ai_addrlen) == 0)
-        {
-            /* success */
-            break;
-        }
-        close(c->socket_fd);
-    }
-
-    freeaddrinfo(res);
-
-    if (!rp) {
-        perror("Could not connect to server");
-        return -1;
-    }
-
-    printf("Connected to %s:%d\n", c->server_host, c->server_port);
-    return 0;
-}
 
 static int auth_server(mgmt_client_t *c)
 {
@@ -498,7 +455,7 @@ static void menu_loop(mgmt_client_t *c)
             int ask = ask_choice("Choice: ", 1, 2);
             if (ask == 2 || ask < 0) return;
 
-            if (connect_server(c) == 0) {
+            if (connect_server( c->server_host , c->server_port , &c->socket_fd) == 0) {
                 auth_server(c);
             }
 
